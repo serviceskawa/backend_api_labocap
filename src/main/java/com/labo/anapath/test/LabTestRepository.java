@@ -3,6 +3,8 @@ package com.labo.anapath.test;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -25,6 +27,29 @@ public interface LabTestRepository extends JpaRepository<LabTest, UUID> {
      * @return page d'analyses
      */
     Page<LabTest> findByBranchId(UUID branchId, Pageable pageable);
+
+    /**
+     * Retourne la liste paginée des analyses d'une succursale en appliquant des filtres
+     * optionnels sur le nom (recherche partielle, insensible à la casse) et le statut.
+     *
+     * <p>Un paramètre {@code null} désactive le filtre correspondant.</p>
+     *
+     * @param branchId identifiant de la succursale
+     * @param search   terme de recherche partielle sur le nom (ou {@code null})
+     * @param status   statut exact à filtrer, ACTIF/INACTIF (ou {@code null})
+     * @param pageable paramètres de pagination et de tri
+     * @return page d'analyses correspondant aux filtres
+     */
+    @Query("""
+            SELECT t FROM LabTest t
+            WHERE t.branchId = :branchId
+              AND (CAST(:search AS string) IS NULL OR LOWER(t.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
+              AND (CAST(:status AS string) IS NULL OR t.status = :status)
+            """)
+    Page<LabTest> findByFilters(@Param("branchId") UUID branchId,
+                                @Param("search") String search,
+                                @Param("status") String status,
+                                Pageable pageable);
 
     List<LabTest> findAllByBranchIdOrderByName(UUID branchId);
 

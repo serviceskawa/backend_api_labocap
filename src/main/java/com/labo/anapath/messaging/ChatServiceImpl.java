@@ -72,4 +72,10 @@ public class ChatServiceImpl implements ChatService {
         chatRepository.saveAll(unread);
         return unread.size();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countUnread(UUID userId) {
+        return chatRepository.countByReceiverIdAndIsReadFalse(userId);
+    }
 }

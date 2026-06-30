@@ -85,6 +85,51 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
     long countByBranchIdAndStatusPendingAndCreatedAtBefore(@Param("branchId") UUID branchId,
                                                             @Param("before") LocalDateTime before);
 
+    /**
+     * Demandes d'examen sans macro depuis plus de {@code days} jours (alerte
+     * "macro non faite"). Réplique la règle Laravel : test_orders absents de
+     * test_pathology_macros et créés il y a plus de N jours.
+     */
+    @Query(value = """
+            SELECT t.* FROM test_orders t
+            WHERE t.branch_id = :branchId
+              AND t.deleted_at IS NULL
+              AND DATE(t.created_at) <= CURRENT_DATE - :days
+              AND NOT EXISTS (
+                  SELECT 1 FROM test_pathology_macros m
+                  WHERE m.test_order_id = t.id AND m.deleted_at IS NULL)
+            ORDER BY t.created_at ASC
+            LIMIT :maxRows
+            """, nativeQuery = true)
+    List<TestOrder> findOverdueWithoutMacro(@Param("branchId") UUID branchId,
+                                            @Param("days") int days,
+                                            @Param("maxRows") int maxRows);
+
+    /**
+     * Demandes d'examen dont le compte-rendu n'est toujours pas validé depuis plus de
+     * {@code days} jours (alerte "compte-rendu non fait"). Réplique la règle Laravel :
+     * {@code test_orders} créés il y a plus de N jours dont le rapport associé n'est pas
+     * terminé (statut différent de VALIDATED/DELIVERED). Le destinataire est le
+     * pathologiste assigné ({@code attribuate_doctor_id}).
+     */
+    @Query(value = """
+            SELECT t.code AS testOrderCode,
+                   u.email AS email,
+                   CONCAT(u.firstname, ' ', u.lastname) AS doctorName
+            FROM test_orders t
+            JOIN reports r ON r.test_order_id = t.id AND r.deleted_at IS NULL
+            JOIN users u ON u.id = t.attribuate_doctor_id AND u.deleted_at IS NULL
+            WHERE t.branch_id = :branchId
+              AND t.deleted_at IS NULL
+              AND r.status NOT IN ('VALIDATED', 'DELIVERED')
+              AND DATE(t.created_at) <= CURRENT_DATE - :days
+            ORDER BY t.created_at ASC
+            LIMIT :maxRows
+            """, nativeQuery = true)
+    List<ReportNonFaitProjection> findOverdueWithoutReport(@Param("branchId") UUID branchId,
+                                                           @Param("days") int days,
+                                                           @Param("maxRows") int maxRows);
+
     // -------------------------------------------------------------------------
     // Dashboard — top examens
     // -------------------------------------------------------------------------
@@ -289,14 +334,52 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
      *                        à cette valeur sont considérés en retard
      * @return nombre de bons en retard
      */
-    @Query("SELECT COUNT(t) FROM TestOrder t WHERE t.assignedToUserId = :userId AND t.branchId = :branchId " +
-           "AND t.status = :pendingStatus " +
+    @Query("SELECT COUNT(t) FROM TestOrder t " +
+           "LEFT JOIN com.labo.anapath.report.Report r ON r.testOrder.id = t.id " +
+           "WHERE t.assignedToUserId = :userId AND t.branchId = :branchId " +
+           "AND (r IS NULL OR r.status NOT IN (com.labo.anapath.report.ReportStatus.VALIDATED, com.labo.anapath.report.ReportStatus.DELIVERED)) " +
            "AND t.assignmentDate IS NOT NULL AND t.assignmentDate < :cutoff")
     long countLateByAssignedToUserIdAndBranchId(
             @Param("userId") UUID userId,
             @Param("branchId") UUID branchId,
-            @Param("pendingStatus") TestOrderStatus pendingStatus,
             @Param("cutoff") LocalDateTime cutoff);
+
+    /**
+     * Compte les bons assignés dont le rapport n'est pas encore terminé
+     * (rapport inexistant, ou statut autre que VALIDATED/DELIVERED).
+     */
+    @Query("SELECT COUNT(t) FROM TestOrder t " +
+           "LEFT JOIN com.labo.anapath.report.Report r ON r.testOrder.id = t.id " +
+           "WHERE t.assignedToUserId = :userId AND t.branchId = :branchId " +
+           "AND (r IS NULL OR r.status NOT IN (com.labo.anapath.report.ReportStatus.VALIDATED, com.labo.anapath.report.ReportStatus.DELIVERED))")
+    long countAssignedReportPending(@Param("userId") UUID userId, @Param("branchId") UUID branchId);
+
+    /**
+     * Compte les bons assignés dont le rapport est terminé (VALIDATED ou DELIVERED).
+     */
+    @Query("SELECT COUNT(t) FROM TestOrder t " +
+           "JOIN com.labo.anapath.report.Report r ON r.testOrder.id = t.id " +
+           "WHERE t.assignedToUserId = :userId AND t.branchId = :branchId " +
+           "AND r.status IN (com.labo.anapath.report.ReportStatus.VALIDATED, com.labo.anapath.report.ReportStatus.DELIVERED)")
+    long countAssignedReportDone(@Param("userId") UUID userId, @Param("branchId") UUID branchId);
+
+    /**
+     * Compte les bons d'examen immuno assignés dont le rapport n'est pas terminé.
+     *
+     * @param userId   identifiant de l'utilisateur assigné
+     * @param branchId identifiant de la branche (isolation multi-tenant)
+     * @param typeIds  liste des UUID des types immuno
+     * @return nombre de bons immuno en attente
+     */
+    @Query("SELECT COUNT(t) FROM TestOrder t " +
+           "LEFT JOIN com.labo.anapath.report.Report r ON r.testOrder.id = t.id " +
+           "WHERE t.assignedToUserId = :userId AND t.branchId = :branchId " +
+           "AND t.typeOrder.id IN :typeIds " +
+           "AND (r IS NULL OR r.status NOT IN (com.labo.anapath.report.ReportStatus.VALIDATED, com.labo.anapath.report.ReportStatus.DELIVERED))")
+    long countImmunoPendingByAssignedToUserId(
+            @Param("userId") UUID userId,
+            @Param("branchId") UUID branchId,
+            @Param("typeIds") List<UUID> typeIds);
 
     // -------------------------------------------------------------------------
     // Myspace — liste paginée des bons assignés à un utilisateur
@@ -316,10 +399,22 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
     @Query(value = """
             SELECT t.* FROM test_orders t
             JOIN patients pat ON pat.id = t.patient_id AND pat.deleted_at IS NULL
+            LEFT JOIN reports r ON r.test_order_id = t.id AND r.deleted_at IS NULL
             WHERE t.deleted_at IS NULL
               AND t.assigned_to_user_id = :userId
               AND t.branch_id = :branchId
-              AND (:status IS NULL OR t.status::text = CAST(:status AS text))
+              AND (:status IS NULL
+                   OR (:status = 'PENDING'   AND (r.id IS NULL OR r.status NOT IN ('VALIDATED', 'DELIVERED')))
+                   OR (:status = 'VALIDATED' AND r.status IN ('VALIDATED', 'DELIVERED'))
+                   OR (:status = 'DELIVERED' AND r.status = 'DELIVERED'))
+              AND (CAST(:typeOrderId AS uuid) IS NULL OR t.type_order_id = CAST(:typeOrderId AS uuid))
+              AND (:priority IS NULL
+                   OR (:priority = 'urgent' AND t.is_urgent = true)
+                   OR (:priority = 'late' AND t.status::text = 'PENDING'
+                       AND t.assignment_date IS NOT NULL
+                       AND t.assignment_date < (now() - interval '21 days')))
+              AND (CAST(:fromDate AS date) IS NULL OR DATE(t.created_at) >= CAST(:fromDate AS date))
+              AND (CAST(:toDate AS date) IS NULL OR DATE(t.created_at) <= CAST(:toDate AS date))
               AND (:search IS NULL OR (
                     lower(coalesce(t.code,         '')) LIKE lower('%' || CAST(:search AS text) || '%')
                  OR lower(coalesce(pat.firstname,  '')) LIKE lower('%' || CAST(:search AS text) || '%')
@@ -330,10 +425,22 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             countQuery = """
             SELECT COUNT(*) FROM test_orders t
             JOIN patients pat ON pat.id = t.patient_id AND pat.deleted_at IS NULL
+            LEFT JOIN reports r ON r.test_order_id = t.id AND r.deleted_at IS NULL
             WHERE t.deleted_at IS NULL
               AND t.assigned_to_user_id = :userId
               AND t.branch_id = :branchId
-              AND (:status IS NULL OR t.status::text = CAST(:status AS text))
+              AND (:status IS NULL
+                   OR (:status = 'PENDING'   AND (r.id IS NULL OR r.status NOT IN ('VALIDATED', 'DELIVERED')))
+                   OR (:status = 'VALIDATED' AND r.status IN ('VALIDATED', 'DELIVERED'))
+                   OR (:status = 'DELIVERED' AND r.status = 'DELIVERED'))
+              AND (CAST(:typeOrderId AS uuid) IS NULL OR t.type_order_id = CAST(:typeOrderId AS uuid))
+              AND (:priority IS NULL
+                   OR (:priority = 'urgent' AND t.is_urgent = true)
+                   OR (:priority = 'late' AND t.status::text = 'PENDING'
+                       AND t.assignment_date IS NOT NULL
+                       AND t.assignment_date < (now() - interval '21 days')))
+              AND (CAST(:fromDate AS date) IS NULL OR DATE(t.created_at) >= CAST(:fromDate AS date))
+              AND (CAST(:toDate AS date) IS NULL OR DATE(t.created_at) <= CAST(:toDate AS date))
               AND (:search IS NULL OR (
                     lower(coalesce(t.code,         '')) LIKE lower('%' || CAST(:search AS text) || '%')
                  OR lower(coalesce(pat.firstname,  '')) LIKE lower('%' || CAST(:search AS text) || '%')
@@ -345,6 +452,10 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             @Param("userId") UUID userId,
             @Param("branchId") UUID branchId,
             @Param("status") String status,
+            @Param("typeOrderId") String typeOrderId,
+            @Param("priority") String priority,
+            @Param("fromDate") String fromDate,
+            @Param("toDate") String toDate,
             @Param("search") String search,
             Pageable pageable);
 

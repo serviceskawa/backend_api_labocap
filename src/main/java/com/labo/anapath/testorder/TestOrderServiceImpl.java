@@ -737,13 +737,22 @@ public class TestOrderServiceImpl implements TestOrderService {
     @Override
     @Transactional(readOnly = true)
     public MyspaceStatsDto getMyspaceStats(UUID userId, UUID branchId) {
+        // En attente / terminé sont déterminés par le statut du RAPPORT (comme Laravel),
+        // car tous les bons assignés sont déjà au statut VALIDATED côté bon d'examen.
         long totalAssigned  = testOrderRepository.countByAssignedToUserIdAndBranchId(userId, branchId);
-        long totalPending   = testOrderRepository.countByAssignedToUserIdAndBranchIdAndStatus(userId, branchId, TestOrderStatus.PENDING);
-        long totalValidated = testOrderRepository.countByAssignedToUserIdAndBranchIdAndStatus(userId, branchId, TestOrderStatus.VALIDATED);
+        long totalPending   = testOrderRepository.countAssignedReportPending(userId, branchId);
+        long totalValidated = testOrderRepository.countAssignedReportDone(userId, branchId);
         long totalUrgent    = testOrderRepository.countUrgentByAssignedToUserIdAndBranchId(userId, branchId);
-        LocalDateTime cutoff = LocalDateTime.now().minusHours(48);
-        long totalLate      = testOrderRepository.countLateByAssignedToUserIdAndBranchId(userId, branchId, TestOrderStatus.PENDING, cutoff);
-        return new MyspaceStatsDto(totalAssigned, totalPending, totalValidated, totalUrgent, totalLate);
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(21);
+        long totalLate      = testOrderRepository.countLateByAssignedToUserIdAndBranchId(userId, branchId, cutoff);
+
+        List<UUID> immunoTypeIds = typeOrderRepository.findImmunoTypeIds(branchId);
+        long totalImmunoPending = immunoTypeIds.isEmpty() ? 0L
+                : testOrderRepository.countImmunoPendingByAssignedToUserId(
+                        userId, branchId, immunoTypeIds);
+
+        return new MyspaceStatsDto(totalAssigned, totalPending, totalValidated,
+                totalImmunoPending, totalUrgent, totalLate);
     }
 
     /**
@@ -760,12 +769,18 @@ public class TestOrderServiceImpl implements TestOrderService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<TestOrderResponseDto> getMyspaceOrders(UUID userId, UUID branchId, int page, int size,
-                                                               TestOrderStatus status, String search) {
+                                                               TestOrderStatus status, UUID typeOrderId,
+                                                               String priority, String from, String to, String search) {
         PageRequest pageRequest = PageRequest.of(page, size, Sort.by("createdAt").descending());
         String searchParam = (search != null && !search.isBlank()) ? search : null;
         String statusParam = (status != null) ? status.name() : null;
+        String typeOrderParam = (typeOrderId != null) ? typeOrderId.toString() : null;
+        String priorityParam = (priority != null && !priority.isBlank()) ? priority : null;
+        String fromParam = (from != null && !from.isBlank()) ? from : null;
+        String toParam = (to != null && !to.isBlank()) ? to : null;
         Page<TestOrderResponseDto> result = testOrderRepository
-                .findMyspaceOrders(userId, branchId, statusParam, searchParam, pageRequest)
+                .findMyspaceOrders(userId, branchId, statusParam, typeOrderParam, priorityParam,
+                        fromParam, toParam, searchParam, pageRequest)
                 .map(testOrderMapper::toResponseDto);
         return PageResponse.of(result);
     }

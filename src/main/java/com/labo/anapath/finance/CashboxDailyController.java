@@ -5,7 +5,9 @@ import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.security.UserPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -27,6 +29,7 @@ import java.util.UUID;
 public class CashboxDailyController {
 
     private final CashboxDailyService cashboxDailyService;
+    private final CashboxDailyPdfService cashboxDailyPdfService;
 
     @PostMapping
     @PreAuthorize("hasAuthority('create-cashbox-dailies')")
@@ -79,5 +82,18 @@ public class CashboxDailyController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
         cashboxDailyService.delete(id);
         return ResponseEntity.ok(ApiResponse.success("Session supprimée", null));
+    }
+
+    @GetMapping("/{id}/pdf")
+    @PreAuthorize("hasAuthority('view-cashbox-dailies')")
+    public ResponseEntity<byte[]> generatePdf(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        byte[] pdf = cashboxDailyPdfService.generatePdf(id, principal.getBranchId());
+        String filename = "Cloture-caisse-" + id + ".pdf";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_PDF_VALUE)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
+                .body(pdf);
     }
 }

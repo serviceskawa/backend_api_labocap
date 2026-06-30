@@ -160,12 +160,17 @@ public interface TestOrderService {
      * @param branchId identifiant de la branche (isolation multi-tenant)
      * @param page     numéro de page (0-based)
      * @param size     taille de la page
-     * @param status   filtre optionnel sur le statut
-     * @param search   recherche textuelle optionnelle (code du bon ou nom du patient)
+     * @param status      filtre optionnel sur le statut
+     * @param typeOrderId filtre optionnel sur le type d'examen
+     * @param priority    filtre optionnel sur la priorité ({@code urgent} ou {@code late})
+     * @param from        date de début optionnelle (YYYY-MM-DD, sur created_at)
+     * @param to          date de fin optionnelle (YYYY-MM-DD, sur created_at)
+     * @param search      recherche textuelle optionnelle (code du bon ou nom du patient)
      * @return page de {@link TestOrderResponseDto}
      */
     PageResponse<TestOrderResponseDto> getMyspaceOrders(UUID userId, UUID branchId, int page, int size,
-                                                        TestOrderStatus status, String search);
+                                                        TestOrderStatus status, UUID typeOrderId,
+                                                        String priority, String from, String to, String search);
 
     // -------------------------------------------------------------------------
     // Tarification contractuelle

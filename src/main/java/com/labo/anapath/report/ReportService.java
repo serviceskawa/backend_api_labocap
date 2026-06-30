@@ -41,7 +41,9 @@ public interface ReportService {
             UUID branchId, int page, int size,
             String search, String typeOrderId,
             String dateBegin, String dateEnd,
-            Boolean isUrgent, Integer statusFilter);
+            Boolean isUrgent, Integer statusFilter, Boolean isLate);
+
+    PageResponse<LogReportResponseDto> getReportLogs(UUID branchId, int page, int size);
 
     PageResponse<ReportGlobalSearchRowDto> globalSearch(
             UUID branchId, int page, int size,

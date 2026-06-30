@@ -9,5 +9,6 @@ public interface DocMapper {
 
     @Mapping(target = "documentationCategoryId", source = "documentationCategory.id")
     @Mapping(target = "userId", source = "user.id")
+    @Mapping(target = "roleId", source = "role.id")
     DocResponseDto toResponseDto(Doc doc);
 }

@@ -11,6 +11,7 @@ public record DocResponseDto(
         Long fileSize,
         UUID documentationCategoryId,
         UUID userId,
+        UUID roleId,
         UUID branchId,
         LocalDateTime createdAt
 ) {}

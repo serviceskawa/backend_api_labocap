@@ -1,6 +1,8 @@
 package com.labo.anapath.hr;
 
 import com.labo.anapath.common.dto.PageResponse;
+import com.labo.anapath.common.email.EmailService;
+import com.labo.anapath.common.email.NotificationSettings;
 import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.user.User;
@@ -10,15 +12,20 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class EmployeeTimeoffServiceImpl implements EmployeeTimeoffService {
 
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
     private final EmployeeTimeoffRepository employeeTimeoffRepository;
     private final EmployeeRepository employeeRepository;
     private final UserRepository userRepository;
+    private final EmailService emailService;
+    private final NotificationSettings notificationSettings;
 
     @Override
     @Transactional(readOnly = true)
@@ -45,7 +52,27 @@ public class EmployeeTimeoffServiceImpl implements EmployeeTimeoffService {
         timeoff.setEndDate(dto.getEndDate());
         timeoff.setReason(dto.getReason());
         timeoff.setStatus(TimeoffStatus.PENDING);
-        return toDto(employeeTimeoffRepository.save(timeoff));
+        EmployeeTimeoff saved = employeeTimeoffRepository.save(timeoff);
+        notifyAdminsOfRequest(saved, employee);
+        return toDto(saved);
+    }
+
+    /**
+     * Notifie les administrateurs ({@code admin_mails}) d'une nouvelle demande de congé.
+     * Réplique Laravel : envoi conditionné à l'activation du service {@code conge}.
+     */
+    private void notifyAdminsOfRequest(EmployeeTimeoff timeoff, Employee employee) {
+        UUID branchId = employee.getBranchId();
+        if (!notificationSettings.serviceEnabled(branchId, "conge")) {
+            return;
+        }
+        String labName = notificationSettings.labName(branchId);
+        String employeeName = (employee.getFirstName() + " " + employee.getLastName()).trim();
+        String start = timeoff.getStartDate() != null ? timeoff.getStartDate().format(DATE_FMT) : "";
+        String end = timeoff.getEndDate() != null ? timeoff.getEndDate().format(DATE_FMT) : "";
+        for (String to : notificationSettings.adminEmails(branchId)) {
+            emailService.sendTimeoffRequestToAdmin(to, employeeName, start, end, labName);
+        }
     }
 
     @Override
@@ -72,7 +99,28 @@ public class EmployeeTimeoffServiceImpl implements EmployeeTimeoffService {
             }
         }
 
+        // Réplique Laravel : l'employé n'est notifié qu'au passage en congé validé.
+        if (previousStatus != TimeoffStatus.APPROVED && dto.getStatus() == TimeoffStatus.APPROVED) {
+            notifyEmployeeOfApproval(timeoff, employee);
+        }
+
         return toDto(saved);
+    }
+
+    /** Notifie l'employé que sa demande de congé a été validée. */
+    private void notifyEmployeeOfApproval(EmployeeTimeoff timeoff, Employee employee) {
+        String to = employee.getEmail();
+        if ((to == null || to.isBlank()) && employee.getUser() != null) {
+            to = employee.getUser().getEmail();
+        }
+        if (to == null || to.isBlank()) {
+            return;
+        }
+        String labName = notificationSettings.labName(employee.getBranchId());
+        String employeeName = (employee.getFirstName() + " " + employee.getLastName()).trim();
+        String start = timeoff.getStartDate() != null ? timeoff.getStartDate().format(DATE_FMT) : "";
+        String end = timeoff.getEndDate() != null ? timeoff.getEndDate().format(DATE_FMT) : "";
+        emailService.sendTimeoffApprovedToEmployee(to, employeeName, start, end, labName);
     }
 
     @Override

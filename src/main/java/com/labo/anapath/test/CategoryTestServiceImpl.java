@@ -59,6 +59,9 @@ public class CategoryTestServiceImpl implements CategoryTestService {
     @Override
     @Transactional
     public CategoryTestResponseDto create(CategoryTestRequestDto dto, UUID branchId) {
+        if (categoryTestRepository.existsByCodeIgnoreCaseAndBranchId(dto.getCode(), branchId)) {
+            throw new DuplicateResourceException("Le code '" + dto.getCode() + "' est déjà utilisé par une autre catégorie.");
+        }
         if (categoryTestRepository.existsByNameIgnoreCaseAndBranchId(dto.getName(), branchId)) {
             throw new DuplicateResourceException("Une catégorie '" + dto.getName() + "' existe déjà.");
         }
@@ -75,6 +78,9 @@ public class CategoryTestServiceImpl implements CategoryTestService {
     public CategoryTestResponseDto update(UUID id, CategoryTestRequestDto dto) {
         CategoryTest entity = categoryTestRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Catégorie", id));
+        if (categoryTestRepository.existsByCodeIgnoreCaseAndBranchIdAndIdNot(dto.getCode(), entity.getBranchId(), id)) {
+            throw new DuplicateResourceException("Le code '" + dto.getCode() + "' est déjà utilisé par une autre catégorie.");
+        }
         if (categoryTestRepository.existsByNameIgnoreCaseAndBranchIdAndIdNot(dto.getName(), entity.getBranchId(), id)) {
             throw new DuplicateResourceException("Une catégorie '" + dto.getName() + "' existe déjà.");
         }

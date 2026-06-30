@@ -78,6 +78,20 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     @Override
     @Transactional
+    public InvoiceResponseDto createFromOrder(UUID orderId, UUID branchId) {
+        // Réplique Laravel storeFromOrder : une seule facture par bon d'examen.
+        // Si une facture existe déjà pour ce bon, on la renvoie plutôt que d'échouer.
+        return invoiceRepository.findByTestOrderId(orderId)
+                .map(existing -> findById(existing.getId(), branchId))
+                .orElseGet(() -> {
+                    InvoiceRequestDto dto = new InvoiceRequestDto();
+                    dto.setTestOrderId(orderId);
+                    return create(dto, branchId);
+                });
+    }
+
+    @Override
+    @Transactional
     public InvoiceResponseDto create(InvoiceRequestDto dto, UUID branchId) {
         // 1. Récupérer le bon d'examen (isolation multi-tenant via branchId)
         TestOrder order = testOrderRepository.findByIdAndBranchId(dto.getTestOrderId(), branchId)

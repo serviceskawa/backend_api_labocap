@@ -60,6 +60,10 @@ buildNumber.properties
 *.log
 logs/
 
+### DB backups (dumps volumineux + données sensibles) ###
+backups/
+*.sql.gz
+
 ### OS ###
 .DS_Store
 Thumbs.db

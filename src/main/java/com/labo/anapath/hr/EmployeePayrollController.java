@@ -4,7 +4,9 @@ import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,6 +25,7 @@ import java.util.UUID;
 public class EmployeePayrollController {
 
     private final EmployeePayrollService employeePayrollService;
+    private final PayrollPdfService payrollPdfService;
 
     @GetMapping
     @PreAuthorize("hasAuthority('view-employees')")
@@ -40,5 +43,18 @@ public class EmployeePayrollController {
             @Valid @RequestBody EmployeePayrollRequestDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Fiche de paie créée", employeePayrollService.create(dto, employeeId)));
+    }
+
+    @GetMapping("/{id}/pdf")
+    @PreAuthorize("hasAuthority('view-employees')")
+    public ResponseEntity<byte[]> generatePdf(
+            @PathVariable UUID employeeId,
+            @PathVariable UUID id) {
+        byte[] pdf = payrollPdfService.generatePdf(employeeId, id);
+        String filename = "fiche-paie-" + id + ".pdf";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_PDF_VALUE)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
+                .body(pdf);
     }
 }

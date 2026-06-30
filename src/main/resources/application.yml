@@ -22,6 +22,9 @@ spring:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
+    # Base restaurée depuis un dump déjà migré jusqu'à V50 : on baseline à V50
+    # pour que Flyway ne rejoue pas V2..V50 (sinon clés dupliquées). Les V51+ s'appliqueront.
+    baseline-version: 50
   mail:
     host: ${MAIL_HOST:smtp.mailtrap.io}
     port: ${MAIL_PORT:2525}
@@ -57,6 +60,12 @@ app:
   mail:
     from: ${MAIL_FROM:noreply@labo-anapath.bj}
     from-name: ${MAIL_FROM_NAME:Labo AnaPath}
+  alerts:
+    report:
+      days: ${ALERT_REPORT_DAYS:18}
+      max-per-run: ${ALERT_REPORT_MAX:200}
+  support:
+    ticket-notify-email: ${TICKET_NOTIFY_EMAIL:serviceskawa@gmail.com}
 
 management:
   endpoints:

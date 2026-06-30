@@ -144,11 +144,12 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     private String toClassName(String priority) {
-        if (priority == null) return "bg-primary";
+        // Réplique Laravel randColor() : normal -> bg-info, urgent -> bg-warning, très urgent -> bg-danger.
+        if (priority == null) return "bg-info";
         return switch (priority) {
             case "urgent"      -> "bg-warning";
             case "tres urgent" -> "bg-danger";
-            default            -> "bg-primary";
+            default            -> "bg-info";
         };
     }
 }

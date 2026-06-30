@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="fr">
+<head>
+    <meta charset="UTF-8"/>
+    <style>
+        @page { size: A4; margin: 18mm 15mm; }
+        body { font-family: Arial, sans-serif; font-size: 12px; color: #222; margin: 0; }
+        .header { text-align: center; margin-bottom: 12px; }
+        .title { font-size: 15px; font-weight: bold; margin: 8px 0 16px; }
+        .sub { color: #555; font-size: 12px; margin-bottom: 12px; }
+        table.recap { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        table.recap th, table.recap td { border: 1px solid #ddd; padding: 6px 8px; text-align: right; }
+        table.recap th { background-color: #f3f3f3; font-size: 11px; text-transform: uppercase; text-align: right; }
+        table.recap th.lbl, table.recap td.lbl { text-align: left; }
+        table.recap tr.total td { font-weight: bold; background-color: #fafafa; }
+        .closing { margin-top: 20px; font-size: 16px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <!-- En-tête laboratoire -->
+    <div class="header" th:utext="${entete}">En-tête du laboratoire</div>
+
+    <div class="title">
+        Clôture de caisse — <span th:text="${cashboxName}">Caisse</span>
+        <span th:if="${code != ''}"> (ID <span th:text="${code}">CODE</span>)</span>
+    </div>
+    <div class="sub">
+        Ouverture : <span th:text="${openedAt}"></span>
+        &nbsp;&nbsp;•&nbsp;&nbsp;
+        Fermeture : <span th:text="${closedAt}"></span>
+    </div>
+
+    <table class="recap">
+        <thead>
+            <tr>
+                <th class="lbl">Mode de paiement</th>
+                <th>Fond initial</th>
+                <th>Vente</th>
+                <th>Solde</th>
+                <th>Comptage</th>
+                <th>Écart</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="r : ${rows}" th:classappend="${r.total} ? 'total' : ''">
+                <td class="lbl" th:text="${r.method}">Mode</td>
+                <td th:text="${r.fondInitial}">0</td>
+                <td th:text="${r.vente}">0</td>
+                <td th:text="${r.solde}">0</td>
+                <td th:text="${r.comptage}">0</td>
+                <td th:text="${r.ecart}">0</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="closing">
+        SOLDE DE FERMETURE : <span th:text="${closingBalance}">0</span> F CFA
+    </div>
+</body>
+</html>

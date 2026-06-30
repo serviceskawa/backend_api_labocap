@@ -93,6 +93,12 @@ public class ConsultationController {
                 consultationService.updateType(id, dto.getTypeConsultationId())));
     }
 
+    @GetMapping("/{id}/files")
+    @PreAuthorize("hasAuthority('view-consultations')")
+    public ResponseEntity<ApiResponse<List<ConsultationFileResponseDto>>> getFiles(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success(consultationService.getFiles(id)));
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('delete-consultations')")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {

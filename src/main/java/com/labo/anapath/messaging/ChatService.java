@@ -15,4 +15,7 @@ public interface ChatService {
     ChatResponseDto markAsRead(UUID chatId, UUID currentUserId);
 
     int markAllAsRead(UUID senderId, UUID receiverId);
+
+    /** Nombre de messages non lus reçus par l'utilisateur (pour le badge de la sidebar). */
+    long countUnread(UUID userId);
 }
