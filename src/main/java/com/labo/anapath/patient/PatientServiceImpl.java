@@ -20,7 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -61,7 +63,47 @@ public class PatientServiceImpl implements PatientService {
             result = patientRepository.findByBranchId(branchId, pageRequest)
                     .map(patientMapper::toResponseDto);
         }
-        return PageResponse.of(result);
+        // Agréger les totaux financiers (Total / Payé / Dû) par patient, comme le
+        // tableau Laravel. Une seule requête groupée pour toute la page.
+        Map<UUID, BigDecimal[]> totalsByPatient = loadInvoiceTotals(
+                result.getContent().stream().map(PatientResponseDto::id).toList());
+        return PageResponse.of(result.map(dto -> {
+            BigDecimal[] tp = totalsByPatient.getOrDefault(
+                    dto.id(), new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+            return withTotals(dto, tp[0], tp[1]);
+        }));
+    }
+
+    /**
+     * Charge, pour une liste d'identifiants patients, le total facturé et le total
+     * payé sous forme de {@code Map<patientId, [total, paid]>}.
+     */
+    private Map<UUID, BigDecimal[]> loadInvoiceTotals(List<UUID> patientIds) {
+        if (patientIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, BigDecimal[]> map = new HashMap<>();
+        for (Object[] row : invoiceRepository.sumTotalsByPatientIds(patientIds)) {
+            UUID patientId = row[0] instanceof UUID u ? u : UUID.fromString(String.valueOf(row[0]));
+            BigDecimal total = row[1] != null ? new BigDecimal(row[1].toString()) : BigDecimal.ZERO;
+            BigDecimal paid = row[2] != null ? new BigDecimal(row[2].toString()) : BigDecimal.ZERO;
+            map.put(patientId, new BigDecimal[]{total, paid});
+        }
+        return map;
+    }
+
+    /**
+     * Recompose un {@link PatientResponseDto} en y injectant les totaux financiers
+     * (le record étant immuable). Le restant dû est calculé par {@code total - paid}.
+     */
+    private PatientResponseDto withTotals(PatientResponseDto d, BigDecimal total, BigDecimal paid) {
+        BigDecimal t = total != null ? total : BigDecimal.ZERO;
+        BigDecimal p = paid != null ? paid : BigDecimal.ZERO;
+        return new PatientResponseDto(
+                d.id(), d.code(), d.firstname(), d.lastname(), d.genre(),
+                d.telephone1(), d.telephone2(), d.adresse(), d.age(), d.yearOrMonth(),
+                d.birthday(), d.profession(), d.langue(), d.email(), d.branchId(),
+                d.createdAt(), t, p, t.subtract(p));
     }
 
     @Override

@@ -8,8 +8,8 @@ import lombok.Setter;
 /**
  * DTO de requête pour la création ou la mise à jour d'un hôpital.
  * <p>
- * Le nom et le téléphone sont obligatoires. La commission est optionnelle
- * et ne s'applique que si un accord commercial existe avec l'établissement.
+ * Seul le nom est obligatoire (conforme à la validation Laravel). Le téléphone,
+ * l'adresse, l'email et la commission sont optionnels.
  * </p>
  */
 @Getter
@@ -20,8 +20,7 @@ public class HospitalRequestDto {
     @NotBlank(message = "Le nom de l'hôpital est obligatoire")
     private String name;
 
-    /** Numéro de téléphone principal de l'établissement (obligatoire). */
-    @NotBlank(message = "Le téléphone de l'hôpital est obligatoire")
+    /** Numéro de téléphone principal de l'établissement (optionnel, comme Laravel). */
     private String telephone;
 
     /** Adresse physique de l'établissement (optionnel). */
