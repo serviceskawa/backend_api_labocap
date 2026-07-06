@@ -24,6 +24,27 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
 
     List<Invoice> findByPatientOrderByCreatedAtDesc(Patient patient);
 
+    /**
+     * Agrège, par patient, le total facturé et le total payé pour un ensemble de
+     * patients. Reproduit fidèlement les helpers Laravel
+     * {@code getTotalByPatient} / {@code getPaidByPatient} / {@code getNoPaidByPatient}
+     * en s'appuyant sur la colonne booléenne {@code paid}.
+     * <p>
+     * Chaque ligne renvoyée est un {@code Object[]} : [patient_id (UUID),
+     * total (BigDecimal), paid (BigDecimal)]. Le restant dû se déduit par
+     * {@code total - paid}.
+     * </p>
+     */
+    @Query(value = """
+            SELECT patient_id,
+                   COALESCE(SUM(total), 0) AS total_amount,
+                   COALESCE(SUM(CASE WHEN paid = true THEN total ELSE 0 END), 0) AS paid_amount
+            FROM invoices
+            WHERE patient_id IN :patientIds AND deleted_at IS NULL
+            GROUP BY patient_id
+            """, nativeQuery = true)
+    List<Object[]> sumTotalsByPatientIds(@Param("patientIds") Collection<UUID> patientIds);
+
     Optional<Invoice> findByTestOrderId(UUID testOrderId);
 
     List<Invoice> findByTestOrder_IdIn(Collection<UUID> testOrderIds);

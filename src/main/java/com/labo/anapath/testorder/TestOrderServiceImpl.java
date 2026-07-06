@@ -771,7 +771,10 @@ public class TestOrderServiceImpl implements TestOrderService {
     public PageResponse<TestOrderResponseDto> getMyspaceOrders(UUID userId, UUID branchId, int page, int size,
                                                                TestOrderStatus status, UUID typeOrderId,
                                                                String priority, String from, String to, String search) {
-        PageRequest pageRequest = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        // La requête native findMyspaceOrders trie déjà par t.created_at DESC.
+        // Ne PAS ajouter de Sort ici : Spring l'appliquerait tel quel sur la requête
+        // native (ORDER BY t.createdAt) → "column t.createdat does not exist" (500).
+        PageRequest pageRequest = PageRequest.of(page, size);
         String searchParam = (search != null && !search.isBlank()) ? search : null;
         String statusParam = (status != null) ? status.name() : null;
         String typeOrderParam = (typeOrderId != null) ? typeOrderId.toString() : null;
