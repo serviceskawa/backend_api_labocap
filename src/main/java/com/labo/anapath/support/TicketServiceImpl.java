@@ -1,10 +1,14 @@
 package com.labo.anapath.support;
 
 import com.labo.anapath.common.dto.PageResponse;
+import com.labo.anapath.common.email.EmailService;
+import com.labo.anapath.common.email.NotificationSettings;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
+import com.labo.anapath.user.User;
 import com.labo.anapath.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -26,6 +30,12 @@ public class TicketServiceImpl implements TicketService {
     private final TicketRepository ticketRepository;
     private final UserRepository userRepository;
     private final TicketMapper ticketMapper;
+    private final EmailService emailService;
+    private final NotificationSettings notificationSettings;
+
+    /** Adresse notifiée à la création d'un ticket (Laravel : {@code serviceskawa@gmail.com}). */
+    @Value("${app.support.ticket-notify-email:serviceskawa@gmail.com}")
+    private String ticketNotifyEmail;
 
     /**
      * {@inheritDoc}
@@ -60,9 +70,22 @@ public class TicketServiceImpl implements TicketService {
         ticket.setStatus(TicketStatus.OPEN);
         ticket.setPriority(dto.getPriority() != null ? dto.getPriority() : TicketPriority.MEDIUM);
         ticket.setTicketCode(generateTicketCode());
-        ticket.setUser(userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", userId)));
-        return ticketMapper.toResponseDto(ticketRepository.save(ticket));
+        User author = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", userId));
+        ticket.setUser(author);
+        Ticket saved = ticketRepository.save(ticket);
+        notifySupportOfNewTicket(saved, author, branchId);
+        return ticketMapper.toResponseDto(saved);
+    }
+
+    /** Notifie le support qu'un nouveau ticket vient d'être créé (Laravel : {@code NotificationCreateNewTicket}). */
+    private void notifySupportOfNewTicket(Ticket ticket, User author, UUID branchId) {
+        if (ticketNotifyEmail == null || ticketNotifyEmail.isBlank()) {
+            return;
+        }
+        String createdByName = (author.getFirstname() + " " + author.getLastname()).trim();
+        String labName = notificationSettings.labName(branchId);
+        emailService.sendNewTicketAlert(ticketNotifyEmail, ticket.getTicketCode(), createdByName, labName);
     }
 
     /**

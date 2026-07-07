@@ -34,6 +34,7 @@ public record ReportDetailDto(
         UUID reviewedById,
         String reviewedByName,
         List<String> tagNames,
+        List<UUID> tagIds,
         List<LogReportDto> logs,
         LocalDateTime createdAt,
         LocalDateTime updatedAt

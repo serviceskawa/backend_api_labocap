@@ -29,4 +29,7 @@ public interface ChatRepository extends JpaRepository<Chat, UUID> {
     Page<Chat> findConversation(@Param("u1") UUID u1, @Param("u2") UUID u2, Pageable pageable);
 
     List<Chat> findByReceiverIdAndSenderIdAndIsReadFalse(UUID receiverId, UUID senderId);
+
+    /** Nombre total de messages non lus reçus par l'utilisateur. */
+    long countByReceiverIdAndIsReadFalse(UUID receiverId);
 }

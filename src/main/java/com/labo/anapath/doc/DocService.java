@@ -13,4 +13,22 @@ public interface DocService {
     DocVersionResponseDto addVersion(UUID docId, String title, MultipartFile file, UUID userId, UUID branchId);
     List<DocVersionResponseDto> getVersions(UUID docId);
     void delete(UUID id);
+
+    /** Partage un document avec un rôle et notifie par email tous les utilisateurs de ce rôle. */
+    DocResponseDto share(UUID docId, UUID roleId, UUID branchId);
+
+    /** Documents partagés avec l'utilisateur courant (via ses rôles). */
+    PageResponse<DocResponseDto> findSharedWithMe(int page, int size, UUID userId, UUID branchId);
+
+    /** Documents les plus récents de la branche (par date de création). */
+    List<DocResponseDto> findRecent(UUID branchId, int limit);
+
+    /** Documents en corbeille (supprimés logiquement) de la branche. */
+    PageResponse<DocResponseDto> findTrash(int page, int size, UUID branchId);
+
+    /** Restaure un document depuis la corbeille. */
+    DocResponseDto restore(UUID id);
+
+    /** Supprime définitivement un document (et ses versions / fichiers). */
+    void permanentDelete(UUID id);
 }

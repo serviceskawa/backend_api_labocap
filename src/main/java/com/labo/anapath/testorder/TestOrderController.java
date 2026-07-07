@@ -194,11 +194,16 @@ public class TestOrderController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) TestOrderStatus status,
+            @RequestParam(required = false) UUID typeOrderId,
+            @RequestParam(required = false) String priority,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
             @RequestParam(required = false) String search,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
                 testOrderService.getMyspaceOrders(
-                        principal.getId(), principal.getBranchId(), page, size, status, search)));
+                        principal.getId(), principal.getBranchId(), page, size,
+                        status, typeOrderId, priority, from, to, search)));
     }
 
     // -------------------------------------------------------------------------

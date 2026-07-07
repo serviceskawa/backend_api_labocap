@@ -6,7 +6,9 @@ import com.labo.anapath.common.security.UserPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -33,6 +35,7 @@ public class InvoiceController {
     private final InvoiceService invoiceService;
     private final InvoiceRepository invoiceRepository;
     private final MecefService mecefService;
+    private final InvoicePdfService invoicePdfService;
 
     @GetMapping
     @PreAuthorize("hasAuthority('view-invoices')")
@@ -118,6 +121,30 @@ public class InvoiceController {
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Facture créée", invoiceService.create(dto, principal.getBranchId())));
+    }
+
+    @GetMapping("/{id}/pdf")
+    @PreAuthorize("hasAuthority('view-invoices')")
+    public ResponseEntity<byte[]> generatePdf(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        InvoiceResponseDto invoice = invoiceService.findById(id, principal.getBranchId());
+        byte[] pdf = invoicePdfService.generatePdf(id, principal.getBranchId());
+        String filename = "Facture-" + (invoice.code() != null ? invoice.code() : id) + ".pdf";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_PDF_VALUE)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
+                .body(pdf);
+    }
+
+    @PostMapping("/from-order/{orderId}")
+    @PreAuthorize("hasAuthority('edit-invoices')")
+    public ResponseEntity<ApiResponse<InvoiceResponseDto>> createFromOrder(
+            @PathVariable UUID orderId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Facture créée",
+                        invoiceService.createFromOrder(orderId, principal.getBranchId())));
     }
 
     @PutMapping("/{id}")

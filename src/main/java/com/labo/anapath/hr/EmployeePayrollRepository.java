@@ -5,6 +5,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -21,4 +22,10 @@ public interface EmployeePayrollRepository extends JpaRepository<EmployeePayroll
      * @return page de fiches de paie
      */
     Page<EmployeePayroll> findByEmployeeId(UUID employeeId, Pageable pageable);
+
+    /**
+     * Retourne une fiche de paie par son identifiant ET celui de son employé,
+     * garantissant la cohérence employé/fiche (utilisé pour la génération PDF).
+     */
+    Optional<EmployeePayroll> findByIdAndEmployeeId(UUID id, UUID employeeId);
 }

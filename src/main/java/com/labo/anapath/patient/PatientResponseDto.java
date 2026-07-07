@@ -1,5 +1,6 @@
 package com.labo.anapath.patient;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -25,8 +26,11 @@ import java.util.UUID;
  * @param profession  profession (peut être {@code null})
  * @param langue      langue parlée (peut être {@code null})
  * @param email       adresse e-mail (peut être {@code null})
- * @param branchId    identifiant de l'agence
- * @param createdAt   date et heure de création du dossier
+ * @param branchId      identifiant de l'agence
+ * @param createdAt     date et heure de création du dossier
+ * @param totalInvoiced total facturé au patient (somme des factures) — renseigné dans la liste
+ * @param totalPaid     total réglé (factures payées) — renseigné dans la liste
+ * @param totalUnpaid   total restant dû (factures impayées) — renseigné dans la liste
  */
 public record PatientResponseDto(
         UUID id,
@@ -44,5 +48,8 @@ public record PatientResponseDto(
         String langue,
         String email,
         UUID branchId,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        BigDecimal totalInvoiced,
+        BigDecimal totalPaid,
+        BigDecimal totalUnpaid
 ) {}

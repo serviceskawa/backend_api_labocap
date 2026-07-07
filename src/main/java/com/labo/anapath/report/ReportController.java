@@ -91,12 +91,23 @@ public class ReportController {
             @RequestParam(required = false) String dateEnd,
             @RequestParam(required = false) Boolean isUrgent,
             @RequestParam(required = false) Integer status,
+            @RequestParam(required = false) Boolean isLate,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
                 reportService.getSuiviList(
                         principal.getBranchId(), page, size,
                         search, typeOrderId, dateBegin, dateEnd,
-                        isUrgent, status)));
+                        isUrgent, status, isLate)));
+    }
+
+    @GetMapping("/logs")
+    @PreAuthorize("hasAuthority('view-reports')")
+    public ResponseEntity<ApiResponse<PageResponse<LogReportResponseDto>>> getReportLogs(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                reportService.getReportLogs(principal.getBranchId(), page, size)));
     }
 
     @GetMapping("/search-global")

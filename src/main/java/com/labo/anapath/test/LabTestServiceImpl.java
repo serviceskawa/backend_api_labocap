@@ -40,9 +40,12 @@ public class LabTestServiceImpl implements LabTestService {
      */
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<LabTestResponseDto> findAll(int page, int size, UUID branchId) {
+    public PageResponse<LabTestResponseDto> findAll(int page, int size, String search, String status, UUID branchId) {
+        String searchFilter = (search != null && !search.isBlank()) ? search.trim() : null;
+        String statusFilter = (status != null && !status.isBlank()) ? status.trim() : null;
         return PageResponse.of(
-                labTestRepository.findByBranchId(branchId, PageRequest.of(page, size, Sort.by("createdAt").descending()))
+                labTestRepository.findByFilters(branchId, searchFilter, statusFilter,
+                                PageRequest.of(page, size, Sort.by("createdAt").descending()))
                         .map(mapper::toLabTestResponseDto));
     }
 

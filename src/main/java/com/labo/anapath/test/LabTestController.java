@@ -39,10 +39,12 @@ public class LabTestController {
     private final LabTestService labTestService;
 
     /**
-     * Retourne la liste paginée des analyses de la succursale courante.
+     * Retourne la liste paginée des analyses de la succursale courante, avec filtres optionnels.
      *
      * @param page      numéro de page (0-indexé, défaut 0)
      * @param size      nombre d'éléments par page (défaut 20)
+     * @param search    terme de recherche partielle sur le nom (optionnel)
+     * @param status    statut à filtrer, ACTIF/INACTIF (optionnel)
      * @param principal principal de sécurité de l'utilisateur connecté
      * @return page de {@link LabTestResponseDto}
      */
@@ -51,8 +53,11 @@ public class LabTestController {
     public ResponseEntity<ApiResponse<PageResponse<LabTestResponseDto>>> findAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status,
             @AuthenticationPrincipal UserPrincipal principal) {
-        return ResponseEntity.ok(ApiResponse.success(labTestService.findAll(page, size, principal.getBranchId())));
+        return ResponseEntity.ok(ApiResponse.success(
+                labTestService.findAll(page, size, search, status, principal.getBranchId())));
     }
 
     @GetMapping("/all")

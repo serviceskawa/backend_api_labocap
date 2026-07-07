@@ -46,4 +46,26 @@ public interface CategoryTestRepository extends JpaRepository<CategoryTest, UUID
      * @return {@code true} si le nom est déjà utilisé par une autre catégorie
      */
     boolean existsByNameIgnoreCaseAndBranchIdAndIdNot(String name, UUID branchId, UUID id);
+
+    /**
+     * Vérifie si une catégorie portant ce code existe dans la succursale (insensible à la casse).
+     * Utilisé pour détecter les doublons de code lors de la création.
+     *
+     * @param code     code de la catégorie
+     * @param branchId identifiant de la succursale
+     * @return {@code true} si le code est déjà utilisé dans la succursale
+     */
+    boolean existsByCodeIgnoreCaseAndBranchId(String code, UUID branchId);
+
+    /**
+     * Vérifie si une catégorie portant ce code existe dans la succursale,
+     * en excluant la catégorie identifiée par {@code id}.
+     * Utilisé pour détecter les doublons de code lors d'une mise à jour.
+     *
+     * @param code     code de la catégorie
+     * @param branchId identifiant de la succursale
+     * @param id       identifiant de la catégorie à exclure de la vérification
+     * @return {@code true} si le code est déjà utilisé par une autre catégorie
+     */
+    boolean existsByCodeIgnoreCaseAndBranchIdAndIdNot(String code, UUID branchId, UUID id);
 }

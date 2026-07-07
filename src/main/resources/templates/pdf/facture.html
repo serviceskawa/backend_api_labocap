@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="fr">
+<head>
+    <meta charset="UTF-8"/>
+    <style>
+        @page { size: A4; margin: 18mm 15mm; }
+        body { font-family: Arial, sans-serif; font-size: 12px; color: #222; margin: 0; }
+        .header { text-align: center; margin-bottom: 12px; }
+        .title { text-align: right; font-size: 16px; font-weight: bold; margin: 8px 0 16px; }
+        .infos { width: 100%; margin-bottom: 16px; }
+        .infos td { vertical-align: top; }
+        .infos .right { text-align: right; }
+        address { font-style: normal; line-height: 1.5; }
+        table.lines { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        table.lines th, table.lines td { border-bottom: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+        table.lines th { background-color: #f3f3f3; font-size: 11px; text-transform: uppercase; }
+        table.lines td.num, table.lines th.num { text-align: right; }
+        .totals { width: 100%; margin-top: 14px; }
+        .totals td { padding: 2px 8px; }
+        .totals .label { text-align: right; }
+        .totals .value { text-align: right; width: 140px; font-weight: bold; }
+        .totals .grand { font-size: 16px; }
+        .mecef { margin-top: 24px; border-top: 1px solid #ccc; padding-top: 10px; }
+        .mecef .lbl { font-style: italic; text-align: center; margin-bottom: 8px; }
+        .mecef td { vertical-align: middle; }
+        .mecef .kv { display: block; margin: 2px 0; }
+    </style>
+</head>
+<body>
+    <!-- En-tête laboratoire -->
+    <div class="header" th:utext="${entete}">En-tête du laboratoire</div>
+
+    <div class="title" th:text="${title}">Reçu de paiement</div>
+
+    <!-- Infos client / facture -->
+    <table class="infos">
+        <tr>
+            <td>
+                <strong>Informations du patient</strong>
+                <address>
+                    <strong>Nom : </strong><span th:text="${clientName}">Client</span><br/>
+                    <strong>Adresse : </strong><span th:text="${clientAddress}"></span>
+                </address>
+            </td>
+            <td class="right">
+                <p><strong>Date : </strong><span th:text="${date}"></span></p>
+                <p th:if="${payment != ''}"><strong>Mode de paiement : </strong><span th:text="${payment}"></span></p>
+                <p><strong>Code : </strong><span th:text="${code}"></span></p>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Lignes -->
+    <table class="lines">
+        <thead>
+            <tr>
+                <th class="num">#</th>
+                <th>Titre de l'examen</th>
+                <th class="num">Quantité</th>
+                <th class="num">Prix (F CFA)</th>
+                <th class="num">Total (F CFA)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="line : ${lines}">
+                <td class="num" th:text="${line.index}">1</td>
+                <td><b th:text="${line.testName}">Examen</b></td>
+                <td class="num" th:text="${line.quantity}">1</td>
+                <td class="num" th:text="${line.unitPrice}">0</td>
+                <td class="num" th:text="${line.total}">0</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- Totaux -->
+    <table class="totals">
+        <tr>
+            <td class="label">Sous-total :</td>
+            <td class="value"><span th:text="${subtotal}">0</span> F CFA</td>
+        </tr>
+        <tr>
+            <td class="label grand">Total :</td>
+            <td class="value grand"><span th:text="${total}">0</span> F CFA</td>
+        </tr>
+    </table>
+
+    <!-- Éléments de sécurité de la facture normalisée (MECeF) -->
+    <div class="mecef" th:if="${hasMecef}">
+        <div class="lbl">--- ÉLÉMENTS DE SÉCURITÉ DE LA FACTURE NORMALISÉE ---</div>
+        <table>
+            <tr>
+                <td style="width: 180px; text-align: center;">
+                    <img th:if="${qrcode != ''}" th:src="${qrcode}" width="140" height="140" alt="QR Code"/>
+                </td>
+                <td>
+                    <span class="kv"><strong>Code MECeF DGI :</strong> <span th:text="${codeMecef}"></span></span>
+                    <span class="kv"><strong>MECeF NIM :</strong> <span th:text="${nim}"></span></span>
+                    <span class="kv"><strong>MECeF Compteurs :</strong> <span th:text="${counters}"></span></span>
+                    <span class="kv"><strong>MECeF Heure :</strong> <span th:text="${dateGenerate}"></span></span>
+                </td>
+            </tr>
+        </table>
+    </div>
+</body>
+</html>

@@ -82,4 +82,12 @@ public class ChatController {
         return ResponseEntity.ok(ApiResponse.success(
                 userService.findAll(0, 200, principal.getBranchId()).content()));
     }
+
+    @GetMapping("/unread-count")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Map<String, Long>>> unreadCount(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                Map.of("count", chatService.countUnread(principal.getId()))));
+    }
 }

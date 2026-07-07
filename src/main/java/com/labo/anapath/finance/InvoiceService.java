@@ -17,6 +17,16 @@ public interface InvoiceService {
 
     InvoiceResponseDto create(InvoiceRequestDto dto, UUID branchId);
 
+    /**
+     * Crée la facture rattachée à un bon d'examen (réplique Laravel {@code storeFromOrder}).
+     * Si une facture existe déjà pour ce bon, elle est renvoyée telle quelle (idempotent).
+     *
+     * @param orderId  identifiant du bon d'examen à facturer
+     * @param branchId identifiant de la branche
+     * @return la facture créée ou existante
+     */
+    InvoiceResponseDto createFromOrder(UUID orderId, UUID branchId);
+
     InvoiceResponseDto update(UUID id, InvoiceRequestDto dto, UUID branchId);
 
     void delete(UUID id, UUID branchId);

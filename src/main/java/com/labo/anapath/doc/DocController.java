@@ -3,6 +3,7 @@ package com.labo.anapath.doc;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.security.UserPrincipal;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -86,5 +88,61 @@ public class DocController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
         docService.delete(id);
         return ResponseEntity.ok(ApiResponse.success("Document supprimé", null));
+    }
+
+    // ------------------------------------------------------------------
+    // GED avancée : partage par rôle, partagés avec moi, récents, corbeille
+    // ------------------------------------------------------------------
+
+    @PostMapping("/{id}/share")
+    @PreAuthorize("hasAuthority('edit-documentation-categories')")
+    public ResponseEntity<ApiResponse<DocResponseDto>> share(
+            @PathVariable UUID id,
+            @Valid @RequestBody DocShareRequestDto request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success("Document partagé",
+                docService.share(id, request.roleId(), principal.getBranchId())));
+    }
+
+    @GetMapping("/shared-with-me")
+    @PreAuthorize("hasAuthority('view-documentation-categories')")
+    public ResponseEntity<ApiResponse<PageResponse<DocResponseDto>>> sharedWithMe(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                docService.findSharedWithMe(page, size, principal.getId(), principal.getBranchId())));
+    }
+
+    @GetMapping("/recent")
+    @PreAuthorize("hasAuthority('view-documentation-categories')")
+    public ResponseEntity<ApiResponse<List<DocResponseDto>>> recent(
+            @RequestParam(defaultValue = "5") int limit,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                docService.findRecent(principal.getBranchId(), limit)));
+    }
+
+    @GetMapping("/trash")
+    @PreAuthorize("hasAuthority('edit-documentation-categories')")
+    public ResponseEntity<ApiResponse<PageResponse<DocResponseDto>>> trash(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                docService.findTrash(page, size, principal.getBranchId())));
+    }
+
+    @PostMapping("/{id}/restore")
+    @PreAuthorize("hasAuthority('edit-documentation-categories')")
+    public ResponseEntity<ApiResponse<DocResponseDto>> restore(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success("Document restauré", docService.restore(id)));
+    }
+
+    @DeleteMapping("/{id}/permanent")
+    @PreAuthorize("hasAuthority('edit-documentation-categories')")
+    public ResponseEntity<ApiResponse<Void>> permanentDelete(@PathVariable UUID id) {
+        docService.permanentDelete(id);
+        return ResponseEntity.ok(ApiResponse.success("Document supprimé définitivement", null));
     }
 }

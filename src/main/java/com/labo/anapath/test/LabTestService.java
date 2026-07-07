@@ -13,14 +13,16 @@ import java.util.UUID;
 public interface LabTestService {
 
     /**
-     * Retourne la liste paginée des analyses d'une succursale.
+     * Retourne la liste paginée des analyses d'une succursale, avec filtres optionnels.
      *
      * @param page     numéro de page (0-indexé)
      * @param size     taille de la page
+     * @param search   terme de recherche partielle sur le nom (ou {@code null}/vide)
+     * @param status   statut exact à filtrer, ACTIF/INACTIF (ou {@code null}/vide)
      * @param branchId identifiant de la succursale
      * @return page de DTOs d'analyses
      */
-    PageResponse<LabTestResponseDto> findAll(int page, int size, UUID branchId);
+    PageResponse<LabTestResponseDto> findAll(int page, int size, String search, String status, UUID branchId);
 
     List<LabTestResponseDto> findAll(UUID branchId);
 

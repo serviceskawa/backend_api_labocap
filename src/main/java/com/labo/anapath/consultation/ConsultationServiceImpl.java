@@ -148,6 +148,16 @@ public class ConsultationServiceImpl implements ConsultationService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<ConsultationFileResponseDto> getFiles(UUID id) {
+        return consultationFileRepository.findByConsultationIdOrderByCreatedAtAsc(id)
+                .stream()
+                .map(f -> new ConsultationFileResponseDto(
+                        f.getId(), f.getTypeFileLabel(), f.getPath(), f.getComment(), f.getCreatedAt()))
+                .toList();
+    }
+
+    @Override
     @Transactional
     public void delete(UUID id) {
         Consultation consultation = consultationRepository.findById(id)

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="fr">
+<head>
+    <meta charset="UTF-8"/>
+    <style>
+        @page { size: A4; margin: 25px; }
+        body { font-family: Arial, sans-serif; font-size: 12px; color: #222; margin: 0; }
+
+        .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 8px; margin-bottom: 16px; }
+
+        .doc-title { text-align: center; font-size: 18px; font-weight: bold; letter-spacing: 1px; margin: 14px 0 4px; }
+        .doc-meta { text-align: center; font-size: 10px; color: #666; margin-bottom: 18px; }
+
+        .info-box { border: 1px solid #ccc; border-radius: 4px; padding: 10px 12px; margin-bottom: 18px; }
+        .info-box h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; color: #555; border-bottom: 1px solid #eee; padding-bottom: 4px; }
+        .info-row { margin: 3px 0; }
+        .info-label { display: inline-block; width: 140px; color: #666; }
+        .info-value { font-weight: bold; }
+
+        table.amounts { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+        table.amounts th, table.amounts td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
+        table.amounts th { background: #f3f4f6; font-size: 11px; text-transform: uppercase; color: #555; }
+        table.amounts td.amount { text-align: right; font-weight: bold; }
+        tr.net td { background: #eef6ee; font-size: 14px; }
+        tr.net td.amount { color: #15803d; }
+
+        .pay-status { margin-bottom: 24px; font-size: 12px; }
+        .pay-status .info-label { width: 140px; }
+
+        .signature-zone { display: flex; justify-content: space-between; margin-top: 36px; }
+        .signature-block { width: 45%; text-align: center; font-size: 11px; }
+        .signature-line { border-top: 1px solid #333; margin-top: 40px; padding-top: 4px; color: #666; }
+
+        .footer { border-top: 1px solid #ccc; margin-top: 30px; padding-top: 8px; font-size: 10px; text-align: center; color: #777; }
+    </style>
+</head>
+<body>
+
+<div class="header" th:utext="${entete}">En-tête société</div>
+
+<div class="doc-title">FICHE DE PAIE</div>
+<div class="doc-meta">
+    Réf. <span th:text="${reference}">FP-XXXX</span>
+    &#160;·&#160; Période : <span th:text="${period}">Mois Année</span>
+    &#160;·&#160; Émise le <span th:text="${generatedAt}">jj/mm/aaaa</span>
+</div>
+
+<div class="info-box">
+    <h3>Employé</h3>
+    <div class="info-row">
+        <span class="info-label">Nom &amp; prénom</span>
+        <span class="info-value" th:text="${employeeName}">Nom Prénom</span>
+    </div>
+    <div class="info-row">
+        <span class="info-label">Poste</span>
+        <span class="info-value" th:text="${position != '' ? position : '—'}">Poste</span>
+    </div>
+    <div class="info-row">
+        <span class="info-label">Téléphone</span>
+        <span class="info-value" th:text="${phone != '' ? phone : '—'}">—</span>
+    </div>
+    <div class="info-row">
+        <span class="info-label">Email</span>
+        <span class="info-value" th:text="${email != '' ? email : '—'}">—</span>
+    </div>
+    <div class="info-row">
+        <span class="info-label">Date d'embauche</span>
+        <span class="info-value" th:text="${hireDate}">—</span>
+    </div>
+</div>
+
+<table class="amounts">
+    <thead>
+        <tr>
+            <th>Désignation</th>
+            <th style="text-align: right;">Montant</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Salaire brut</td>
+            <td class="amount" th:text="${grossSalary}">0 FCFA</td>
+        </tr>
+        <tr>
+            <td>Déductions / retenues</td>
+            <td class="amount" th:text="${deductions}">0 FCFA</td>
+        </tr>
+        <tr class="net">
+            <td>Salaire net à payer</td>
+            <td class="amount" th:text="${netSalary}">0 FCFA</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="pay-status">
+    <span class="info-label">Date de paiement</span>
+    <span class="info-value" th:text="${paidAt}">Non payé</span>
+</div>
+
+<div class="signature-zone">
+    <div class="signature-block">
+        <div class="signature-line">L'employé</div>
+    </div>
+    <div class="signature-block">
+        <div class="signature-line">La direction</div>
+    </div>
+</div>
+
+<div class="footer" th:utext="${footer}">Pied de page société</div>
+
+</body>
+</html>

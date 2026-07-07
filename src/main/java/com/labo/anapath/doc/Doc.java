@@ -1,6 +1,7 @@
 package com.labo.anapath.doc;
 
 import com.labo.anapath.common.audit.AuditableEntity;
+import com.labo.anapath.role.Role;
 import com.labo.anapath.user.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -42,4 +43,9 @@ public class Doc extends AuditableEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
+
+    /** Rôle avec lequel le document est partagé (réplique Laravel {@code docs.role_id}). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "role_id")
+    private Role role;
 }

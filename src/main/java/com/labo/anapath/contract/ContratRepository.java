@@ -22,11 +22,14 @@ public interface ContratRepository extends JpaRepository<Contrat, UUID> {
     // Dashboard KPIs
     long countByBranchId(UUID branchId);
 
+    // CAST(... AS string) sur chaque test "IS NULL" : sans cela PostgreSQL n'arrive
+    // pas à inférer le type du paramètre (« could not determine data type of parameter »)
+    // et l'endpoint renvoie 500 dès qu'un filtre est absent (cas du menu déroulant contrat).
     @Query("SELECT c FROM Contrat c WHERE c.branchId = :branchId " +
-           "AND (:status IS NULL OR c.status = :status) " +
-           "AND (:search IS NULL OR LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%'))) " +
-           "AND (:dateFrom IS NULL OR c.startDate >= :dateFrom) " +
-           "AND (:dateTo IS NULL OR c.startDate <= :dateTo)")
+           "AND (CAST(:status AS string) IS NULL OR c.status = :status) " +
+           "AND (CAST(:search AS string) IS NULL OR LOWER(c.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))) " +
+           "AND (CAST(:dateFrom AS string) IS NULL OR c.startDate >= :dateFrom) " +
+           "AND (CAST(:dateTo AS string) IS NULL OR c.startDate <= :dateTo)")
     Page<Contrat> findWithFilters(@Param("branchId") UUID branchId,
                                   @Param("status") String status,
                                   @Param("search") String search,

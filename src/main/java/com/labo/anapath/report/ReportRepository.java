@@ -202,6 +202,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
                    (:statusFilter = 3 AND r.status = 'DRAFT') OR
                    (:statusFilter = 4 AND r.status = 'VALIDATED') OR
                    (:statusFilter = 5 AND r.is_delivered = false))
+              AND (:isLate IS NULL OR (r.status = 'DRAFT' AND DATE(r.created_at) <= CURRENT_DATE - 21))
             ORDER BY r.created_at DESC
             """,
             countQuery = """
@@ -225,6 +226,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
                    (:statusFilter = 3 AND r.status = 'DRAFT') OR
                    (:statusFilter = 4 AND r.status = 'VALIDATED') OR
                    (:statusFilter = 5 AND r.is_delivered = false))
+              AND (:isLate IS NULL OR (r.status = 'DRAFT' AND DATE(r.created_at) <= CURRENT_DATE - 21))
             """,
             nativeQuery = true)
     Page<ReportSuiviProjection> findSuiviRows(
@@ -235,6 +237,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             @Param("dateEnd") String dateEnd,
             @Param("isUrgent") Boolean isUrgent,
             @Param("statusFilter") Integer statusFilter,
+            @Param("isLate") Boolean isLate,
             Pageable pageable);
 
     @Query(value = """

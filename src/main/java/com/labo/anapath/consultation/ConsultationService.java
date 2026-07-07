@@ -21,5 +21,8 @@ public interface ConsultationService {
 
     ConsultationResponseDto updateType(UUID id, UUID typeConsultationId);
 
+    /** Liste les fichiers joints à une consultation. */
+    List<ConsultationFileResponseDto> getFiles(UUID id);
+
     void delete(UUID id);
 }

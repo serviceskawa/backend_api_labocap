@@ -1,11 +1,14 @@
 package com.labo.anapath.report;
 
 import com.labo.anapath.common.dto.PageResponse;
+import com.labo.anapath.common.email.EmailService;
+import com.labo.anapath.common.email.NotificationSettings;
 import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.setting.SettingReportTemplate;
 import com.labo.anapath.setting.SettingReportTemplateRepository;
 import com.labo.anapath.testorder.TestOrderRepository;
+import com.labo.anapath.user.User;
 import com.labo.anapath.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +42,8 @@ public class ReportServiceImpl implements ReportService {
     private final UserRepository userRepository;
     private final SettingReportTemplateRepository templateRepository;
     private final ReportMapper reportMapper;
+    private final EmailService emailService;
+    private final NotificationSettings notificationSettings;
 
     @Override
     @Transactional(readOnly = true)
@@ -129,6 +134,7 @@ public class ReportServiceImpl implements ReportService {
                 report.getReviewedBy() != null ? report.getReviewedBy().getId() : null,
                 report.getReviewedBy() != null ? report.getReviewedBy().getFirstname() + " " + report.getReviewedBy().getLastname() : null,
                 report.getTags().stream().map(Tag::getName).toList(),
+                report.getTags().stream().map(Tag::getId).toList(),
                 logDtos,
                 report.getCreatedAt(), report.getUpdatedAt());
     }
@@ -167,8 +173,13 @@ public class ReportServiceImpl implements ReportService {
                     .orElseThrow(() -> new ResourceNotFoundException("Titre", dto.getTitleId())));
         }
         if (dto.getReviewedById() != null) {
-            report.setReviewedBy(userRepository.findById(dto.getReviewedById())
-                    .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", dto.getReviewedById())));
+            UUID previousReviewerId = report.getReviewedBy() != null ? report.getReviewedBy().getId() : null;
+            User reviewer = userRepository.findById(dto.getReviewedById())
+                    .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", dto.getReviewedById()));
+            report.setReviewedBy(reviewer);
+            if (!reviewer.getId().equals(previousReviewerId)) {
+                notifyAssignedReviewer(report, reviewer);
+            }
         }
         if (dto.getSignatory1Id() != null) {
             report.setSignatory1(userRepository.findById(dto.getSignatory1Id())
@@ -212,7 +223,7 @@ public class ReportServiceImpl implements ReportService {
             UUID branchId, int page, int size,
             String search, String typeOrderId,
             String dateBegin, String dateEnd,
-            Boolean isUrgent, Integer statusFilter) {
+            Boolean isUrgent, Integer statusFilter, Boolean isLate) {
         var pageRequest = PageRequest.of(page, size);
         var resultPage = reportRepository.findSuiviRows(
                 branchId,
@@ -220,7 +231,9 @@ public class ReportServiceImpl implements ReportService {
                 (typeOrderId != null && !typeOrderId.isBlank()) ? typeOrderId : null,
                 (dateBegin != null && !dateBegin.isBlank()) ? dateBegin : null,
                 (dateEnd != null && !dateEnd.isBlank()) ? dateEnd : null,
-                isUrgent, statusFilter, pageRequest);
+                isUrgent, statusFilter,
+                Boolean.TRUE.equals(isLate) ? Boolean.TRUE : null,
+                pageRequest);
 
         return PageResponse.of(resultPage.map(p -> new ReportSuiviRowDto(
                 p.getReportId() != null ? UUID.fromString(p.getReportId()) : null,
@@ -240,6 +253,30 @@ public class ReportServiceImpl implements ReportService {
                 p.getRetrieverName(),
                 p.getDeliveryDate()
         )));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<LogReportResponseDto> getReportLogs(UUID branchId, int page, int size) {
+        var pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return PageResponse.of(
+                logReportRepository.findByBranchId(branchId, pageRequest).map(l -> {
+                    var report = l.getReport();
+                    var user = l.getUser();
+                    return new LogReportResponseDto(
+                            l.getId(),
+                            l.getAction(),
+                            l.getDescription(),
+                            l.getCreatedAt(),
+                            user != null
+                                    ? (user.getFirstname() + " " + user.getLastname()).trim()
+                                    : null,
+                            report != null ? report.getId() : null,
+                            report != null ? report.getCode() : null,
+                            (report != null && report.getTestOrder() != null)
+                                    ? report.getTestOrder().getCode()
+                                    : null);
+                }));
     }
 
     @Override
@@ -297,8 +334,10 @@ public class ReportServiceImpl implements ReportService {
                     .orElseThrow(() -> new ResourceNotFoundException("Titre", dto.getTitleId())));
         }
         if (dto.getReviewedById() != null) {
-            report.setReviewedBy(userRepository.findById(dto.getReviewedById())
-                    .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", dto.getReviewedById())));
+            User reviewer = userRepository.findById(dto.getReviewedById())
+                    .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", dto.getReviewedById()));
+            report.setReviewedBy(reviewer);
+            notifyAssignedReviewer(report, reviewer);
         }
 
         if (dto.getTagIds() != null && !dto.getTagIds().isEmpty()) {
@@ -309,6 +348,23 @@ public class ReportServiceImpl implements ReportService {
         Report saved = reportRepository.save(report);
         logAction(saved.getId(), "CREATE", branchId);
         return reportMapper.toResponseDto(saved);
+    }
+
+    /**
+     * Notifie par email un utilisateur fraîchement assigné comme relecteur d'un compte-rendu.
+     * (Réplique Laravel : {@code AssignedReviewMail}.)
+     */
+    private void notifyAssignedReviewer(Report report, User reviewer) {
+        if (reviewer.getEmail() == null || reviewer.getEmail().isBlank()) {
+            return;
+        }
+        String reviewerName = (reviewer.getFirstname() + " " + reviewer.getLastname()).trim();
+        String reportTitle = report.getTitleReport() != null
+                ? report.getTitleReport().getName()
+                : report.getCode();
+        String orderCode = report.getTestOrder() != null ? report.getTestOrder().getCode() : "";
+        String labName = notificationSettings.labName(report.getBranchId());
+        emailService.sendAssignedReview(reviewer.getEmail(), reviewerName, reportTitle, orderCode, labName);
     }
 
     /**
