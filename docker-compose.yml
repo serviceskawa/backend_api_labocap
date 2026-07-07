@@ -47,6 +47,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant dans .env}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
       JWT_REFRESH: ${JWT_REFRESH:-604800000}
+      # Origines frontend autorisées par CORS (lues par CorsConfig.java au runtime)
+      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:3001}
       # Stockage des fichiers dans le conteneur → volume persistant "storage"
       STORAGE_PATH: /var/lib/labo/storage
       # SMTP
