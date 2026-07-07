@@ -1,0 +1,72 @@
+services:
+  # ─── Base de données PostgreSQL ────────────────────────────────────────────
+  db:
+    image: postgres:16
+    container_name: labo-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-labo_anapath}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant dans .env}
+      # Port d'écoute interne de PostgreSQL (repris par pg_isready via $PGPORT)
+      PGPORT: ${DB_PORT:-5432}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      # Restauration AUTOMATIQUE du dump au tout premier démarrage (volume vide).
+      # ⚠ Indispensable : Flyway est configuré baseline-version=50 et ne rejoue
+      # pas V1→V50. Le dump doit contenir le schéma déjà migré jusqu'à V50.
+      # Ne s'exécute QUE si db-data est vide. Adapte le nom du fichier si besoin.
+      - ./backups/backup-2026-07-06-20-01-06.sql:/docker-entrypoint-initdb.d/01-restore.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-labo_anapath} -p ${DB_PORT:-5432}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Décommente pour exposer PostgreSQL à l'hôte (admin/psql). Sinon, garde-le
+    # privé au réseau interne, seule l'API y accède.
+    # ports:
+    #   - "${DB_PORT:-5432}:${DB_PORT:-5432}"
+
+  # ─── API Spring Boot ───────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: labo-anapath-api:1.0.0
+    container_name: labo-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      # La base est jointe par le nom de service "db" sur le réseau interne
+      DB_URL: jdbc:postgresql://db:${DB_PORT:-5432}/${DB_NAME:-labo_anapath}
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant dans .env}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant dans .env}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      JWT_REFRESH: ${JWT_REFRESH:-604800000}
+      # Stockage des fichiers dans le conteneur → volume persistant "storage"
+      STORAGE_PATH: /var/lib/labo/storage
+      # SMTP
+      MAIL_HOST: ${MAIL_HOST:-smtp.mailtrap.io}
+      MAIL_PORT: ${MAIL_PORT:-2525}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-noreply@labo-anapath.bj}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Labo AnaPath}
+    volumes:
+      - storage:/var/lib/labo/storage
+    ports:
+      - "${API_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  db-data:
+  storage:
