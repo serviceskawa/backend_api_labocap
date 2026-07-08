@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
@@ -50,6 +51,19 @@ public class AuthController {
     private final AuthService authService;
     private final TwoFaService twoFaService;
     private final JwtProperties jwtProperties;
+
+    /**
+     * Attribut {@code Secure} des cookies d'authentification.
+     * <p>
+     * {@code true} par défaut (obligatoire en production HTTPS). À passer à
+     * {@code false} UNIQUEMENT sur un environnement servi en HTTP clair (ex.
+     * démo sur IP brute), sans quoi le navigateur refuse de stocker les cookies
+     * et l'utilisateur est renvoyé sur /login. Ne jamais laisser {@code false}
+     * en production.
+     * </p>
+     */
+    @Value("${app.cookie.secure:true}")
+    private boolean cookieSecure;
 
     /**
      * Authentifie un utilisateur avec son email et son mot de passe.
@@ -259,7 +273,7 @@ public class AuthController {
     private void writeTokenCookies(HttpServletResponse response, LoginResponse loginResponse) {
         ResponseCookie accessCookie = ResponseCookie.from(ACCESS_COOKIE, loginResponse.accessToken())
                 .httpOnly(true)
-                .secure(true)
+                .secure(cookieSecure)
                 .sameSite("Strict")
                 .path(API_PATH)
                 .maxAge(Duration.ofMillis(jwtProperties.getExpirationMs()))
@@ -267,7 +281,7 @@ public class AuthController {
 
         ResponseCookie refreshCookie = ResponseCookie.from(REFRESH_COOKIE, loginResponse.refreshToken())
                 .httpOnly(true)
-                .secure(true)
+                .secure(cookieSecure)
                 .sameSite("Strict")
                 .path(REFRESH_PATH)
                 .maxAge(Duration.ofMillis(jwtProperties.getRefreshExpirationMs()))
@@ -283,7 +297,7 @@ public class AuthController {
     private void clearTokenCookies(HttpServletResponse response) {
         ResponseCookie clearAccess = ResponseCookie.from(ACCESS_COOKIE, "")
                 .httpOnly(true)
-                .secure(true)
+                .secure(cookieSecure)
                 .sameSite("Strict")
                 .path(API_PATH)
                 .maxAge(0)
@@ -291,7 +305,7 @@ public class AuthController {
 
         ResponseCookie clearRefresh = ResponseCookie.from(REFRESH_COOKIE, "")
                 .httpOnly(true)
-                .secure(true)
+                .secure(cookieSecure)
                 .sameSite("Strict")
                 .path(REFRESH_PATH)
                 .maxAge(0)

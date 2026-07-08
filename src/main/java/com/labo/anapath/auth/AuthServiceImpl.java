@@ -68,6 +68,19 @@ public class AuthServiceImpl implements AuthService {
     private final com.labo.anapath.common.email.EmailService emailService;
 
     /**
+     * Affiche le code OTP 2FA en clair dans les logs applicatifs.
+     * <p>
+     * {@code false} par défaut. À passer à {@code true} UNIQUEMENT sur un
+     * environnement de test où l'envoi d'e-mails est indisponible (ex. quota
+     * Mailtrap atteint), afin de lire le code dans {@code docker compose logs}.
+     * NE JAMAIS activer en production : loguer un code d'authentification en
+     * clair est une faille de sécurité.
+     * </p>
+     */
+    @org.springframework.beans.factory.annotation.Value("${app.otp.log-plaintext:false}")
+    private boolean logOtpPlaintext;
+
+    /**
      * {@inheritDoc}
      * <p>
      * Délègue la vérification des identifiants à Spring Security. Si la 2FA est
@@ -284,6 +297,12 @@ public class AuthServiceImpl implements AuthService {
         twoFaRepository.deleteByUserId(user.getId());
         twoFaRepository.flush();
         twoFaRepository.save(new TwoFa(user.getId(), user.getBranchId(), hashedOtp));
+
+        // DEV UNIQUEMENT : trace le code en clair quand l'envoi d'e-mail est
+        // indisponible (voir app.otp.log-plaintext). Jamais en production.
+        if (logOtpPlaintext) {
+            log.warn("[DEV] Code OTP 2FA pour {} : {}", maskEmail(user.getEmail()), otp);
+        }
 
         // Envoyer l'email (async)
         emailService.sendOtp(user.getEmail(), user.getFirstname(), otp);
