@@ -19,7 +19,7 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app
 
-COPY --from=build /build/target/labo-anapath-api-1.0.0.jar app.jar
+COPY --from=build /build/target/app.jar app.jar
 
 RUN chown appuser:appgroup app.jar
 
