@@ -74,6 +74,31 @@ public interface UserService {
     void updatePassword(UUID id, UpdatePasswordRequest request, UUID branchId);
 
     /**
+     * Met à jour les informations personnelles de l'utilisateur lui-même.
+     *
+     * <p>Ne touche ni aux rôles, ni au statut, ni à l'e-mail : ces champs ne sont
+     * pas modifiables par l'utilisateur depuis son profil.</p>
+     *
+     * @param id       identifiant UUID de l'utilisateur courant
+     * @param request  nouvelles informations personnelles
+     * @param branchId identifiant de la succursale (isolation multi-tenant)
+     * @return le DTO mis à jour
+     */
+    UserResponseDto updateMyProfile(UUID id, UpdateProfileRequest request, UUID branchId);
+
+    /**
+     * Change l'adresse e-mail de connexion de l'utilisateur lui-même.
+     *
+     * @param id       identifiant UUID de l'utilisateur courant
+     * @param request  nouvelle adresse et mot de passe actuel de confirmation
+     * @param branchId identifiant de la succursale (isolation multi-tenant)
+     * @return le DTO mis à jour
+     * @throws com.labo.anapath.common.exception.BusinessException          si le mot de passe est incorrect
+     * @throws com.labo.anapath.common.exception.DuplicateResourceException si l'adresse est déjà prise
+     */
+    UserResponseDto updateMyEmail(UUID id, UpdateEmailRequest request, UUID branchId);
+
+    /**
      * Bascule le statut actif/inactif d'un utilisateur, vérifié dans la succursale de l'appelant.
      * En cas de désactivation, la session et le 2FA sont également réinitialisés.
      *

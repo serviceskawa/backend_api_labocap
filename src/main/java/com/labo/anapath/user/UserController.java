@@ -156,6 +156,64 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success("Mot de passe mis à jour", null));
     }
 
+    // ---------------------------------------------------------------------
+    // Routes « self-service » : l'utilisateur agit sur son propre compte.
+    // Elles n'exigent que d'être authentifié — les routes /{id} ci-dessus
+    // restent réservées aux détenteurs de la permission « edit-users ».
+    // ---------------------------------------------------------------------
+
+    /**
+     * Met à jour les informations personnelles de l'utilisateur connecté.
+     *
+     * @param request   nouvelles informations personnelles
+     * @param principal principal de sécurité de l'utilisateur connecté
+     * @return le DTO mis à jour
+     */
+    @PutMapping("/me")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<UserResponseDto>> updateMyProfile(
+            @Valid @RequestBody UpdateProfileRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        UserResponseDto updated = userService.updateMyProfile(
+                principal.getId(), request, principal.getBranchId());
+        return ResponseEntity.ok(ApiResponse.success("Profil mis à jour", updated));
+    }
+
+    /**
+     * Change l'adresse e-mail de connexion de l'utilisateur connecté.
+     *
+     * <p>Le mot de passe actuel est exigé dans le corps de la requête.</p>
+     *
+     * @param request   nouvelle adresse et mot de passe de confirmation
+     * @param principal principal de sécurité de l'utilisateur connecté
+     * @return le DTO mis à jour
+     */
+    @PatchMapping("/me/email")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<UserResponseDto>> updateMyEmail(
+            @Valid @RequestBody UpdateEmailRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        UserResponseDto updated = userService.updateMyEmail(
+                principal.getId(), request, principal.getBranchId());
+        return ResponseEntity.ok(ApiResponse.success("Adresse e-mail mise à jour", updated));
+    }
+
+    /**
+     * Change le mot de passe de l'utilisateur connecté, après vérification de l'ancien.
+     *
+     * @param request   ancien et nouveau mot de passe
+     * @param principal principal de sécurité de l'utilisateur connecté
+     * @return réponse vide avec message de confirmation
+     */
+    @PatchMapping("/me/password")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> updateMyPassword(
+            @Valid @RequestBody UpdatePasswordRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        userService.updatePassword(principal.getId(), request, principal.getBranchId());
+        return ResponseEntity.ok(ApiResponse.success("Mot de passe mis à jour", null));
+    }
+
     /**
      * Retourne les permissions directement assignées à un utilisateur.
      *
