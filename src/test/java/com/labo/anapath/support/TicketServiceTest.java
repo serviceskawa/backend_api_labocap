@@ -1,5 +1,7 @@
 package com.labo.anapath.support;
 
+import com.labo.anapath.common.email.EmailService;
+import com.labo.anapath.common.email.NotificationSettings;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.user.User;
 import com.labo.anapath.user.UserRepository;
@@ -29,6 +31,8 @@ class TicketServiceTest {
     @Mock TicketRepository ticketRepository;
     @Mock UserRepository userRepository;
     @Mock TicketMapper ticketMapper;
+    @Mock EmailService emailService;
+    @Mock NotificationSettings notificationSettings;
 
     TicketServiceImpl service;
 
@@ -38,7 +42,8 @@ class TicketServiceTest {
 
     @BeforeEach
     void setup() {
-        service = new TicketServiceImpl(ticketRepository, userRepository, ticketMapper);
+        service = new TicketServiceImpl(ticketRepository, userRepository, ticketMapper,
+                emailService, notificationSettings);
     }
 
     private Ticket buildTicket() {
@@ -58,6 +63,7 @@ class TicketServiceTest {
     @DisplayName("create - génère un ticket_code au format TKT-YYYYMM-XXXXXX")
     void create_generatesUniqueCode() {
         User user = new User();
+        when(ticketMapper.toEntity(any(TicketRequestDto.class))).thenReturn(new Ticket());
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         Ticket saved = buildTicket();
         when(ticketRepository.save(any())).thenAnswer(inv -> {

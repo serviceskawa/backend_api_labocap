@@ -65,7 +65,7 @@ class InvoiceServiceImplTest {
         InvoiceStatusUpdateDto dto = new InvoiceStatusUpdateDto();
         dto.setPayment("ESPECES");
 
-        assertThatThrownBy(() -> service.markAsPaid(INVOICE_ID, dto))
+        assertThatThrownBy(() -> service.markAsPaid(INVOICE_ID, dto, BRANCH_ID))
                 .isInstanceOf(InvalidOperationException.class)
                 .hasMessageContaining("INVOICE_ALREADY_PAID");
 
@@ -91,7 +91,7 @@ class InvoiceServiceImplTest {
         InvoiceStatusUpdateDto dto = new InvoiceStatusUpdateDto();
         dto.setPayment("ESPECES");
 
-        service.markAsPaid(INVOICE_ID, dto);
+        service.markAsPaid(INVOICE_ID, dto, BRANCH_ID);
 
         ArgumentCaptor<Cashbox> captor = ArgumentCaptor.forClass(Cashbox.class);
         verify(cashboxRepository).save(captor.capture());
@@ -118,7 +118,7 @@ class InvoiceServiceImplTest {
         InvoiceStatusUpdateDto dto = new InvoiceStatusUpdateDto();
         dto.setPayment("VIREMENT");
 
-        service.markAsPaid(INVOICE_ID, dto);
+        service.markAsPaid(INVOICE_ID, dto, BRANCH_ID);
 
         ArgumentCaptor<Cashbox> captor = ArgumentCaptor.forClass(Cashbox.class);
         verify(cashboxRepository).save(captor.capture());
@@ -149,7 +149,7 @@ class InvoiceServiceImplTest {
         InvoiceStatusUpdateDto dto = new InvoiceStatusUpdateDto();
         dto.setPayment("MOBILEMONEY");
 
-        service.markAsPaid(INVOICE_ID, dto);
+        service.markAsPaid(INVOICE_ID, dto, BRANCH_ID);
 
         assertThat(contrat.getIsClose()).isTrue();
         verify(contratRepository).save(contrat);

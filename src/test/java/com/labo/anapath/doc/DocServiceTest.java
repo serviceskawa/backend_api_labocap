@@ -1,7 +1,10 @@
 package com.labo.anapath.doc;
 
+import com.labo.anapath.common.email.EmailService;
+import com.labo.anapath.common.email.NotificationSettings;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.common.storage.FileStorageService;
+import com.labo.anapath.role.RoleRepository;
 import com.labo.anapath.user.User;
 import com.labo.anapath.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,7 +33,10 @@ class DocServiceTest {
     @Mock DocVersionRepository docVersionRepository;
     @Mock DocumentationCategoryRepository documentationCategoryRepository;
     @Mock UserRepository userRepository;
+    @Mock RoleRepository roleRepository;
     @Mock FileStorageService fileStorageService;
+    @Mock EmailService emailService;
+    @Mock NotificationSettings notificationSettings;
     @Mock DocMapper docMapper;
     @Mock DocVersionMapper docVersionMapper;
 
@@ -43,7 +49,8 @@ class DocServiceTest {
     @BeforeEach
     void setup() {
         service = new DocServiceImpl(docRepository, docVersionRepository, documentationCategoryRepository,
-                userRepository, fileStorageService, docMapper, docVersionMapper);
+                userRepository, roleRepository, fileStorageService, emailService, notificationSettings,
+                docMapper, docVersionMapper);
     }
 
     private Doc buildDoc(String title) {
@@ -65,7 +72,7 @@ class DocServiceTest {
         when(docRepository.save(any())).thenReturn(saved);
         when(docVersionRepository.save(any())).thenReturn(new DocVersion());
         when(docMapper.toResponseDto(saved)).thenReturn(
-                new DocResponseDto(DOC_ID, "Procédure 1", "documents/uuid.pdf", true, 100L, null, USER_ID, BRANCH_ID, null));
+                new DocResponseDto(DOC_ID, "Procédure 1", "documents/uuid.pdf", true, 100L, null, USER_ID, BRANCH_ID, BRANCH_ID, null));
 
         MockMultipartFile file = new MockMultipartFile("file", "proc.pdf", "application/pdf", "pdf".getBytes());
         DocResponseDto result = service.create("Procédure 1", null, file, USER_ID, BRANCH_ID);

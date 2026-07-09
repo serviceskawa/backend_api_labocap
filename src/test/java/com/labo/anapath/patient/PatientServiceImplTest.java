@@ -71,7 +71,8 @@ class PatientServiceImplTest {
                 PATIENT_ID, null, patient.getFirstname(), patient.getLastname(),
                 patient.getGenre(), patient.getTelephone1(), null, null,
                 null, null, patient.getBirthday(), null, null, null,
-                BRANCH_ID, LocalDateTime.now());
+                BRANCH_ID, LocalDateTime.now(),
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
     }
 
     @Test
@@ -79,22 +80,22 @@ class PatientServiceImplTest {
     void findById_success() {
         Patient patient = buildPatient();
         PatientResponseDto dto = buildResponseDto(patient);
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdAndBranchId(PATIENT_ID, BRANCH_ID)).thenReturn(Optional.of(patient));
         when(patientMapper.toResponseDto(patient)).thenReturn(dto);
 
-        PatientResponseDto result = patientService.findById(PATIENT_ID);
+        PatientResponseDto result = patientService.findById(PATIENT_ID, BRANCH_ID);
 
         assertThat(result).isNotNull();
         assertThat(result.firstname()).isEqualTo("Jean");
-        verify(patientRepository).findById(PATIENT_ID);
+        verify(patientRepository).findByIdAndBranchId(PATIENT_ID, BRANCH_ID);
     }
 
     @Test
     @DisplayName("findById - should throw ResourceNotFoundException when patient not found")
     void findById_notFound() {
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.empty());
+        when(patientRepository.findByIdAndBranchId(PATIENT_ID, BRANCH_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> patientService.findById(PATIENT_ID))
+        assertThatThrownBy(() -> patientService.findById(PATIENT_ID, BRANCH_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -116,7 +117,8 @@ class PatientServiceImplTest {
         PatientResponseDto responseDto = new PatientResponseDto(
                 UUID.randomUUID(), null, "Marie", "Curie", "F",
                 "0600000002", null, null, null, null, null,
-                null, null, null, BRANCH_ID, LocalDateTime.now());
+                null, null, null, BRANCH_ID, LocalDateTime.now(),
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
 
         when(patientRepository.existsByTelephone1AndBranchId("0600000002", BRANCH_ID)).thenReturn(false);
         when(patientMapper.toEntity(requestDto)).thenReturn(patient);
@@ -148,7 +150,8 @@ class PatientServiceImplTest {
         PatientResponseDto responseDto = new PatientResponseDto(
                 UUID.randomUUID(), null, "Sans", "Telephone", "F",
                 null, null, null, null, null, null,
-                null, null, null, BRANCH_ID, null);
+                null, null, null, BRANCH_ID, null,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
 
         when(patientMapper.toEntity(requestDto)).thenReturn(patient);
         when(patientRepository.save(any(Patient.class))).thenReturn(patient);
@@ -190,14 +193,14 @@ class PatientServiceImplTest {
         PatientResponseDto responseDto = new PatientResponseDto(
                 PATIENT_ID, null, "Jean-Paul", "Dupont", "M",
                 "0600000001", null, null, null, null, null,
-                null, null, null, BRANCH_ID, LocalDateTime.now());
+                null, null, null, BRANCH_ID, LocalDateTime.now(),
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
 
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
-        when(patientRepository.existsByTelephone1AndBranchId(anyString(), eq(BRANCH_ID))).thenReturn(false);
+        when(patientRepository.findByIdAndBranchId(PATIENT_ID, BRANCH_ID)).thenReturn(Optional.of(patient));
         when(patientRepository.save(any(Patient.class))).thenReturn(patient);
         when(patientMapper.toResponseDto(patient)).thenReturn(responseDto);
 
-        PatientResponseDto result = patientService.update(PATIENT_ID, requestDto);
+        PatientResponseDto result = patientService.update(PATIENT_ID, requestDto, BRANCH_ID);
 
         assertThat(result).isNotNull();
         verify(patientRepository).save(patient);
@@ -214,11 +217,11 @@ class PatientServiceImplTest {
         requestDto.setLastname("Dupont");
         requestDto.setCode("CODE-DEJA-PRIS");
 
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdAndBranchId(PATIENT_ID, BRANCH_ID)).thenReturn(Optional.of(patient));
         when(patientRepository.existsByCodeAndBranchIdAndIdNot("CODE-DEJA-PRIS", BRANCH_ID, PATIENT_ID))
                 .thenReturn(true);
 
-        assertThatThrownBy(() -> patientService.update(PATIENT_ID, requestDto))
+        assertThatThrownBy(() -> patientService.update(PATIENT_ID, requestDto, BRANCH_ID))
                 .isInstanceOf(DuplicateResourceException.class)
                 .hasMessageContaining("CODE-DEJA-PRIS");
 
@@ -229,10 +232,10 @@ class PatientServiceImplTest {
     @DisplayName("delete - should soft delete patient when no linked orders")
     void delete_noTestOrders_softDeletes() {
         Patient patient = buildPatient();
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdAndBranchId(PATIENT_ID, BRANCH_ID)).thenReturn(Optional.of(patient));
         when(testOrderRepository.existsByPatient(patient)).thenReturn(false);
 
-        patientService.delete(PATIENT_ID);
+        patientService.delete(PATIENT_ID, BRANCH_ID);
 
         verify(patientRepository).delete(patient);
     }
@@ -241,10 +244,10 @@ class PatientServiceImplTest {
     @DisplayName("delete - should throw BusinessException when patient has linked test orders")
     void delete_withTestOrders_throwsBusinessException() {
         Patient patient = buildPatient();
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdAndBranchId(PATIENT_ID, BRANCH_ID)).thenReturn(Optional.of(patient));
         when(testOrderRepository.existsByPatient(patient)).thenReturn(true);
 
-        assertThatThrownBy(() -> patientService.delete(PATIENT_ID))
+        assertThatThrownBy(() -> patientService.delete(PATIENT_ID, BRANCH_ID))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("PATIENT_HAS_ORDERS");
     }
@@ -252,9 +255,9 @@ class PatientServiceImplTest {
     @Test
     @DisplayName("delete - should throw ResourceNotFoundException when patient not found")
     void delete_notFound() {
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.empty());
+        when(patientRepository.findByIdAndBranchId(PATIENT_ID, BRANCH_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> patientService.delete(PATIENT_ID))
+        assertThatThrownBy(() -> patientService.delete(PATIENT_ID, BRANCH_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -276,12 +279,12 @@ class PatientServiceImplTest {
         invoice2.setTotal(new BigDecimal("30000"));
         invoice2.setStatus(InvoiceStatus.PENDING);
 
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdAndBranchId(PATIENT_ID, BRANCH_ID)).thenReturn(Optional.of(patient));
         when(patientMapper.toResponseDto(patient)).thenReturn(patientDto);
         when(testOrderRepository.findByPatientOrderByCreatedAtDesc(patient)).thenReturn(List.of(order1, order2));
         when(invoiceRepository.findByPatientOrderByCreatedAtDesc(patient)).thenReturn(List.of(invoice1, invoice2));
 
-        PatientProfileDto profile = patientService.getProfile(PATIENT_ID);
+        PatientProfileDto profile = patientService.getProfile(PATIENT_ID, BRANCH_ID);
 
         assertThat(profile).isNotNull();
         assertThat(profile.totalOrders()).isEqualTo(2);
@@ -295,9 +298,9 @@ class PatientServiceImplTest {
     @Test
     @DisplayName("getProfile - should throw ResourceNotFoundException when patient not found")
     void getProfile_notFound() {
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.empty());
+        when(patientRepository.findByIdAndBranchId(PATIENT_ID, BRANCH_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> patientService.getProfile(PATIENT_ID))
+        assertThatThrownBy(() -> patientService.getProfile(PATIENT_ID, BRANCH_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 }

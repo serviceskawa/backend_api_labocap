@@ -29,6 +29,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -88,10 +89,14 @@ class TestOrderServiceImplTest {
     }
 
     private TestOrderResponseDto buildResponseDto() {
-        return new TestOrderResponseDto(ORDER_ID, null, TestOrderStatus.PENDING, LocalDate.now(),
+        return new TestOrderResponseDto(
+                ORDER_ID, null, TestOrderStatus.PENDING, LocalDate.now(),
                 null, false, null, null, null,
-                PATIENT_ID, "Jean", "Dupont", null, null, null, null,
-                null, null, null, null, null, List.of(), BRANCH_ID, LocalDateTime.now());
+                PATIENT_ID, "Jean", "Dupont",
+                null, null, null, null,
+                null, null, null, null,
+                null, null, List.of(), BRANCH_ID, LocalDateTime.now(),
+                null, null, false, null, null);
     }
 
     @Test
@@ -103,7 +108,7 @@ class TestOrderServiceImplTest {
 
         TestOrderResponseDto responseDto = buildResponseDto();
 
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(buildPatient()));
+        when(patientRepository.findByIdAndBranchId(PATIENT_ID, BRANCH_ID)).thenReturn(Optional.of(buildPatient()));
         when(testOrderRepository.save(any(TestOrder.class))).thenAnswer(inv -> inv.getArgument(0));
         when(testOrderMapper.toResponseDto(any(TestOrder.class))).thenReturn(responseDto);
 
@@ -124,7 +129,7 @@ class TestOrderServiceImplTest {
         dto.setPatientId(PATIENT_ID);
         dto.setPrelevementDate(LocalDate.now());
 
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.empty());
+        when(patientRepository.findByIdAndBranchId(PATIENT_ID, BRANCH_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> testOrderService.create(dto, BRANCH_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -146,8 +151,8 @@ class TestOrderServiceImplTest {
         dto.setPrelevementDate(LocalDate.now());
         dto.setDetails(List.of(detailDto));
 
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(buildPatient()));
-        when(labTestRepository.findById(labTestId)).thenReturn(Optional.of(labTest));
+        when(patientRepository.findByIdAndBranchId(PATIENT_ID, BRANCH_ID)).thenReturn(Optional.of(buildPatient()));
+        when(labTestRepository.findByIdAndBranchId(labTestId, BRANCH_ID)).thenReturn(Optional.of(labTest));
         when(testOrderRepository.save(any(TestOrder.class))).thenAnswer(inv -> inv.getArgument(0));
         when(testOrderMapper.toResponseDto(any(TestOrder.class))).thenReturn(buildResponseDto());
 
@@ -384,14 +389,13 @@ class TestOrderServiceImplTest {
         report.setDelivered(false);
         TestOrderResponseDto responseDto = buildResponseDto();
 
-        when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+        when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
         when(testOrderRepository.save(any(TestOrder.class))).thenAnswer(inv -> inv.getArgument(0));
         when(reportRepository.findByTestOrderId(ORDER_ID)).thenReturn(Optional.of(report));
         when(reportRepository.save(any(Report.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(testOrderMapper.toResponseDto(any(TestOrder.class))).thenReturn(responseDto);
 
-        testOrderService.markAsDelivered(ORDER_ID);
+        testOrderService.markAsDelivered(ORDER_ID, BRANCH_ID);
 
         ArgumentCaptor<TestOrder> orderCaptor = ArgumentCaptor.forClass(TestOrder.class);
         verify(testOrderRepository, org.mockito.Mockito.atLeastOnce()).save(orderCaptor.capture());
@@ -408,15 +412,15 @@ class TestOrderServiceImplTest {
         TestOrder pendingOrder = buildOrder(TestOrderStatus.PENDING);
         TestOrder deliveredOrder = buildOrder(TestOrderStatus.DELIVERED);
 
-        when(testOrderRepository.findById(ORDER_ID))
+        when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID))
                 .thenReturn(Optional.of(pendingOrder))
                 .thenReturn(Optional.of(deliveredOrder));
 
-        assertThatThrownBy(() -> testOrderService.markAsDelivered(ORDER_ID))
+        assertThatThrownBy(() -> testOrderService.markAsDelivered(ORDER_ID, BRANCH_ID))
                 .isInstanceOf(InvalidOperationException.class)
                 .hasMessageContaining("VALIDATED");
 
-        assertThatThrownBy(() -> testOrderService.markAsDelivered(ORDER_ID))
+        assertThatThrownBy(() -> testOrderService.markAsDelivered(ORDER_ID, BRANCH_ID))
                 .isInstanceOf(InvalidOperationException.class)
                 .hasMessageContaining("VALIDATED");
     }
@@ -424,9 +428,9 @@ class TestOrderServiceImplTest {
     @Test
     @DisplayName("markAsDelivered - bon introuvable → ResourceNotFoundException")
     void markAsDelivered_not_found_throws() {
-        when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.empty());
+        when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> testOrderService.markAsDelivered(ORDER_ID))
+        assertThatThrownBy(() -> testOrderService.markAsDelivered(ORDER_ID, BRANCH_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -440,16 +444,15 @@ class TestOrderServiceImplTest {
         TestOrder order = buildOrder(TestOrderStatus.PENDING);
         order.setFilesName(null);
 
-        when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+        when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
         when(fileStorageService.store(any())).thenReturn("file1.png", "file2.png");
-        when(objectMapper.readValue((String) any(), (Class<?>) any())).thenReturn(new ArrayList<>());
         when(objectMapper.writeValueAsString(any())).thenReturn("[\"file1.png\",\"file2.png\"]");
         when(testOrderRepository.save(any())).thenReturn(order);
 
         MockMultipartFile f1 = new MockMultipartFile("files_name", "img1.png", "image/png", new byte[]{1});
         MockMultipartFile f2 = new MockMultipartFile("files_name", "img2.png", "image/png", new byte[]{2});
 
-        List<String> result = testOrderService.uploadImages(ORDER_ID, List.of(f1, f2));
+        List<String> result = testOrderService.uploadImages(ORDER_ID, BRANCH_ID, List.<MultipartFile>of(f1, f2));
 
         assertThat(result).hasSize(2);
         verify(fileStorageService, org.mockito.Mockito.times(2)).store(any());
@@ -462,10 +465,10 @@ class TestOrderServiceImplTest {
         TestOrder order = buildOrder(TestOrderStatus.PENDING);
         order.setFilesName("[\"file.png\"]");
 
-        when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(objectMapper.readValue((String) any(), (Class<?>) any())).thenReturn(new ArrayList<>(List.of("file.png")));
+        when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
+        when(objectMapper.readValue((String) any(), any(Class.class))).thenReturn(new ArrayList<>(List.of("file.png")));
 
-        assertThatThrownBy(() -> testOrderService.deleteImage(ORDER_ID, 5))
+        assertThatThrownBy(() -> testOrderService.deleteImage(ORDER_ID, 5, BRANCH_ID))
                 .isInstanceOf(InvalidOperationException.class)
                 .hasMessageContaining("5");
     }
@@ -476,12 +479,12 @@ class TestOrderServiceImplTest {
         TestOrder order = buildOrder(TestOrderStatus.PENDING);
         order.setFilesName("[\"file.png\"]");
 
-        when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(objectMapper.readValue((String) any(), (Class<?>) any())).thenReturn(new ArrayList<>(List.of("file.png")));
+        when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
+        when(objectMapper.readValue((String) any(), any(Class.class))).thenReturn(new ArrayList<>(List.of("file.png")));
         when(objectMapper.writeValueAsString(any())).thenReturn("[]");
         when(testOrderRepository.save(any())).thenReturn(order);
 
-        testOrderService.deleteImage(ORDER_ID, 0);
+        testOrderService.deleteImage(ORDER_ID, 0, BRANCH_ID);
 
         verify(fileStorageService).delete("file.png");
         verify(testOrderRepository).save(any());
@@ -493,11 +496,11 @@ class TestOrderServiceImplTest {
         TestOrder order = buildOrder(TestOrderStatus.PENDING);
         order.setFilesName("[\"photo.png\"]");
 
-        when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(objectMapper.readValue((String) any(), (Class<?>) any())).thenReturn(new ArrayList<>(List.of("photo.png")));
+        when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
+        when(objectMapper.readValue((String) any(), any(Class.class))).thenReturn(new ArrayList<>(List.of("photo.png")));
         when(fileStorageService.getUrl("photo.png")).thenReturn("/uploads/examen_images/photo.png");
 
-        List<ImageDto> result = testOrderService.getImages(ORDER_ID);
+        List<ImageDto> result = testOrderService.getImages(ORDER_ID, BRANCH_ID);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).index()).isEqualTo(0);
@@ -508,9 +511,9 @@ class TestOrderServiceImplTest {
     @Test
     @DisplayName("uploadImages - bon introuvable → ResourceNotFoundException")
     void uploadImages_notFound_throws() {
-        when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.empty());
+        when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> testOrderService.uploadImages(ORDER_ID, List.of()))
+        assertThatThrownBy(() -> testOrderService.uploadImages(ORDER_ID, BRANCH_ID, List.<MultipartFile>of()))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 }

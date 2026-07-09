@@ -23,7 +23,7 @@ jobs:
       # Compilation unique sur le runner GitHub (produit target/app.jar)
       - name: Build Spring Boot
         run: |
-          mvn -B clean package -DskipTests
+          mvn -B clean package -Dmaven.test.skip=true
           mv target/app.jar target/app-new.jar
 
       # Envoi du jar construit vers le serveur en staging (app-new.jar)

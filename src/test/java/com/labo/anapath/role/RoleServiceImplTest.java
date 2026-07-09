@@ -55,7 +55,7 @@ class RoleServiceImplTest {
     }
 
     private RoleResponseDto buildResponseDto(String name, String slug) {
-        return new RoleResponseDto(ROLE_ID, name, slug, List.of(), LocalDateTime.now());
+        return new RoleResponseDto(ROLE_ID, name, slug, "desc", true, List.of(), LocalDateTime.now());
     }
 
     @Test
@@ -138,10 +138,10 @@ class RoleServiceImplTest {
         Role role = buildRole("Admin", "admin");
         RoleResponseDto dto = buildResponseDto("Admin", "admin");
 
-        when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
+        when(roleRepository.findByIdAndBranchId(ROLE_ID, BRANCH_ID)).thenReturn(Optional.of(role));
         when(roleMapper.toResponseDto(role)).thenReturn(dto);
 
-        RoleResponseDto result = roleService.findById(ROLE_ID);
+        RoleResponseDto result = roleService.findById(ROLE_ID, BRANCH_ID);
 
         assertThat(result.slug()).isEqualTo("admin");
     }
@@ -149,9 +149,9 @@ class RoleServiceImplTest {
     @Test
     @DisplayName("findById - lève ResourceNotFoundException si inexistant")
     void findById_notFound_throws404() {
-        when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.empty());
+        when(roleRepository.findByIdAndBranchId(ROLE_ID, BRANCH_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> roleService.findById(ROLE_ID))
+        assertThatThrownBy(() -> roleService.findById(ROLE_ID, BRANCH_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -165,7 +165,7 @@ class RoleServiceImplTest {
         dto.setName("Nouveau Nom");
         dto.setPermissionIds(null);
 
-        when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
+        when(roleRepository.findByIdAndBranchId(ROLE_ID, BRANCH_ID)).thenReturn(Optional.of(role));
         when(roleMapper.toResponseDto(any(Role.class))).thenReturn(responseDto);
         when(roleRepository.save(any(Role.class))).thenReturn(role);
 
@@ -177,7 +177,7 @@ class RoleServiceImplTest {
 
         when(roleRepository.existsBySlug("nouveau-nom")).thenReturn(false);
 
-        RoleResponseDto result = roleService.update(ROLE_ID, dto);
+        RoleResponseDto result = roleService.update(ROLE_ID, dto, BRANCH_ID);
 
         assertThat(result).isNotNull();
         assertThat(role.getSlug()).isEqualTo("nouveau-nom");
@@ -195,12 +195,12 @@ class RoleServiceImplTest {
         dto.setName("Admin");
         dto.setPermissionIds(List.of(permId));
 
-        when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
+        when(roleRepository.findByIdAndBranchId(ROLE_ID, BRANCH_ID)).thenReturn(Optional.of(role));
         when(permissionRepository.findAllById(List.of(permId))).thenReturn(List.of(permission));
         when(roleRepository.save(any(Role.class))).thenReturn(role);
         when(roleMapper.toResponseDto(any(Role.class))).thenReturn(buildResponseDto("Admin", "admin"));
 
-        roleService.update(ROLE_ID, dto);
+        roleService.update(ROLE_ID, dto, BRANCH_ID);
 
         verify(permissionRepository).findAllById(List.of(permId));
         assertThat(role.getPermissions()).containsExactly(permission);
@@ -216,11 +216,11 @@ class RoleServiceImplTest {
         dto.setName("Admin");
         dto.setPermissionIds(null);
 
-        when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
+        when(roleRepository.findByIdAndBranchId(ROLE_ID, BRANCH_ID)).thenReturn(Optional.of(role));
         when(roleRepository.save(any(Role.class))).thenReturn(role);
         when(roleMapper.toResponseDto(any(Role.class))).thenReturn(buildResponseDto("Admin", "admin"));
 
-        roleService.update(ROLE_ID, dto);
+        roleService.update(ROLE_ID, dto, BRANCH_ID);
 
         verify(permissionRepository, never()).findAllById(anyList());
     }
@@ -232,12 +232,12 @@ class RoleServiceImplTest {
         Permission permission = new Permission();
         Role role = buildRole("Admin", "admin");
 
-        when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
+        when(roleRepository.findByIdAndBranchId(ROLE_ID, BRANCH_ID)).thenReturn(Optional.of(role));
         when(permissionRepository.findAllById(List.of(permId))).thenReturn(List.of(permission));
         when(roleRepository.save(any(Role.class))).thenReturn(role);
         when(roleMapper.toResponseDto(any(Role.class))).thenReturn(buildResponseDto("Admin", "admin"));
 
-        roleService.assignPermissions(ROLE_ID, List.of(permId));
+        roleService.assignPermissions(ROLE_ID, List.of(permId), BRANCH_ID);
 
         assertThat(role.getPermissions()).containsExactly(permission);
         verify(roleRepository).save(role);
@@ -248,9 +248,9 @@ class RoleServiceImplTest {
     void delete_success() {
         Role role = buildRole("Admin", "admin");
 
-        when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
+        when(roleRepository.findByIdAndBranchId(ROLE_ID, BRANCH_ID)).thenReturn(Optional.of(role));
 
-        roleService.delete(ROLE_ID);
+        roleService.delete(ROLE_ID, BRANCH_ID);
 
         verify(roleRepository).delete(role);
     }
