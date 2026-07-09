@@ -46,7 +46,7 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             set -e
-            cd /var/www/backend_api_labocap
+            cd ${{ secrets.SERVER_PROJECT_PATH }}
 
             # sauvegarde de la version précédente pour rollback
             [ -f app.jar ] && cp app.jar app.previous.jar
