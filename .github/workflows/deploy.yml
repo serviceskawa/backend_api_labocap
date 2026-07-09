@@ -1,0 +1,61 @@
+name: Deploy Spring Boot Application
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      # Compilation unique sur le runner GitHub (produit target/app.jar)
+      - name: Build Spring Boot
+        run: |
+          mvn -B clean package -DskipTests
+          mv target/app.jar target/app-new.jar
+
+      # Envoi du jar construit vers le serveur en staging (app-new.jar)
+      - name: Copy jar to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: target/app-new.jar
+          target: /var/www/backend/deploy
+          strip_components: 1   # dépose app-new.jar sans le dossier target/
+
+      # Bascule atomique + redémarrage du service
+      - name: Restart service
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            set -e
+            cd /var/www/backend/deploy
+            # sauvegarde de la version précédente pour rollback
+            [ -f app.jar ] && cp app.jar app.previous.jar
+            mv app-new.jar app.jar
+            sudo systemctl restart backend
+            # vérification santé : rollback automatique si l'app ne répond pas
+            sleep 15
+            if ! curl -fsS http://localhost:8080/actuator/health >/dev/null 2>&1; then
+              echo "Health check KO — rollback"
+              [ -f app.previous.jar ] && mv app.previous.jar app.jar && sudo systemctl restart backend
+              exit 1
+            fi
+            echo "Déploiement OK"

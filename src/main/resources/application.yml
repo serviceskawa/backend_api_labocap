@@ -26,8 +26,8 @@ spring:
     # pour que Flyway ne rejoue pas V2..V50 (sinon clés dupliquées). Les V51+ s'appliqueront.
     baseline-version: 50
   mail:
-    host: ${MAIL_HOST:smtp.mailtrap.io}
-    port: ${MAIL_PORT:2525}
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT}
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
     properties:
@@ -58,7 +58,7 @@ app:
   storage:
     path: ${STORAGE_PATH:/tmp/labo/storage}
   mail:
-    from: ${MAIL_FROM:noreply@labo-anapath.bj}
+    from: ${MAIL_FROM}
     from-name: ${MAIL_FROM_NAME:Labo AnaPath}
   alerts:
     report:
