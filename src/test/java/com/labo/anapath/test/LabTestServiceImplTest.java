@@ -124,10 +124,10 @@ class LabTestServiceImplTest {
         LabTestResponseDto dto = buildResponseDto("NFS");
         Page<LabTest> page = new PageImpl<>(List.of(entity));
 
-        when(labTestRepository.findByBranchId(any(UUID.class), any(Pageable.class))).thenReturn(page);
+        when(labTestRepository.findByFilters(any(UUID.class), any(), any(), any(Pageable.class))).thenReturn(page);
         when(mapper.toLabTestResponseDto(entity)).thenReturn(dto);
 
-        PageResponse<LabTestResponseDto> result = labTestService.findAll(0, 20, BRANCH_ID);
+        PageResponse<LabTestResponseDto> result = labTestService.findAll(0, 20, null, null, BRANCH_ID);
 
         assertThat(result.content()).hasSize(1);
     }

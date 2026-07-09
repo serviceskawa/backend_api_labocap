@@ -64,7 +64,7 @@ class UserServiceImplTest {
 
     private UserResponseDto buildResponseDto(User user) {
         return new UserResponseDto(USER_ID, user.getFirstname(), user.getLastname(), user.getEmail(),
-                user.getPhone(), user.isActive(), BRANCH_ID, LocalDateTime.now(), List.of());
+                user.getPhone(), user.isActive(), BRANCH_ID, LocalDateTime.now(), List.of(), null, List.of());
     }
 
     @Test
@@ -89,10 +89,10 @@ class UserServiceImplTest {
         User user = buildUser();
         UserResponseDto dto = buildResponseDto(user);
 
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdAndBranchId(USER_ID, BRANCH_ID)).thenReturn(Optional.of(user));
         when(userMapper.toResponseDto(user)).thenReturn(dto);
 
-        UserResponseDto result = userService.findById(USER_ID);
+        UserResponseDto result = userService.findById(USER_ID, BRANCH_ID);
 
         assertThat(result.email()).isEqualTo("test@labo.bj");
     }
@@ -100,9 +100,9 @@ class UserServiceImplTest {
     @Test
     @DisplayName("findById - lève ResourceNotFoundException si inexistant")
     void findById_notFound_throws404() {
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
+        when(userRepository.findByIdAndBranchId(USER_ID, BRANCH_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> userService.findById(USER_ID))
+        assertThatThrownBy(() -> userService.findById(USER_ID, BRANCH_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -124,7 +124,7 @@ class UserServiceImplTest {
 
         when(userRepository.existsByEmail("new@labo.bj")).thenReturn(false);
         when(userMapper.toEntity(dto)).thenReturn(user);
-        when(roleRepository.findAllById(List.of(roleId))).thenReturn(List.of(role));
+        when(roleRepository.findAllByIdInAndBranchId(List.of(roleId), BRANCH_ID)).thenReturn(List.of(role));
         when(passwordEncoder.encode("password123")).thenReturn("$2a$12$hashed");
         when(userRepository.save(any(User.class))).thenReturn(user);
         when(userMapper.toResponseDto(user)).thenReturn(responseDto);
@@ -133,7 +133,7 @@ class UserServiceImplTest {
 
         assertThat(result).isNotNull();
         verify(userRepository).save(any(User.class));
-        verify(roleRepository).findAllById(List.of(roleId));
+        verify(roleRepository).findAllByIdInAndBranchId(List.of(roleId), BRANCH_ID);
     }
 
     @Test
@@ -182,15 +182,15 @@ class UserServiceImplTest {
         User user = buildUser();
         UserResponseDto responseDto = buildResponseDto(user);
 
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(roleRepository.findAllById(List.of(newRoleId))).thenReturn(List.of(newRole));
+        when(userRepository.findByIdAndBranchId(USER_ID, BRANCH_ID)).thenReturn(Optional.of(user));
+        when(roleRepository.findAllByIdInAndBranchId(List.of(newRoleId), BRANCH_ID)).thenReturn(List.of(newRole));
         when(userRepository.save(any(User.class))).thenReturn(user);
         when(userMapper.toResponseDto(user)).thenReturn(responseDto);
 
-        UserResponseDto result = userService.update(USER_ID, dto);
+        UserResponseDto result = userService.update(USER_ID, dto, BRANCH_ID);
 
         assertThat(result).isNotNull();
-        verify(roleRepository).findAllById(List.of(newRoleId));
+        verify(roleRepository).findAllByIdInAndBranchId(List.of(newRoleId), BRANCH_ID);
         verify(userRepository).save(user);
     }
 
@@ -206,14 +206,14 @@ class UserServiceImplTest {
         User user = buildUser();
         UserResponseDto responseDto = buildResponseDto(user);
 
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdAndBranchId(USER_ID, BRANCH_ID)).thenReturn(Optional.of(user));
         when(userRepository.save(any(User.class))).thenReturn(user);
         when(userMapper.toResponseDto(user)).thenReturn(responseDto);
 
-        userService.update(USER_ID, dto);
+        userService.update(USER_ID, dto, BRANCH_ID);
 
-        // roleRepository.findAllById ne doit PAS être appelé
-        verify(roleRepository, org.mockito.Mockito.never()).findAllById(anyList());
+        // roleRepository.findAllByIdInAndBranchId ne doit PAS être appelé
+        verify(roleRepository, org.mockito.Mockito.never()).findAllByIdInAndBranchId(anyList(), any());
     }
 
     @Test
@@ -224,9 +224,9 @@ class UserServiceImplTest {
         dto.setFirstname("Updated");
         dto.setLastname("User");
 
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
+        when(userRepository.findByIdAndBranchId(USER_ID, BRANCH_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> userService.update(USER_ID, dto))
+        assertThatThrownBy(() -> userService.update(USER_ID, dto, BRANCH_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -238,10 +238,10 @@ class UserServiceImplTest {
         user.setConnect(true);
         user.setTwoFactorEnabled(true);
 
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdAndBranchId(USER_ID, BRANCH_ID)).thenReturn(Optional.of(user));
         when(userRepository.save(any(User.class))).thenReturn(user);
 
-        userService.toggleStatus(USER_ID);
+        userService.toggleStatus(USER_ID, BRANCH_ID);
 
         assertThat(user.isActive()).isFalse();
         assertThat(user.isConnect()).isFalse();
@@ -257,10 +257,10 @@ class UserServiceImplTest {
         user.setConnect(false);
         user.setTwoFactorEnabled(false);
 
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdAndBranchId(USER_ID, BRANCH_ID)).thenReturn(Optional.of(user));
         when(userRepository.save(any(User.class))).thenReturn(user);
 
-        userService.toggleStatus(USER_ID);
+        userService.toggleStatus(USER_ID, BRANCH_ID);
 
         assertThat(user.isActive()).isTrue();
         assertThat(user.isConnect()).isFalse();
@@ -271,9 +271,9 @@ class UserServiceImplTest {
     @Test
     @DisplayName("toggleStatus - lève ResourceNotFoundException si utilisateur inexistant")
     void toggleStatus_notFound_throws404() {
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
+        when(userRepository.findByIdAndBranchId(USER_ID, BRANCH_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> userService.toggleStatus(USER_ID))
+        assertThatThrownBy(() -> userService.toggleStatus(USER_ID, BRANCH_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -285,12 +285,12 @@ class UserServiceImplTest {
         request.setCurrentPassword("oldPass");
         request.setNewPassword("newPass123");
 
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdAndBranchId(USER_ID, BRANCH_ID)).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("oldPass", user.getPassword())).thenReturn(true);
         when(passwordEncoder.encode("newPass123")).thenReturn("$2a$12$newHashed");
         when(userRepository.save(any(User.class))).thenReturn(user);
 
-        userService.updatePassword(USER_ID, request);
+        userService.updatePassword(USER_ID, request, BRANCH_ID);
 
         assertThat(user.getPassword()).isEqualTo("$2a$12$newHashed");
         verify(userRepository).save(user);
@@ -304,10 +304,10 @@ class UserServiceImplTest {
         request.setCurrentPassword("wrongPass");
         request.setNewPassword("newPass123");
 
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdAndBranchId(USER_ID, BRANCH_ID)).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("wrongPass", user.getPassword())).thenReturn(false);
 
-        assertThatThrownBy(() -> userService.updatePassword(USER_ID, request))
+        assertThatThrownBy(() -> userService.updatePassword(USER_ID, request, BRANCH_ID))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("incorrect");
     }
@@ -317,9 +317,9 @@ class UserServiceImplTest {
     void delete_success_softDelete() {
         User user = buildUser();
 
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(userRepository.findByIdAndBranchId(USER_ID, BRANCH_ID)).thenReturn(Optional.of(user));
 
-        userService.delete(USER_ID);
+        userService.delete(USER_ID, BRANCH_ID);
 
         verify(userRepository).delete(user);
     }

@@ -1,5 +1,7 @@
 package com.labo.anapath.hr;
 
+import com.labo.anapath.common.email.EmailService;
+import com.labo.anapath.common.email.NotificationSettings;
 import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.user.User;
@@ -29,6 +31,8 @@ class EmployeeTimeoffServiceTest {
     @Mock EmployeeTimeoffRepository timeoffRepository;
     @Mock EmployeeRepository employeeRepository;
     @Mock UserRepository userRepository;
+    @Mock EmailService emailService;
+    @Mock NotificationSettings notificationSettings;
 
     EmployeeTimeoffServiceImpl service;
 
@@ -37,7 +41,8 @@ class EmployeeTimeoffServiceTest {
 
     @BeforeEach
     void setup() {
-        service = new EmployeeTimeoffServiceImpl(timeoffRepository, employeeRepository, userRepository);
+        service = new EmployeeTimeoffServiceImpl(timeoffRepository, employeeRepository, userRepository,
+                emailService, notificationSettings);
     }
 
     private Employee buildEmployee() {

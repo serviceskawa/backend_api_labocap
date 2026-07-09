@@ -26,6 +26,7 @@ import static org.mockito.Mockito.when;
 class EmployeePayrollControllerTest {
 
     @Mock EmployeePayrollService employeePayrollService;
+    @Mock PayrollPdfService payrollPdfService;
 
     EmployeePayrollController controller;
 
@@ -33,7 +34,7 @@ class EmployeePayrollControllerTest {
 
     @BeforeEach
     void setup() {
-        controller = new EmployeePayrollController(employeePayrollService);
+        controller = new EmployeePayrollController(employeePayrollService, payrollPdfService);
     }
 
     private EmployeePayrollResponseDto dummyDto(BigDecimal gross, BigDecimal deductions) {

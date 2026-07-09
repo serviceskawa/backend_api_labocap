@@ -1,6 +1,7 @@
 package com.labo.anapath.patient;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.labo.anapath.common.audit.AuditorAwareImpl;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
@@ -13,11 +14,13 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
+import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -26,6 +29,7 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -46,6 +50,15 @@ class PatientControllerTest {
 
     @MockBean
     private PatientService patientService;
+
+    // @WebMvcTest ne charge pas la couche JPA, mais @EnableJpaAuditing (sur AnaPathApplication)
+    // exige les beans jpaMappingContext et auditorAware → on les mocke pour permettre
+    // le chargement du contexte web.
+    @MockBean
+    private JpaMetamodelMappingContext jpaMappingContext;
+
+    @MockBean(name = "auditorAware")
+    private AuditorAwareImpl auditorAware;
 
     private final UUID BRANCH_ID = UUID.randomUUID();
     private final UUID PATIENT_ID = UUID.randomUUID();
@@ -72,7 +85,8 @@ class PatientControllerTest {
                 PATIENT_ID, null, "Jean", "Dupont", "M",
                 "0600000001", null, null, null, null,
                 LocalDate.of(1990, 1, 1), null, null, null,
-                BRANCH_ID, LocalDateTime.now());
+                BRANCH_ID, LocalDateTime.now(),
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
 
         PageResponse<PatientResponseDto> page = new PageResponse<>(List.of(dto), 0, 20, 1L, 1, true);
         when(patientService.findAll(eq(0), eq(20), any(), eq(BRANCH_ID))).thenReturn(page);
@@ -93,9 +107,10 @@ class PatientControllerTest {
                 PATIENT_ID, null, "Jean", "Dupont", "M",
                 "0600000001", null, null, null, null,
                 LocalDate.of(1990, 1, 1), null, null, null,
-                BRANCH_ID, LocalDateTime.now());
+                BRANCH_ID, LocalDateTime.now(),
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
 
-        when(patientService.findById(PATIENT_ID)).thenReturn(dto);
+        when(patientService.findById(eq(PATIENT_ID), eq(BRANCH_ID))).thenReturn(dto);
 
         mockMvc.perform(get("/api/v1/patients/{id}", PATIENT_ID)
                         .with(user(principal)))
@@ -108,7 +123,7 @@ class PatientControllerTest {
     @WithMockUser
     void findById_404() throws Exception {
         UserPrincipal principal = buildPrincipal();
-        when(patientService.findById(PATIENT_ID)).thenThrow(new ResourceNotFoundException("Patient", PATIENT_ID));
+        when(patientService.findById(eq(PATIENT_ID), eq(BRANCH_ID))).thenThrow(new ResourceNotFoundException("Patient", PATIENT_ID));
 
         mockMvc.perform(get("/api/v1/patients/{id}", PATIENT_ID)
                         .with(user(principal)))
@@ -130,12 +145,14 @@ class PatientControllerTest {
         PatientResponseDto responseDto = new PatientResponseDto(
                 UUID.randomUUID(), null, "Marie", "Curie", "F",
                 null, null, null, null, null, null,
-                null, null, null, BRANCH_ID, LocalDateTime.now());
+                null, null, null, BRANCH_ID, LocalDateTime.now(),
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
 
         when(patientService.create(any(PatientRequestDto.class), eq(BRANCH_ID))).thenReturn(responseDto);
 
         mockMvc.perform(post("/api/v1/patients")
                         .with(user(principal))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(requestDto)))
                 .andExpect(status().isCreated())
@@ -152,6 +169,7 @@ class PatientControllerTest {
 
         mockMvc.perform(post("/api/v1/patients")
                         .with(user(principal))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(requestDto)))
                 .andExpect(status().isBadRequest());

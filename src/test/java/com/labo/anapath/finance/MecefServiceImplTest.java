@@ -62,7 +62,7 @@ class MecefServiceImplTest {
     @Test
     @DisplayName("confirmInvoice - MECeF désactivé (pas de setting) → InvalidOperationException MECEF_DISABLED")
     void confirmMecef_noSetting_throwsMecefDisabled() {
-        when(settingInvoiceRepository.findByBranchId(BRANCH_ID)).thenReturn(Optional.empty());
+        when(settingInvoiceRepository.findFirstByBranchId(BRANCH_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.confirmInvoice(INVOICE_ID, "uid123", BRANCH_ID))
                 .isInstanceOf(InvalidOperationException.class)
@@ -76,7 +76,7 @@ class MecefServiceImplTest {
     void confirmMecef_statusFalse_throwsMecefDisabled() {
         SettingInvoice disabled = new SettingInvoice();
         disabled.setStatus(false);
-        when(settingInvoiceRepository.findByBranchId(BRANCH_ID)).thenReturn(Optional.of(disabled));
+        when(settingInvoiceRepository.findFirstByBranchId(BRANCH_ID)).thenReturn(Optional.of(disabled));
 
         assertThatThrownBy(() -> service.confirmInvoice(INVOICE_ID, "uid123", BRANCH_ID))
                 .isInstanceOf(InvalidOperationException.class)
@@ -86,7 +86,7 @@ class MecefServiceImplTest {
     @Test
     @DisplayName("confirmInvoice - API indisponible → ExternalApiException")
     void confirmMecef_apiDown_throwsExternalApiException() {
-        when(settingInvoiceRepository.findByBranchId(BRANCH_ID)).thenReturn(Optional.of(buildSettingEnabled()));
+        when(settingInvoiceRepository.findFirstByBranchId(BRANCH_ID)).thenReturn(Optional.of(buildSettingEnabled()));
         when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(buildInvoice()));
         when(restTemplate.exchange(anyString(), eq(HttpMethod.PUT), any(), eq(MecefApiResponse.class)))
                 .thenThrow(new ResourceAccessException("Connection refused"));
@@ -108,7 +108,7 @@ class MecefServiceImplTest {
         mecefResp.setNim("NIM456");
         mecefResp.setQrCode("base64data");
 
-        when(settingInvoiceRepository.findByBranchId(BRANCH_ID)).thenReturn(Optional.of(setting));
+        when(settingInvoiceRepository.findFirstByBranchId(BRANCH_ID)).thenReturn(Optional.of(setting));
         when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(inv));
         when(restTemplate.exchange(anyString(), eq(HttpMethod.PUT), any(), eq(MecefApiResponse.class)))
                 .thenReturn(ResponseEntity.status(HttpStatus.OK).body(mecefResp));
@@ -126,7 +126,7 @@ class MecefServiceImplTest {
     @Test
     @DisplayName("cancelInvoice - API indisponible → ExternalApiException")
     void cancelMecef_apiDown_throwsExternalApiException() {
-        when(settingInvoiceRepository.findByBranchId(BRANCH_ID)).thenReturn(Optional.of(buildSettingEnabled()));
+        when(settingInvoiceRepository.findFirstByBranchId(BRANCH_ID)).thenReturn(Optional.of(buildSettingEnabled()));
         when(restTemplate.exchange(anyString(), eq(HttpMethod.PUT), any(), eq(Void.class)))
                 .thenThrow(new ResourceAccessException("Timeout"));
 

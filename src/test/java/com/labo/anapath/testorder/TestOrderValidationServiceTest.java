@@ -103,8 +103,9 @@ class TestOrderValidationServiceTest {
                 null, false, 100.0, 0.0, 100.0,
                 UUID.randomUUID(), "Jean", "Dupont",
                 null, null, null, null,
-                null, null, null, null, null,
-                Collections.emptyList(), BRANCH_ID, null);
+                null, null, null, null,
+                null, null, Collections.emptyList(), BRANCH_ID, null,
+                null, null, false, null, null);
     }
 
     // --- AC3 ---
@@ -180,7 +181,6 @@ class TestOrderValidationServiceTest {
         when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(invoiceRepository.findByBranchIdAndCodeNotNullAndYear(eq(BRANCH_ID), anyInt(), any()))
                 .thenReturn(Collections.emptyList());
-        when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(testOrderMapper.toResponseDto(any())).thenReturn(responseDto);
 
         TestOrderResponseDto result = testOrderService.updateStatus(ORDER_ID, "VALIDATED", USER_ID, BRANCH_ID);
@@ -211,7 +211,6 @@ class TestOrderValidationServiceTest {
         when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(invoiceRepository.findByBranchIdAndCodeNotNullAndYear(any(), anyInt(), any()))
                 .thenReturn(Collections.emptyList());
-        when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(testOrderMapper.toResponseDto(any())).thenReturn(responseDto);
 
         testOrderService.updateStatus(ORDER_ID, "VALIDATED", USER_ID, BRANCH_ID);
@@ -241,7 +240,6 @@ class TestOrderValidationServiceTest {
         when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(invoiceRepository.findByBranchIdAndCodeNotNullAndYear(any(), anyInt(), any()))
                 .thenReturn(Collections.emptyList());
-        when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(testOrderMapper.toResponseDto(any())).thenReturn(responseDto);
 
         testOrderService.updateStatus(ORDER_ID, "VALIDATED", USER_ID, BRANCH_ID);
@@ -265,8 +263,6 @@ class TestOrderValidationServiceTest {
         existingReport.setTestOrder(order);
 
         when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
-        when(settingRepository.findByKeyAndBranchId(anyString(), eq(BRANCH_ID)))
-                .thenReturn(Optional.empty());
         when(reportRepository.findByTestOrderId(any())).thenReturn(Optional.of(existingReport));
         when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
@@ -275,7 +271,6 @@ class TestOrderValidationServiceTest {
         when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(invoiceRepository.findByBranchIdAndCodeNotNullAndYear(any(), anyInt(), any()))
                 .thenReturn(Collections.emptyList());
-        when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(testOrderMapper.toResponseDto(any())).thenReturn(responseDto);
 
         testOrderService.updateStatus(ORDER_ID, "VALIDATED", USER_ID, BRANCH_ID);
@@ -307,7 +302,6 @@ class TestOrderValidationServiceTest {
         when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(invoiceRepository.findByBranchIdAndCodeNotNullAndYear(any(), anyInt(), any()))
                 .thenReturn(Collections.emptyList());
-        when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(testOrderMapper.toResponseDto(any())).thenReturn(responseDto);
 
         testOrderService.updateStatus(ORDER_ID, "VALIDATED", USER_ID, BRANCH_ID);
