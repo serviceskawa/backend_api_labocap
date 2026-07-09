@@ -1,6 +1,7 @@
 package com.labo.anapath.patient;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.labo.anapath.common.audit.AuditorAwareImpl;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
@@ -13,6 +14,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
+import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -27,6 +29,7 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -47,6 +50,15 @@ class PatientControllerTest {
 
     @MockBean
     private PatientService patientService;
+
+    // @WebMvcTest ne charge pas la couche JPA, mais @EnableJpaAuditing (sur AnaPathApplication)
+    // exige les beans jpaMappingContext et auditorAware → on les mocke pour permettre
+    // le chargement du contexte web.
+    @MockBean
+    private JpaMetamodelMappingContext jpaMappingContext;
+
+    @MockBean(name = "auditorAware")
+    private AuditorAwareImpl auditorAware;
 
     private final UUID BRANCH_ID = UUID.randomUUID();
     private final UUID PATIENT_ID = UUID.randomUUID();
@@ -140,6 +152,7 @@ class PatientControllerTest {
 
         mockMvc.perform(post("/api/v1/patients")
                         .with(user(principal))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(requestDto)))
                 .andExpect(status().isCreated())
@@ -156,6 +169,7 @@ class PatientControllerTest {
 
         mockMvc.perform(post("/api/v1/patients")
                         .with(user(principal))
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(requestDto)))
                 .andExpect(status().isBadRequest());

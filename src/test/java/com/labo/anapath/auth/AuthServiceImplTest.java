@@ -1,5 +1,6 @@
 package com.labo.anapath.auth;
 
+import com.labo.anapath.common.email.EmailService;
 import com.labo.anapath.common.exception.InvalidCodeException;
 import com.labo.anapath.common.exception.UnauthorizedException;
 import com.labo.anapath.common.security.CustomUserDetailsService;
@@ -23,6 +24,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -33,8 +35,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -67,6 +67,15 @@ class AuthServiceImplTest {
     @Mock
     private GoogleAuthenticator googleAuthenticator;
 
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private TwoFaRepository twoFaRepository;
+
+    @Mock
+    private EmailService emailService;
+
     @InjectMocks
     private AuthServiceImpl authService;
 
@@ -75,6 +84,7 @@ class AuthServiceImplTest {
 
     private User buildUser() {
         User user = new User();
+        user.setId(USER_ID);
         user.setEmail("admin@test.com");
         user.setPassword("$2a$12$encodedpassword");
         user.setFirstname("Admin");
@@ -160,7 +170,7 @@ class AuthServiceImplTest {
 
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(UnauthorizedException.class)
-                .hasMessageContaining("Compte désactivé");
+                .hasMessageContaining("Identifiants invalides");
     }
 
     @Test
@@ -175,7 +185,7 @@ class AuthServiceImplTest {
 
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(UnauthorizedException.class)
-                .hasMessageContaining("Email ou mot de passe incorrect");
+                .hasMessageContaining("Identifiants invalides");
     }
 
     @Test
@@ -207,7 +217,10 @@ class AuthServiceImplTest {
         when(jwtTokenProvider.extractType("temp-token")).thenReturn("2fa-challenge");
         when(jwtTokenProvider.extractUserId("temp-token")).thenReturn(USER_ID);
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(googleAuthenticator.authorize(eq("BASE32SECRET"), anyInt())).thenReturn(true);
+        TwoFa twoFa = new TwoFa(USER_ID, BRANCH_ID, "hashed-code");
+        twoFa.setCreatedAt(LocalDateTime.now());
+        when(twoFaRepository.findByUserId(USER_ID)).thenReturn(Optional.of(twoFa));
+        when(passwordEncoder.matches("123456", "hashed-code")).thenReturn(true);
         when(customUserDetailsService.loadUserById(USER_ID)).thenReturn(principal);
         when(jwtTokenProvider.generateToken(principal)).thenReturn("access-token");
         when(jwtTokenProvider.generateRefreshToken(USER_ID)).thenReturn("refresh-token");
@@ -248,7 +261,10 @@ class AuthServiceImplTest {
         when(jwtTokenProvider.extractType("temp-token")).thenReturn("2fa-challenge");
         when(jwtTokenProvider.extractUserId("temp-token")).thenReturn(USER_ID);
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(googleAuthenticator.authorize(eq("BASE32SECRET"), anyInt())).thenReturn(false);
+        TwoFa twoFa = new TwoFa(USER_ID, BRANCH_ID, "hashed-code");
+        twoFa.setCreatedAt(LocalDateTime.now());
+        when(twoFaRepository.findByUserId(USER_ID)).thenReturn(Optional.of(twoFa));
+        when(passwordEncoder.matches("000000", "hashed-code")).thenReturn(false);
 
         TwoFactorVerifyRequest request = new TwoFactorVerifyRequest();
         request.setTempToken("temp-token");
