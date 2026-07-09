@@ -173,6 +173,53 @@ public class UserServiceImpl implements UserService {
 
     /** {@inheritDoc} */
     @Override
+    @Transactional
+    public UserResponseDto updateMyProfile(UUID id, UpdateProfileRequest request, UUID branchId) {
+        User user = userRepository.findByIdAndBranchId(id, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", id));
+
+        user.setFirstname(request.getFirstname());
+        user.setLastname(request.getLastname());
+        if (request.getPhone() != null) {
+            user.setPhone(request.getPhone());
+        }
+        // Signature absente du corps = signature inchangée (l'écran ne la renvoie
+        // que lorsqu'un nouveau fichier a été choisi).
+        if (request.getSignature() != null) {
+            user.setSignature(request.getSignature());
+        }
+
+        User updated = userRepository.save(user);
+        log.info("Profil mis à jour par l'utilisateur lui-même: {}", id);
+        return userMapper.toResponseDto(updated);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional
+    public UserResponseDto updateMyEmail(UUID id, UpdateEmailRequest request, UUID branchId) {
+        User user = userRepository.findByIdAndBranchId(id, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", id));
+
+        // L'e-mail est l'identifiant de connexion : on exige le mot de passe actuel
+        // pour qu'une session détournée ne suffise pas à s'approprier le compte.
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            throw new BusinessException("Le mot de passe actuel est incorrect.");
+        }
+
+        String newEmail = request.getNewEmail().trim();
+        if (!user.getEmail().equalsIgnoreCase(newEmail) && userRepository.existsByEmail(newEmail)) {
+            throw new DuplicateResourceException("Un utilisateur avec l'email '" + newEmail + "' existe déjà.");
+        }
+
+        user.setEmail(newEmail);
+        User updated = userRepository.save(user);
+        log.info("Adresse e-mail de connexion modifiée pour l'utilisateur: {}", id);
+        return userMapper.toResponseDto(updated);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     @Transactional(readOnly = true)
     public List<PermissionResponseDto> getUserPermissions(UUID userId, UUID branchId) {
         User user = userRepository.findByIdAndBranchId(userId, branchId)
