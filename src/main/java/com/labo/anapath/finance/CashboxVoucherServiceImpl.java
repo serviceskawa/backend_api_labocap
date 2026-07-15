@@ -26,6 +26,7 @@ public class CashboxVoucherServiceImpl implements CashboxVoucherService {
     private final ExpenseRepository expenseRepository;
     private final ExpenceDetailRepository expenceDetailRepository;
     private final ArticleRepository articleRepository;
+    private final com.labo.anapath.inventory.SupplierRepository supplierRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -185,6 +186,10 @@ public class CashboxVoucherServiceImpl implements CashboxVoucherService {
                 .map(d -> new CashboxVoucherDetailResponseDto(
                         d.getId(), d.getItemName(), d.getQuantity(), d.getUnitPrice(), d.getLineAmount()))
                 .toList();
+        // Colonne « Fournisseur » de la vue Laravel « Bon de caisse ».
+        String supplierName = v.getSupplierId() == null ? null :
+                supplierRepository.findById(v.getSupplierId())
+                        .map(com.labo.anapath.inventory.Supplier::getName).orElse(null);
         return new CashboxVoucherResponseDto(
                 v.getId(),
                 v.getCashbox() != null ? v.getCashbox().getId() : null,
@@ -193,6 +198,7 @@ public class CashboxVoucherServiceImpl implements CashboxVoucherService {
                 v.getDescription(),
                 v.getStatus(),
                 v.getSupplierId(),
+                supplierName,
                 v.getExpenseCategoryId(),
                 v.getTicketFile(),
                 details,

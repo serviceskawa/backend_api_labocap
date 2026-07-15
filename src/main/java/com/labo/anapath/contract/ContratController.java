@@ -90,6 +90,16 @@ public class ContratController {
                 .body(ApiResponse.success("Ligne test ajoutée", contratService.addTestDetail(id, dto)));
     }
 
+    @PutMapping("/{id}/details/{detailId}")
+    @PreAuthorize("hasAuthority('edit-contrats')")
+    public ResponseEntity<ApiResponse<DetailsContratDto>> updateTestDetail(
+            @PathVariable UUID id,
+            @PathVariable UUID detailId,
+            @Valid @RequestBody TestDetailUpdateDto dto) {
+        return ResponseEntity.ok(
+                ApiResponse.success("Ligne mise à jour", contratService.updateTestDetail(id, detailId, dto)));
+    }
+
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasAuthority('edit-contrats')")
     public ResponseEntity<ApiResponse<ContratResponseDto>> activate(@PathVariable UUID id) {

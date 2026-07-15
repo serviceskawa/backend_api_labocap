@@ -1,8 +1,10 @@
 package com.labo.anapath.role;
 
 import com.labo.anapath.common.dto.PageResponse;
+import com.labo.anapath.common.exception.BusinessException;
 import com.labo.anapath.common.exception.DuplicateResourceException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
+import com.labo.anapath.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -33,6 +35,7 @@ public class RoleServiceImpl implements RoleService {
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
     private final RoleMapper roleMapper;
+    private final UserRepository userRepository;
 
     /**
      * {@inheritDoc}
@@ -113,6 +116,11 @@ public class RoleServiceImpl implements RoleService {
     public void delete(UUID id, UUID branchId) {
         Role role = roleRepository.findByIdAndBranchId(id, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Rôle", id));
+        // Règle métier : un rôle encore attribué à des utilisateurs ne peut pas être supprimé.
+        if (userRepository.existsByRoleId(id)) {
+            throw new BusinessException(
+                    "Ce rôle est attribué à un ou plusieurs utilisateurs et ne peut pas être supprimé.");
+        }
         roleRepository.delete(role);
         log.info("Rôle supprimé: {}", id);
     }

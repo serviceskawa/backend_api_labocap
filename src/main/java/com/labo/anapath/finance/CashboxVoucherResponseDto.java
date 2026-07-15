@@ -13,6 +13,7 @@ public record CashboxVoucherResponseDto(
         String description,
         String status,
         UUID supplierId,
+        String supplierName,
         UUID expenseCategoryId,
         String ticketFile,
         List<CashboxVoucherDetailResponseDto> details,

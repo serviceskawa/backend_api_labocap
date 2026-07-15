@@ -12,6 +12,9 @@ public record CashboxOperationResponseDto(
         String type,
         String description,
         LocalDate operationDate,
+        String invoiceCode,
+        String paymentType,
+        String userName,
         UUID branchId,
         LocalDateTime createdAt
 ) {}

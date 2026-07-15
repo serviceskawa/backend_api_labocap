@@ -22,5 +22,9 @@ public record ContratResponseDto(
         Boolean isClose,
         List<DetailsContratDto> details,
         UUID branchId,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt,
+        // Enrichissements de la vue détail (null sur le endpoint liste)
+        Integer usedTestsCount,
+        ContratInvoiceDto invoice
 ) {}

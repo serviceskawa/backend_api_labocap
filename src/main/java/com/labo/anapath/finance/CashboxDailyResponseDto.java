@@ -29,5 +29,7 @@ public record CashboxDailyResponseDto(
         BigDecimal totalConfirmation,
         BigDecimal totalEcart,
         UUID branchId,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt,
+        String userName
 ) {}
