@@ -68,8 +68,14 @@ public class TestOrderSpecification {
             }
             if (filter.getSearch() != null && !filter.getSearch().isBlank()) {
                 String pattern = "%" + filter.getSearch().toLowerCase() + "%";
+                // Recherche globale : code du bon OU nom/prénom du patient (comme la
+                // DataTable Laravel). Jointure LEFT pour ne pas exclure les bons sans
+                // patient dont le code correspond.
+                var patientJoin = root.join("patient", jakarta.persistence.criteria.JoinType.LEFT);
                 Predicate codeMatch = cb.like(cb.lower(cb.coalesce(root.get("code"), "")), pattern);
-                predicates.add(cb.or(codeMatch));
+                Predicate firstMatch = cb.like(cb.lower(cb.coalesce(patientJoin.get("firstname"), "")), pattern);
+                Predicate lastMatch = cb.like(cb.lower(cb.coalesce(patientJoin.get("lastname"), "")), pattern);
+                predicates.add(cb.or(codeMatch, firstMatch, lastMatch));
             }
             if (filter.getContratId() != null) {
                 predicates.add(cb.equal(root.get("contrat").get("id"), filter.getContratId()));

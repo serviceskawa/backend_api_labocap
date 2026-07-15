@@ -9,6 +9,7 @@ import com.labo.anapath.finance.Invoice;
 import com.labo.anapath.finance.InvoiceRepository;
 import com.labo.anapath.finance.InvoiceStatus;
 import com.labo.anapath.test.LabTestRepository;
+import com.labo.anapath.testorder.TestOrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -30,6 +31,7 @@ public class ContratServiceImpl implements ContratService {
     private final DetailsContratRepository detailsContratRepository;
     private final InvoiceRepository invoiceRepository;
     private final ClientRepository clientRepository;
+    private final TestOrderRepository testOrderRepository;
     private final ContratMapper contratMapper;
 
     @Override
@@ -43,8 +45,18 @@ public class ContratServiceImpl implements ContratService {
                 branchId, statusVal, searchVal, from, to,
                 PageRequest.of(page, size, Sort.by("createdAt").descending()))
                 .map(c -> {
-                    ContratResponseDto dto = contratMapper.toResponseDto(c);
-                    return addClientName(c, dto);
+                    ContratResponseDto dto = addClientName(c, contratMapper.toResponseDto(c));
+                    // « Nombre d'examens » (colonne liste Laravel = $contrat->orders->count()) :
+                    // on renseigne aussi usedTestsCount côté liste, pas seulement en détail.
+                    int usedTestsCount = (int) testOrderRepository.countByContratId(c.getId());
+                    return new ContratResponseDto(
+                            dto.id(), dto.name(), dto.type(), dto.description(),
+                            dto.hospitalId(), dto.hospitalName(),
+                            dto.clientId(), dto.clientName(),
+                            dto.nbrTests(), dto.startDate(), dto.endDate(),
+                            dto.status(), dto.invoiceUnique(), dto.isClose(),
+                            dto.details(), dto.branchId(), dto.createdAt(), dto.updatedAt(),
+                            usedTestsCount, dto.invoice());
                 }));
     }
 
@@ -53,7 +65,7 @@ public class ContratServiceImpl implements ContratService {
     public ContratResponseDto findById(UUID id) {
         Contrat c = contratRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Contrat", id));
-        return addClientName(c, contratMapper.toResponseDto(c));
+        return enrichDetail(c, addClientName(c, contratMapper.toResponseDto(c)));
     }
 
     @Override
@@ -141,9 +153,20 @@ public class ContratServiceImpl implements ContratService {
         DetailsContrat detail = new DetailsContrat();
         detail.setContrat(contrat);
         detail.setLabTest(labTest);
+        detail.setPrice(labTest.getPrice());
         detail.setAmountRemise(dto.getAmountRemise());
         detail.setAmountAfterRemise(dto.getAmountAfterRemise());
         detail.setCategoryTestId(labTest.getCategoryTest() != null ? labTest.getCategoryTest().getId() : null);
+        return contratMapper.toDetailsDto(detailsContratRepository.save(detail));
+    }
+
+    @Override
+    @Transactional
+    public DetailsContratDto updateTestDetail(UUID contractId, UUID detailId, TestDetailUpdateDto dto) {
+        DetailsContrat detail = detailsContratRepository.findById(detailId)
+                .orElseThrow(() -> new ResourceNotFoundException("Ligne contrat", detailId));
+        detail.setAmountRemise(dto.getAmountRemise());
+        detail.setAmountAfterRemise(dto.getAmountAfterRemise());
         return contratMapper.toDetailsDto(detailsContratRepository.save(detail));
     }
 
@@ -231,6 +254,43 @@ public class ContratServiceImpl implements ContratService {
                 contrat.getClientId(), clientName,
                 dto.nbrTests(), dto.startDate(), dto.endDate(),
                 dto.status(), dto.invoiceUnique(), dto.isClose(),
-                dto.details(), dto.branchId(), dto.createdAt());
+                dto.details(), dto.branchId(), dto.createdAt(), dto.updatedAt(),
+                dto.usedTestsCount(), dto.invoice());
+    }
+
+    /**
+     * Enrichit le DTO pour la vue détail : nombre de bons d'examen consommés
+     * (équivalent {@code $contrat->orders->count()}) et facture unique rattachée
+     * (uniquement si {@code invoiceUnique} et qu'une facture existe, comme dans
+     * la vue Blade {@code contrats_details/index}).
+     */
+    private ContratResponseDto enrichDetail(Contrat contrat, ContratResponseDto dto) {
+        int usedTestsCount = (int) testOrderRepository.countByContratId(contrat.getId());
+
+        ContratInvoiceDto invoiceDto = null;
+        if (Boolean.TRUE.equals(contrat.getInvoiceUnique())) {
+            Invoice invoice = invoiceRepository
+                    .findFirstByContratIdOrderByCreatedAtDesc(contrat.getId())
+                    .orElse(null);
+            if (invoice != null) {
+                boolean paid = Boolean.TRUE.equals(invoice.getPaid());
+                invoiceDto = new ContratInvoiceDto(
+                        invoice.getId(),
+                        invoice.getCode(),
+                        invoice.getClientName(),
+                        paid,
+                        paid ? invoice.getUpdatedAt() : null,
+                        invoice.getTotal());
+            }
+        }
+
+        return new ContratResponseDto(
+                dto.id(), dto.name(), dto.type(), dto.description(),
+                dto.hospitalId(), dto.hospitalName(),
+                dto.clientId(), dto.clientName(),
+                dto.nbrTests(), dto.startDate(), dto.endDate(),
+                dto.status(), dto.invoiceUnique(), dto.isClose(),
+                dto.details(), dto.branchId(), dto.createdAt(), dto.updatedAt(),
+                usedTestsCount, invoiceDto);
     }
 }

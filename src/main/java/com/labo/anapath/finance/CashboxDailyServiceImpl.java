@@ -3,6 +3,7 @@ package com.labo.anapath.finance;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.BusinessException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
+import com.labo.anapath.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -21,6 +22,7 @@ public class CashboxDailyServiceImpl implements CashboxDailyService {
 
     private final CashboxDailyRepository cashboxDailyRepository;
     private final CashboxRepository cashboxRepository;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional
@@ -193,7 +195,18 @@ public class CashboxDailyServiceImpl implements CashboxDailyService {
                 d.getTotalConfirmation(),
                 d.getTotalEcart(),
                 d.getBranchId(),
-                d.getCreatedAt()
+                d.getCreatedAt(),
+                // updatedAt fait office de date de fermeture (statut 0 = clôturée) ;
+                // userName = agent ayant ouvert/fermé la session (colonnes vue Laravel).
+                d.getUpdatedAt(),
+                resolveUserName(d.getCreatedBy())
         );
+    }
+
+    private String resolveUserName(UUID userId) {
+        if (userId == null) return null;
+        return userRepository.findById(userId)
+                .map(u -> (u.getFirstname() + " " + u.getLastname()).trim())
+                .orElse(null);
     }
 }

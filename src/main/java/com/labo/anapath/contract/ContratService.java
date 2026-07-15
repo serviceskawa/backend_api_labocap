@@ -20,6 +20,8 @@ public interface ContratService {
 
     DetailsContratDto addTestDetail(UUID contractId, TestDetailRequestDto dto);
 
+    DetailsContratDto updateTestDetail(UUID contractId, UUID detailId, TestDetailUpdateDto dto);
+
     ContratResponseDto activate(UUID contractId);
 
     ContratResponseDto close(UUID contractId);

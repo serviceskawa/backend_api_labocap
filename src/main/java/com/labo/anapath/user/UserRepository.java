@@ -75,6 +75,16 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      */
     Optional<User> findByResetToken(String resetToken);
 
+    /**
+     * Indique si au moins un utilisateur actif (non supprimé) est rattaché au rôle donné.
+     * Sert à empêcher la suppression d'un rôle encore attribué à des utilisateurs.
+     *
+     * @param roleId identifiant du rôle
+     * @return {@code true} si le rôle est lié à au moins un utilisateur actif
+     */
+    @Query("SELECT COUNT(u) > 0 FROM User u JOIN u.roles r WHERE r.id = :roleId")
+    boolean existsByRoleId(@Param("roleId") UUID roleId);
+
     // Dashboard — utilisateurs connectés
     @Query(value = """
             SELECT u.id::text as id, u.lastname as lastname, u.firstname as firstname, u.email as email

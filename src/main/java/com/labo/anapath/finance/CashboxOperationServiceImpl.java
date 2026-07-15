@@ -2,6 +2,7 @@ package com.labo.anapath.finance;
 
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
+import com.labo.anapath.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,8 @@ public class CashboxOperationServiceImpl implements CashboxOperationService {
 
     private final CashboxOperationRepository cashboxOperationRepository;
     private final CashboxRepository cashboxRepository;
+    private final InvoiceRepository invoiceRepository;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -54,6 +57,10 @@ public class CashboxOperationServiceImpl implements CashboxOperationService {
     }
 
     private CashboxOperationResponseDto toDto(CashboxOperation o) {
+        // Colonnes de la vue Laravel « Caisse de vente » : Facture (code) et Utilisateur.
+        String invoiceCode = o.getInvoiceId() == null ? null :
+                invoiceRepository.findById(o.getInvoiceId()).map(Invoice::getCode).orElse(null);
+        String userName = resolveUserName(o.getCreatedBy());
         return new CashboxOperationResponseDto(
                 o.getId(),
                 o.getCashbox() != null ? o.getCashbox().getId() : null,
@@ -61,8 +68,18 @@ public class CashboxOperationServiceImpl implements CashboxOperationService {
                 o.getType(),
                 o.getDescription(),
                 o.getOperationDate(),
+                invoiceCode,
+                o.getPaymentMethod(),
+                userName,
                 o.getBranchId(),
                 o.getCreatedAt()
         );
+    }
+
+    private String resolveUserName(UUID userId) {
+        if (userId == null) return null;
+        return userRepository.findById(userId)
+                .map(u -> (u.getFirstname() + " " + u.getLastname()).trim())
+                .orElse(null);
     }
 }
