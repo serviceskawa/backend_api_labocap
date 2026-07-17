@@ -13,6 +13,8 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.NotFound;
+import org.hibernate.annotations.NotFoundAction;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -32,8 +34,15 @@ import java.time.LocalDate;
 @NoArgsConstructor
 public class Movement extends AuditableEntity {
 
+    /**
+     * L'article peut avoir été supprimé (soft delete) alors que ses mouvements
+     * subsistent : sans {@code IGNORE}, le filtre {@code deleted_at IS NULL} de
+     * {@link Article} fait échouer le chargement et met en erreur toute la liste.
+     * Laravel se contente d'ignorer ces lignes (`@if($movement->article)`).
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "article_id", nullable = false)
+    @NotFound(action = NotFoundAction.IGNORE)
     private Article article;
 
     @Enumerated(EnumType.STRING)

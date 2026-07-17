@@ -46,7 +46,9 @@ public class UnitMeasurementController {
      * @return page de {@link UnitMeasurementResponseDto}
      */
     @GetMapping
-    @PreAuthorize("hasAuthority('view-tests')")
+    // Les unités servent aussi le formulaire Article (menu Stocks) : `view-articles`
+    // doit suffire, sinon ce menu renvoie 403 pour un profil stock sans accès analyses.
+    @PreAuthorize("hasAnyAuthority('view-tests','view-articles')")
     public ResponseEntity<ApiResponse<PageResponse<UnitMeasurementResponseDto>>> findAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -55,7 +57,9 @@ public class UnitMeasurementController {
     }
 
     @GetMapping("/all")
-    @PreAuthorize("hasAuthority('view-tests')")
+    // Les unités servent aussi le formulaire Article (menu Stocks) : `view-articles`
+    // doit suffire, sinon ce menu renvoie 403 pour un profil stock sans accès analyses.
+    @PreAuthorize("hasAnyAuthority('view-tests','view-articles')")
     public ResponseEntity<ApiResponse<List<UnitMeasurementResponseDto>>> findAll(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(unitMeasurementService.findAll(principal.getBranchId())));
@@ -68,7 +72,9 @@ public class UnitMeasurementController {
      * @return le DTO de l'unité trouvée
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('view-tests')")
+    // Les unités servent aussi le formulaire Article (menu Stocks) : `view-articles`
+    // doit suffire, sinon ce menu renvoie 403 pour un profil stock sans accès analyses.
+    @PreAuthorize("hasAnyAuthority('view-tests','view-articles')")
     public ResponseEntity<ApiResponse<UnitMeasurementResponseDto>> findById(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(unitMeasurementService.findById(id)));
     }
@@ -81,7 +87,7 @@ public class UnitMeasurementController {
      * @return le DTO de l'unité créée avec le statut HTTP 201
      */
     @PostMapping
-    @PreAuthorize("hasAuthority('edit-tests')")
+    @PreAuthorize("hasAnyAuthority('edit-tests','edit-articles')")
     public ResponseEntity<ApiResponse<UnitMeasurementResponseDto>> create(
             @Valid @RequestBody UnitMeasurementRequestDto dto,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -97,7 +103,7 @@ public class UnitMeasurementController {
      * @return le DTO mis à jour
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('edit-tests')")
+    @PreAuthorize("hasAnyAuthority('edit-tests','edit-articles')")
     public ResponseEntity<ApiResponse<UnitMeasurementResponseDto>> update(
             @PathVariable UUID id, @Valid @RequestBody UnitMeasurementRequestDto dto) {
         return ResponseEntity.ok(ApiResponse.success("Unité mise à jour", unitMeasurementService.update(id, dto)));
@@ -111,7 +117,7 @@ public class UnitMeasurementController {
      * @return réponse vide avec message de confirmation
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('edit-tests')")
+    @PreAuthorize("hasAnyAuthority('edit-tests','edit-articles')")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
         unitMeasurementService.delete(id);
         return ResponseEntity.ok(ApiResponse.success("Unité supprimée", null));

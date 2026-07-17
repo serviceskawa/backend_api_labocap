@@ -5,6 +5,7 @@ import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.contract.Contrat;
 import com.labo.anapath.contract.ContratRepository;
 import com.labo.anapath.patient.PatientRepository;
+import com.labo.anapath.setting.SettingInvoiceRepository;
 import com.labo.anapath.test.LabTestRepository;
 import com.labo.anapath.testorder.TestOrderRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -36,6 +37,9 @@ class InvoiceServiceImplTest {
     @Mock private LabTestRepository labTestRepository;
     @Mock private CashboxRepository cashboxRepository;
     @Mock private ContratRepository contratRepository;
+    @Mock private RefundRequestRepository refundRequestRepository;
+    @Mock private RefundReasonRepository refundReasonRepository;
+    @Mock private SettingInvoiceRepository settingInvoiceRepository;
     @Mock private FinanceMapper financeMapper;
 
     @InjectMocks private InvoiceServiceImpl service;

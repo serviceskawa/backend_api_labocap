@@ -27,8 +27,9 @@ import java.util.UUID;
  * <p>
  * Les données sont isolées par agence : le {@code branchId} est extrait du
  * principal authentifié ({@link UserPrincipal}) et transmis au service.
- * La consultation nécessite l'autorité {@code view-clients} ;
- * la création, la modification et la suppression nécessitent {@code manage-clients}.
+ * La consultation nécessite l'autorité {@code view-clients} ; la création,
+ * la modification et la suppression exigent respectivement {@code create-clients},
+ * {@code edit-clients} et {@code delete-clients}, comme dans l'application Laravel.
  * </p>
  */
 @RestController
@@ -91,7 +92,7 @@ public class ClientController {
      * @return le DTO du client créé avec le statut HTTP 201
      */
     @PostMapping
-    @PreAuthorize("hasAuthority('edit-clients')")
+    @PreAuthorize("hasAuthority('create-clients')")
     public ResponseEntity<ApiResponse<ClientResponseDto>> create(
             @Valid @RequestBody ClientRequestDto dto,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -125,7 +126,7 @@ public class ClientController {
      * @return réponse vide confirmant la suppression
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('edit-clients')")
+    @PreAuthorize("hasAuthority('delete-clients')")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
         clientService.delete(id);
         return ResponseEntity.ok(ApiResponse.success("Client supprimé", null));

@@ -1,6 +1,7 @@
 package com.labo.anapath.finance;
 
 import com.labo.anapath.common.dto.PageResponse;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
@@ -10,9 +11,11 @@ public interface ExpenseService {
 
     ExpenseResponseDto findById(UUID id);
 
-    ExpenseResponseDto create(ExpenseRequestDto dto, UUID branchId);
+    ExpenseResponseDto create(ExpenseCreateRequestDto dto, UUID branchId);
 
     ExpenseResponseDto update(UUID id, ExpenseRequestDto dto);
+
+    ExpenseResponseDto uploadReceipt(UUID id, MultipartFile file);
 
     void delete(UUID id);
 

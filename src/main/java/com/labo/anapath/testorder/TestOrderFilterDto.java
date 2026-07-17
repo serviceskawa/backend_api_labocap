@@ -20,6 +20,12 @@ public class TestOrderFilterDto {
     /** Filtre sur le statut du bon (PENDING, VALIDATED, DELIVERED, CANCELLED). */
     private TestOrderStatus status;
 
+    /**
+     * Filtre par statut du COMPTE RENDU : "NONE" (pas de compte rendu),
+     * "DRAFT" (en attente), "VALIDATED" (validé), "DELIVERED" (livré).
+     */
+    private String reportStatus;
+
     /** Filtre sur l'identifiant du patient. */
     private UUID patientId;
 

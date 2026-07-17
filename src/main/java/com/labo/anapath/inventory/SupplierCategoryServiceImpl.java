@@ -3,6 +3,7 @@ package com.labo.anapath.inventory;
 import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,7 +21,9 @@ public class SupplierCategoryServiceImpl implements SupplierCategoryService {
     @Override
     @Transactional(readOnly = true)
     public List<SupplierCategoryResponseDto> findAll(UUID branchId) {
-        return supplierCategoryRepository.findByBranchId(branchId)
+        // Laravel liste les catégories via `latest()` : du plus récent au plus ancien.
+        return supplierCategoryRepository
+                .findByBranchId(branchId, Sort.by("createdAt").descending())
                 .stream().map(inventoryMapper::toSupplierCategoryResponseDto).toList();
     }
 

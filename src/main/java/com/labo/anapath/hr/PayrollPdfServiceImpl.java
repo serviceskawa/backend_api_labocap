@@ -76,7 +76,8 @@ public class PayrollPdfServiceImpl implements PayrollPdfService {
                 "FP-" + payroll.getId().toString().substring(0, 8).toUpperCase(Locale.ROOT));
         ctx.setVariable("generatedAt", LocalDate.now().format(DATE_FMT));
 
-        String html = templateEngine.process("pdf/fiche-paie", ctx);
+        String html = com.labo.anapath.common.pdf.PdfHtmlUtil.toXhtml(
+                templateEngine.process("pdf/fiche-paie", ctx));
 
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             PdfRendererBuilder builder = new PdfRendererBuilder();

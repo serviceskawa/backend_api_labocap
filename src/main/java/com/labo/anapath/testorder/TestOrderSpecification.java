@@ -45,6 +45,26 @@ public class TestOrderSpecification {
             if (filter.getStatus() != null) {
                 predicates.add(cb.equal(root.get("status"), filter.getStatus()));
             }
+            // Filtre par statut du compte rendu (sous-requête sur Report, dont les
+            // supprimés sont déjà exclus par @SQLRestriction) :
+            //  - "NONE" → aucune ligne Report pour ce bon
+            //  - "DRAFT"/"VALIDATED"/"DELIVERED" → un Report existe avec ce statut
+            if (filter.getReportStatus() != null && !filter.getReportStatus().isBlank()) {
+                jakarta.persistence.criteria.Subquery<UUID> sub = query.subquery(UUID.class);
+                var reportRoot = sub.from(com.labo.anapath.report.Report.class);
+                sub.select(reportRoot.get("id"));
+                Predicate link = cb.equal(reportRoot.get("testOrder"), root);
+                if ("NONE".equalsIgnoreCase(filter.getReportStatus())) {
+                    sub.where(link);
+                    predicates.add(cb.not(cb.exists(sub)));
+                } else {
+                    com.labo.anapath.report.ReportStatus rs =
+                            com.labo.anapath.report.ReportStatus.valueOf(
+                                    filter.getReportStatus().toUpperCase());
+                    sub.where(cb.and(link, cb.equal(reportRoot.get("status"), rs)));
+                    predicates.add(cb.exists(sub));
+                }
+            }
             if (filter.getPatientId() != null) {
                 predicates.add(cb.equal(root.get("patient").get("id"), filter.getPatientId()));
             }

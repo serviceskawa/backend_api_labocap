@@ -42,7 +42,7 @@ public class MovementController {
      * @return page de mouvements de stock
      */
     @GetMapping
-    @PreAuthorize("hasAuthority('view-articles')")
+    @PreAuthorize("hasAuthority('view-movements')")
     public ResponseEntity<ApiResponse<PageResponse<MovementResponseDto>>> findAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -60,7 +60,7 @@ public class MovementController {
      * @return le mouvement enregistré avec le statut HTTP 201
      */
     @PostMapping
-    @PreAuthorize("hasAuthority('edit-articles')")
+    @PreAuthorize("hasAuthority('create-movements')")
     public ResponseEntity<ApiResponse<MovementResponseDto>> create(
             @Valid @RequestBody MovementRequestDto dto,
             @AuthenticationPrincipal UserPrincipal principal) {

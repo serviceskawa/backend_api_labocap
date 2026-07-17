@@ -44,6 +44,7 @@ public class CashboxOperationServiceImpl implements CashboxOperationService {
         operation.setOperationDate(dto.getOperationDate() != null ? dto.getOperationDate() : LocalDate.now());
         operation.setReference(dto.getReference());
         operation.setChequeNumber(dto.getChequeNumber());
+        operation.setBankId(dto.getBankId());
 
         // AC7 — mise à jour atomique du solde
         if ("CREDIT".equals(dto.getType())) {

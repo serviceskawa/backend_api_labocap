@@ -2,6 +2,7 @@ package com.labo.anapath.testorder;
 
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
+import com.labo.anapath.common.exception.DuplicateResourceException;
 import com.labo.anapath.common.security.UserPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -73,6 +74,7 @@ public class TestOrderController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) TestOrderStatus status,
+            @RequestParam(required = false) String reportStatus,
             @RequestParam(required = false) UUID patientId,
             @RequestParam(required = false) UUID doctorId,
             @RequestParam(required = false) UUID attribuateDoctorId,
@@ -86,6 +88,7 @@ public class TestOrderController {
             @AuthenticationPrincipal UserPrincipal principal) {
         TestOrderFilterDto filter = new TestOrderFilterDto();
         filter.setStatus(status);
+        filter.setReportStatus(reportStatus);
         filter.setPatientId(patientId);
         filter.setDoctorId(doctorId);
         filter.setAttribuateDoctorId(attribuateDoctorId);
@@ -318,8 +321,23 @@ public class TestOrderController {
             @PathVariable UUID id,
             @RequestParam String status,
             @AuthenticationPrincipal UserPrincipal principal) {
-        return ResponseEntity.ok(ApiResponse.success("Statut mis à jour",
-                testOrderService.updateStatus(id, status, principal.getId(), principal.getBranchId())));
+        // Retry transactionnel : en cas de collision de code (deux validations
+        // concurrentes), chaque appel de updateStatus s'exécute dans une NOUVELLE
+        // transaction (via le proxy Spring). La perdante est proprement annulée
+        // (rien de partiel n'est commité) puis rejouée : elle relit alors le code
+        // gagnant et calcule le suivant. L'utilisateur ne voit plus le conflit.
+        int maxAttempts = 5;
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return ResponseEntity.ok(ApiResponse.success("Statut mis à jour",
+                        testOrderService.updateStatus(id, status, principal.getId(), principal.getBranchId())));
+            } catch (DuplicateResourceException e) {
+                // On ne rejoue que la collision de génération de code, et pas indéfiniment.
+                if (!"CODE_GENERATION_CONFLICT".equals(e.getMessage()) || attempt >= maxAttempts) {
+                    throw e;
+                }
+            }
+        }
     }
 
     /**
@@ -333,7 +351,7 @@ public class TestOrderController {
      * @return le bon mis à jour
      */
     @PostMapping("/{id}/deliver")
-    @PreAuthorize("hasAuthority('deliver-reports')")
+    @PreAuthorize("hasAuthority('edit-reports')")
     public ResponseEntity<ApiResponse<TestOrderResponseDto>> deliver(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -376,6 +394,26 @@ public class TestOrderController {
             @AuthenticationPrincipal UserPrincipal principal) {
         testOrderService.deleteImage(id, index, principal.getBranchId());
         return ResponseEntity.ok(ApiResponse.success("Image supprimée", null));
+    }
+
+    /**
+     * Téléverse la pièce jointe (archive) d'un bon d'examen — équivalent du champ
+     * {@code examen_file} de Laravel. Le fichier est stocké et son chemin est
+     * enregistré dans la colonne {@code archive} du bon.
+     *
+     * @param id        identifiant UUID du bon
+     * @param file      fichier envoyé (multipart, paramètre {@code archive})
+     * @param principal principal Spring Security (branchId)
+     * @return le chemin du fichier stocké
+     */
+    @PostMapping("/{id}/archive")
+    @PreAuthorize("hasAnyAuthority('create-test-orders', 'edit-test-orders')")
+    public ResponseEntity<ApiResponse<String>> uploadArchive(
+            @PathVariable UUID id,
+            @RequestParam("archive") MultipartFile file,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success("Pièce jointe enregistrée",
+                testOrderService.uploadArchive(id, principal.getBranchId(), file)));
     }
 
     @PostMapping("/{id}/assign-doctor")

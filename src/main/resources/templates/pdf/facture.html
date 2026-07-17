@@ -3,103 +3,208 @@
 <head>
     <meta charset="UTF-8"/>
     <style>
-        @page { size: A4; margin: 18mm 15mm; }
-        body { font-family: Arial, sans-serif; font-size: 12px; color: #222; margin: 0; }
-        .header { text-align: center; margin-bottom: 12px; }
-        .title { text-align: right; font-size: 16px; font-weight: bold; margin: 8px 0 16px; }
-        .infos { width: 100%; margin-bottom: 16px; }
+        /* Marge basse réservée au bloc « note importante » + pied de page, tous
+           deux en position fixe (ancrés au bas de chaque page). La marge doit être
+           assez haute pour contenir la note (~4 lignes) + l'écart + le pied de page,
+           afin que le contenu ne les chevauche pas. */
+        @page { size: A4; margin: 10mm 10mm 46mm 10mm; }
+        @page { @bottom-center { content: element(bottomBlock); vertical-align: bottom; } }
+        body {
+            font-family: "Nunito", "Helvetica Neue", Helvetica, Arial, sans-serif;
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin: 0;
+            line-height: 1.5;
+        }
+        .card-body { padding: 1.5rem; }
+
+        .clearfix::after { content: ""; display: block; clear: both; }
+        .float-start { float: left; }
+        .float-end { float: right; }
+
+        /* Ligne de tête : logo à gauche, QR à droite (même taille), sur la même ligne. */
+        .topbar { margin-bottom: 1.5rem; }
+        .topbar .logo { height: 84px; }
+        .topbar .qr { width: 84px; height: 84px; }
+
+        hr { border: 0; border-top: 1px solid #e5e7eb; margin: 0.75rem 0; }
+
+        /* En-tête : « Facture de vente » à gauche, « Adressée à » à droite. */
+        .infos { width: 100%; border-collapse: collapse; }
         .infos td { vertical-align: top; }
-        .infos .right { text-align: right; }
-        address { font-style: normal; line-height: 1.5; }
-        table.lines { width: 100%; border-collapse: collapse; margin-top: 8px; }
-        table.lines th, table.lines td { border-bottom: 1px solid #ddd; padding: 6px 8px; text-align: left; }
-        table.lines th { background-color: #f3f3f3; font-size: 11px; text-transform: uppercase; }
-        table.lines td.num, table.lines th.num { text-align: right; }
-        .totals { width: 100%; margin-top: 14px; }
-        .totals td { padding: 2px 8px; }
-        .totals .label { text-align: right; }
-        .totals .value { text-align: right; width: 140px; font-weight: bold; }
-        .totals .grand { font-size: 16px; }
-        .mecef { margin-top: 24px; border-top: 1px solid #ccc; padding-top: 10px; }
-        .mecef .lbl { font-style: italic; text-align: center; margin-bottom: 8px; }
-        .mecef td { vertical-align: middle; }
-        .mecef .kv { display: block; margin: 2px 0; }
+        .infos td.left { width: 55%; }
+        .infos td.right { width: 45%; }
+        .infos .rightbox { float: right; text-align: left; }
+        h4 { color: #343a40; font-size: 1.125rem; font-weight: 700; margin: 0 0 0.5rem 0; }
+        .kv { font-size: 13px; margin: 0 0 0.25rem 0; }
+        strong, b { color: #343a40; }
+
+        /* Tableau des lignes — calque le composant DataTable de l'app Next. */
+        table.table { width: 100%; border-collapse: collapse; margin-top: 1.5rem; margin-bottom: 1rem; font-size: 0.85rem; }
+        table.table thead { background-color: #e5e7eb; }
+        table.table thead th {
+            border-bottom: 2px solid #d1d5db;
+            border-right: 1px solid #d1d5db;
+            padding: 0.75rem 1rem;
+            text-align: left;
+            font-size: 0.7rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #1f2937;
+            vertical-align: bottom;
+        }
+        table.table thead th:last-child { border-right: 0; }
+        table.table tbody tr:nth-child(even) { background-color: #f9fafb; }
+        table.table tbody td {
+            border-right: 1px solid #d1d5db;
+            padding: 0.75rem 1rem;
+            color: #1f2937;
+            vertical-align: top;
+        }
+        table.table tbody td:last-child { border-right: 0; }
+        .text-end { text-align: right; }
+
+        /* Totaux, à droite. */
+        .totaux { width: 100%; margin-top: 0.5rem; }
+        .totaux td { vertical-align: top; }
+        .totaux .block { float: right; text-align: left; }
+        .totaux p { margin: 0 0 0.5rem 0; }
+        .totaux h3 { color: #343a40; font-size: 1.35rem; font-weight: 700; margin: 0.5rem 0 0 0; }
+        .amount { float: right; padding-left: 2rem; }
+
+        /* Signature, à droite sous les totaux. */
+        .signature { width: 100%; margin-top: 1rem; }
+        .signature .block { float: right; text-align: center; }
+        .signature img { max-height: 60px; display: block; margin: 0 auto 0.25rem auto; }
+        .signature .name { color: #343a40; font-weight: 600; }
+
+        /* Bloc bas de page : un seul conteneur fixe ancré tout en bas de la feuille.
+           Il empile la note (en haut) puis le pied de page (en bas) dans l'ordre du
+           flux → le pied de page est toujours complètement en bas, la note juste
+           au-dessus. Un seul élément fixe = position relative des deux déterministe. */
+        .bottom-block {
+            /* Rendu dans la marge basse de la page via @bottom-center (position:
+               running), comme le pied de page de rapport.html — technique fiable
+               dans OpenHTMLToPDF. Petit margin-bottom pour ne pas coller au bord
+               imprimable extrême. */
+            position: running(bottomBlock);
+            padding-bottom: 24px;
+        }
+
+        /* Note importante : encadré à filet gauche bleu, à 10px au-dessus du pied
+           de page. */
+        .note-running {
+            border-left: 3px solid #3b82f6;
+            background: #f9fafb;
+            padding: 0.6rem 0.9rem;
+            font-size: 0.78rem;
+            margin-bottom: 40px;
+        }
+        .note-running b { color: #343a40; }
+
+        /* Pied de page du laboratoire, en bas du bloc → complètement en bas de la feuille. */
+        .footer-fixed {
+            text-align: center;
+            font-size: 10px;
+            color: #6c757d;
+        }
     </style>
 </head>
 <body>
-    <!-- En-tête laboratoire -->
-    <div class="header" th:utext="${entete}">En-tête du laboratoire</div>
 
-    <div class="title" th:text="${title}">Reçu de paiement</div>
+<!-- Bloc bas de page (position: running → marge basse) : note importante au-dessus,
+     pied de page tout en bas de la feuille. -->
 
-    <!-- Infos client / facture -->
+<div class="bottom-block">
+    <div class="note-running">
+        <b>Note importante :</b> <span th:text="${noteImportante}"></span>
+    </div>
+    <div class="footer-fixed" th:if="${!#strings.isEmpty(reportFooter)}" th:text="${reportFooter}"></div>
+</div>
+
+<div class="card-body">
+
+    <!-- Ligne de tête : logo (gauche) + QR (droite) -->
+    <div class="clearfix topbar">
+        <div class="float-start">
+            <img class="logo" th:if="${!#strings.isEmpty(logo)}" th:src="${logo}" alt=""/>
+        </div>
+        <div class="float-end">
+            <img class="qr" th:if="${!#strings.isEmpty(headerQrcode)}" th:src="${headerQrcode}" alt="QR Code"/>
+        </div>
+    </div>
+
+    <!-- En-tête : facture (gauche) · destinataire (droite) -->
     <table class="infos">
         <tr>
-            <td>
-                <strong>Informations du patient</strong>
-                <address>
-                    <strong>Nom : </strong><span th:text="${clientName}">Client</span><br/>
-                    <strong>Adresse : </strong><span th:text="${clientAddress}"></span>
-                </address>
+            <td class="left">
+                <h4 th:text="${docTitle}">Facture de vente</h4>
+                <p class="kv"><strong>Date: </strong> <span th:text="${date}"></span></p>
+                <p class="kv"><strong>Code: </strong> <span th:text="${code}"></span>
+                    <strong th:text="${codeStatus}"></strong></p>
+                <p class="kv"><strong>Référence: </strong> <span th:text="${reference}"></span></p>
+                <p class="kv"><strong>CODE MECeF / DGI: </strong> <span th:text="${codeNormalise}"></span></p>
             </td>
             <td class="right">
-                <p><strong>Date : </strong><span th:text="${date}"></span></p>
-                <p th:if="${payment != ''}"><strong>Mode de paiement : </strong><span th:text="${payment}"></span></p>
-                <p><strong>Code : </strong><span th:text="${code}"></span></p>
+                <div class="rightbox">
+                    <p class="kv"><strong>Adressée à:</strong></p>
+                    <p class="kv"><strong>Nom: </strong> <span th:text="${clientName}"></span></p>
+                    <p class="kv"><strong>Adresse: </strong> <span th:text="${clientAddress}"></span></p>
+                    <p class="kv"><strong>Code client: </strong> <span th:text="${patientCode}"></span></p>
+                    <p class="kv"><strong>Demande d'examen: </strong> <span th:text="${demandeExamen}"></span></p>
+                </div>
             </td>
         </tr>
     </table>
 
-    <!-- Lignes -->
-    <table class="lines">
+    <hr/>
+
+    <!-- Lignes de la facture -->
+    <table class="table">
         <thead>
-            <tr>
-                <th class="num">#</th>
-                <th>Titre de l'examen</th>
-                <th class="num">Quantité</th>
-                <th class="num">Prix (F CFA)</th>
-                <th class="num">Total (F CFA)</th>
-            </tr>
+        <tr>
+            <th>#</th>
+            <th>Désignation</th>
+            <th>Quantité</th>
+            <th>Prix</th>
+            <th>Remise</th>
+            <th class="text-end">Total</th>
+        </tr>
         </thead>
         <tbody>
-            <tr th:each="line : ${lines}">
-                <td class="num" th:text="${line.index}">1</td>
-                <td><b th:text="${line.testName}">Examen</b></td>
-                <td class="num" th:text="${line.quantity}">1</td>
-                <td class="num" th:text="${line.unitPrice}">0</td>
-                <td class="num" th:text="${line.total}">0</td>
-            </tr>
+        <tr th:each="line : ${lines}">
+            <td th:text="${line.index}">1</td>
+            <td><b th:text="${line.testName}">Examen</b></td>
+            <td th:text="${line.quantity}">1</td>
+            <td th:text="${line.price}">0</td>
+            <td th:text="${line.discount}">0</td>
+            <td class="text-end" th:text="${line.total}">0</td>
+        </tr>
         </tbody>
     </table>
 
     <!-- Totaux -->
-    <table class="totals">
+    <table class="totaux">
         <tr>
-            <td class="label">Sous-total :</td>
-            <td class="value"><span th:text="${subtotal}">0</span> F CFA</td>
-        </tr>
-        <tr>
-            <td class="label grand">Total :</td>
-            <td class="value grand"><span th:text="${total}">0</span> F CFA</td>
+            <td>&nbsp;</td>
+            <td>
+                <div class="block">
+                    <p><b>Sous-total : </b><span class="amount" th:text="${subtotal}">0</span></p>
+                    <h3><b>Montant TTC : </b><span th:text="${total}">0</span> FCFA</h3>
+                </div>
+            </td>
         </tr>
     </table>
 
-    <!-- Éléments de sécurité de la facture normalisée (MECeF) -->
-    <div class="mecef" th:if="${hasMecef}">
-        <div class="lbl">--- ÉLÉMENTS DE SÉCURITÉ DE LA FACTURE NORMALISÉE ---</div>
-        <table>
-            <tr>
-                <td style="width: 180px; text-align: center;">
-                    <img th:if="${qrcode != ''}" th:src="${qrcode}" width="140" height="140" alt="QR Code"/>
-                </td>
-                <td>
-                    <span class="kv"><strong>Code MECeF DGI :</strong> <span th:text="${codeMecef}"></span></span>
-                    <span class="kv"><strong>MECeF NIM :</strong> <span th:text="${nim}"></span></span>
-                    <span class="kv"><strong>MECeF Compteurs :</strong> <span th:text="${counters}"></span></span>
-                    <span class="kv"><strong>MECeF Heure :</strong> <span th:text="${dateGenerate}"></span></span>
-                </td>
-            </tr>
-        </table>
+    <!-- Signature de l'opérateur -->
+    <div class="clearfix signature" th:if="${!#strings.isEmpty(operatorName)}">
+        <div class="block">
+            <img th:if="${!#strings.isEmpty(signatureImage)}" th:src="${signatureImage}" alt="Signature"/>
+            <div class="name" th:text="${operatorName}">Admin Admin</div>
+        </div>
     </div>
+
+</div>
 </body>
 </html>

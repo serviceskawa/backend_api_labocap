@@ -70,6 +70,10 @@ public class Invoice extends AuditableEntity {
     @JoinColumn(name = "contrat_id")
     private Contrat contrat;
 
+    /** Date de la facture, saisie à la création. Distincte de {@code created_at}. */
+    @Column(name = "date")
+    private LocalDate date;
+
     /** Nom du client tel qu'il doit apparaître sur la facture imprimée. */
     @Column(name = "client_name", length = 100)
     private String clientName;

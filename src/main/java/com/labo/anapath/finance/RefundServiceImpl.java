@@ -20,6 +20,8 @@ public class RefundServiceImpl implements RefundService {
     private final RefundRequestRepository refundRequestRepository;
     private final RefundRequestLogRepository refundRequestLogRepository;
     private final InvoiceRepository invoiceRepository;
+    private final RefundReasonRepository refundReasonRepository;
+    private final com.labo.anapath.user.UserRepository userRepository;
 
     @Override
     @Transactional
@@ -42,7 +44,7 @@ public class RefundServiceImpl implements RefundService {
         refund.setMontant(dto.getMontant());
         refund.setNote(dto.getNote());
         refund.setAttachment(dto.getAttachment());
-        refund.setCode(generateCodeFactureAvoir(branchId));
+        refund.setCode(generateCodeDemandeRemboursement(branchId));
         refund.setStatus("En attente");
         RefundRequest saved = refundRequestRepository.save(refund);
 
@@ -65,6 +67,7 @@ public class RefundServiceImpl implements RefundService {
         if ("Aprouvé".equals(dto.getStatus())) {
             Invoice avoir = new Invoice();
             avoir.setBranchId(refund.getBranchId());
+            avoir.setDate(LocalDate.now()); // calque Laravel : 'date' => Carbon::now()
             avoir.setClientName(refund.getInvoice() != null ? refund.getInvoice().getClientName() : null);
             avoir.setClientAddress(refund.getInvoice() != null ? refund.getInvoice().getClientAddress() : null);
             avoir.setTotal(refund.getMontant());
@@ -118,6 +121,12 @@ public class RefundServiceImpl implements RefundService {
         refundRequestRepository.delete(refund);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public long countPending(UUID branchId) {
+        return refundRequestRepository.countByBranchIdAndStatus(branchId, "En attente");
+    }
+
     private void createLog(RefundRequest refund, UUID userId, String operation) {
         RefundRequestLog log = new RefundRequestLog();
         log.setBranchId(refund.getBranchId());
@@ -130,12 +139,22 @@ public class RefundServiceImpl implements RefundService {
     private RefundRequestResponseDto toResponseDto(RefundRequest refund) {
         List<RefundRequestLogDto> logs = refundRequestLogRepository.findByRefundRequestId(refund.getId())
                 .stream()
-                .map(l -> new RefundRequestLogDto(l.getId(), l.getUserId(), l.getOperation(), l.getCreatedAt()))
+                .map(l -> new RefundRequestLogDto(
+                        l.getId(),
+                        l.getUserId(),
+                        userFullName(l.getUserId()),
+                        l.getOperation(),
+                        l.getCreatedAt()))
                 .toList();
+        String reasonLabel = refund.getRefundReasonId() == null ? null
+                : refundReasonRepository.findById(refund.getRefundReasonId())
+                        .map(RefundReason::getLabel).orElse(null);
         return new RefundRequestResponseDto(
                 refund.getId(),
                 refund.getInvoice() != null ? refund.getInvoice().getId() : null,
+                refund.getInvoice() != null ? refund.getInvoice().getCode() : null,
                 refund.getRefundReasonId(),
+                reasonLabel,
                 refund.getMontant(),
                 refund.getNote(),
                 refund.getAttachment(),
@@ -143,18 +162,31 @@ public class RefundServiceImpl implements RefundService {
                 refund.getStatus(),
                 logs,
                 refund.getBranchId(),
-                refund.getCreatedAt()
+                refund.getCreatedAt(),
+                refund.getUpdatedAt()
         );
     }
 
-    // Format "AV" + (year % 100) + séquence 4 chiffres — ex: AV260001
-    private String generateCodeFactureAvoir(UUID branchId) {
+    /** « Prénom Nom » de l'auteur d'un log, vide si l'utilisateur n'existe plus. */
+    private String userFullName(UUID userId) {
+        if (userId == null) return null;
+        return userRepository.findById(userId)
+                .map(u -> u.getFirstname() + " " + u.getLastname())
+                .orElse(null);
+    }
+
+    /**
+     * Code d'une demande de remboursement : "DER" + année sur 2 chiffres +
+     * séquence 4 chiffres — ex. DER260001. La séquence se calcule sur les
+     * demandes de l'année, comme le helper Laravel {@code generateCodeFactureAvoir}.
+     */
+    private String generateCodeDemandeRemboursement(UUID branchId) {
         int year = LocalDate.now().getYear();
-        List<Invoice> avoirs = invoiceRepository.findByBranchIdAndStatusInvoiceAndCodeNotNullAndYear(
-                branchId, 1, year, PageRequest.of(0, 1));
+        List<RefundRequest> last = refundRequestRepository.findLastCodeOfYear(
+                branchId, year, PageRequest.of(0, 1));
         String seq = "0001";
-        if (!avoirs.isEmpty()) {
-            String lastCode = avoirs.get(0).getCode();
+        if (!last.isEmpty()) {
+            String lastCode = last.get(0).getCode();
             if (lastCode != null && lastCode.length() >= 4) {
                 try {
                     int lastSeq = Integer.parseInt(lastCode.substring(lastCode.length() - 4));
@@ -162,7 +194,7 @@ public class RefundServiceImpl implements RefundService {
                 } catch (NumberFormatException ignored) {}
             }
         }
-        return "AV" + (year % 100) + seq;
+        return "DER" + (year % 100) + seq;
     }
 
     // Format "FA" + (year % 100) + séquence 4 chiffres — ex: FA260001

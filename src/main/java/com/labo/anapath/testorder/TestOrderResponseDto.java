@@ -72,5 +72,7 @@ public record TestOrderResponseDto(
         /** Identifiant de la facture associée (null si pas encore créée). */
         UUID invoiceId,
         /** Chemin du fichier joint (pièce jointe du bon). */
-        String archive
+        String archive,
+        /** Référence de l'examen (examen de référence Immuno : code ou texte libre). */
+        String testAffiliate
 ) {}

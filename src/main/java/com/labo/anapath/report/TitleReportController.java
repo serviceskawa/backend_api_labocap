@@ -1,5 +1,6 @@
 package com.labo.anapath.report;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
@@ -10,6 +11,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -53,7 +55,15 @@ public class TitleReportController {
         @NotBlank(message = "Le nom du titre est obligatoire")
         private String name;
 
-        /** Indique si ce titre doit devenir le titre par défaut. Optionnel, défaut {@code false}. */
+        /**
+         * Indique si ce titre doit devenir le titre par défaut. Optionnel, défaut {@code false}.
+         *
+         * <p>{@code @JsonProperty("isDefault")} est OBLIGATOIRE : sans lui, Jackson dérive le nom
+         * de propriété « default » depuis le getter/setter Lombok ({@code isDefault()}/{@code setDefault()})
+         * et ignore silencieusement la clé JSON « isDefault » envoyée par le front — la case
+         * « par défaut » resterait alors sans effet en création comme en modification.
+         */
+        @JsonProperty("isDefault")
         private boolean isDefault = false;
     }
 
@@ -79,7 +89,8 @@ public class TitleReportController {
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(PageResponse.of(
                 titleReportRepository.findByBranchId(principal.getBranchId(),
-                        PageRequest.of(page, size)).map(this::toDto))));
+                        PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")))
+                        .map(this::toDto))));
     }
 
     /**
@@ -126,15 +137,15 @@ public class TitleReportController {
     public ResponseEntity<ApiResponse<TitleReportResponseDto>> create(
             @Valid @RequestBody TitleReportRequestDto dto,
             @AuthenticationPrincipal UserPrincipal principal) {
-        if (dto.isDefault()) {
-            // Désactiver tous les autres titres comme défaut dans cette branche
-            titleReportRepository.unsetDefaultForBranch(principal.getBranchId());
-        }
         TitleReport t = new TitleReport();
         t.setBranchId(principal.getBranchId());
         t.setName(dto.getName());
         t.setDefault(dto.isDefault());
         TitleReport saved = titleReportRepository.save(t);
+        if (dto.isDefault()) {
+            // Nouveau titre par défaut : retirer le flag sur tous les autres (en l'excluant).
+            titleReportRepository.unsetDefaultForBranchExcept(saved.getBranchId(), saved.getId());
+        }
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Titre créé", toDto(saved)));
     }
@@ -153,13 +164,15 @@ public class TitleReportController {
             @PathVariable UUID id, @Valid @RequestBody TitleReportRequestDto dto) {
         TitleReport t = titleReportRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Titre de rapport", id));
-        if (dto.isDefault()) {
-            // Désactiver tous les autres titres comme défaut dans cette branche avant la sauvegarde
-            titleReportRepository.unsetDefaultForBranch(t.getBranchId());
-        }
         t.setName(dto.getName());
         t.setDefault(dto.isDefault());
         TitleReport saved = titleReportRepository.save(t);
+        if (dto.isDefault()) {
+            // Ce titre devient LE défaut : on retire le flag sur tous les AUTRES uniquement,
+            // APRÈS avoir sauvegardé celui-ci (flushAutomatically), et en l'excluant — sinon
+            // un bulk update sur tous annulerait le défaut qu'on vient de poser.
+            titleReportRepository.unsetDefaultForBranchExcept(saved.getBranchId(), saved.getId());
+        }
         return ResponseEntity.ok(ApiResponse.success("Titre mis à jour", toDto(saved)));
     }
 

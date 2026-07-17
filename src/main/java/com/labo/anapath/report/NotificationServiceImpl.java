@@ -52,7 +52,7 @@ public class NotificationServiceImpl implements NotificationService {
             default -> AUDIO_FR;
         };
 
-        String accessToken = settingAppRepository.findByKey("api_key_ourvoice")
+        String accessToken = settingAppRepository.findByKey("key_ourvoice")
                 .map(SettingApp::getValue)
                 .orElseThrow(() -> new InvalidOperationException("Clé API OurVoice non configurée"));
         String endpoint = settingAppRepository.findByKey("link_ourvoice_call")
@@ -89,7 +89,7 @@ public class NotificationServiceImpl implements NotificationService {
         // RÈGLE R7 : préfixer avec "229"
         String to = "229" + patient.getTelephone1();
 
-        String accessToken = settingAppRepository.findByKey("api_key_ourvoice")
+        String accessToken = settingAppRepository.findByKey("key_ourvoice")
                 .map(SettingApp::getValue)
                 .orElseThrow(() -> new InvalidOperationException("Clé API OurVoice non configurée"));
         String endpoint = settingAppRepository.findByKey("link_ourvoice_sms")

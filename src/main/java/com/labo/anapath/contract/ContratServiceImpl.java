@@ -114,6 +114,14 @@ public class ContratServiceImpl implements ContratService {
         contrat.setStartDate(dto.getStartDate());
         contrat.setEndDate(dto.getEndDate());
         contrat.setNbrTests(dto.getNbrTests());
+        // Le statut était ignoré à la mise à jour : impossible de repasser un
+        // contrat CLOTURE à ACTIF/INACTIF via le formulaire de modification.
+        // On synchronise aussi le drapeau is_close (la page détails s'appuie
+        // dessus en priorité) : CLOTURE → true, sinon false.
+        if (dto.getStatus() != null) {
+            contrat.setStatus(dto.getStatus());
+            contrat.setIsClose("CLOTURE".equals(dto.getStatus()));
+        }
         return addClientName(contrat, contratMapper.toResponseDto(contratRepository.save(contrat)));
     }
 
@@ -186,6 +194,7 @@ public class ContratServiceImpl implements ContratService {
                 String code = generateCodeFacture(contrat.getBranchId());
                 Invoice invoice = new Invoice();
                 invoice.setBranchId(contrat.getBranchId());
+                invoice.setDate(LocalDate.now()); // calque Laravel : 'date' => Carbon::now()
                 invoice.setContrat(contrat);
                 invoice.setCode(code);
                 invoice.setStatus(InvoiceStatus.PENDING);

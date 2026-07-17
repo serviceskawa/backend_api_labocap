@@ -139,6 +139,17 @@ public interface TestOrderService {
 
     void deleteImage(UUID id, int index, UUID branchId);
 
+    /**
+     * Téléverse la pièce jointe (archive) d'un bon d'examen et enregistre son
+     * chemin dans la colonne {@code archive}.
+     *
+     * @param id       identifiant UUID du bon
+     * @param branchId identifiant de la branche (isolation multi-tenant)
+     * @param file     fichier téléversé
+     * @return le chemin du fichier stocké
+     */
+    String uploadArchive(UUID id, UUID branchId, MultipartFile file);
+
     // -------------------------------------------------------------------------
     // Myspace
     // -------------------------------------------------------------------------

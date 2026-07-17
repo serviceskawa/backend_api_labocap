@@ -15,4 +15,6 @@ public interface RefundService {
     RefundRequestResponseDto findById(UUID id);
 
     void delete(UUID id);
+
+    long countPending(UUID branchId);
 }

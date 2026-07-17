@@ -53,6 +53,9 @@ public interface LabTestRepository extends JpaRepository<LabTest, UUID> {
 
     List<LabTest> findAllByBranchIdOrderByName(UUID branchId);
 
+    /** Analyses de la succursale, triées du plus récemment créé au plus ancien. */
+    List<LabTest> findAllByBranchIdOrderByCreatedAtDesc(UUID branchId);
+
     /**
      * Recherche une analyse par son identifiant et sa succursale.
      * Assure l'isolation multi-tenant.

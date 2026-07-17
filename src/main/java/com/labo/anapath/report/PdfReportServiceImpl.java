@@ -8,13 +8,17 @@ import com.labo.anapath.user.UserRepository;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Base64;
 import java.util.UUID;
 
 @Service
@@ -110,16 +114,48 @@ public class PdfReportServiceImpl implements PdfReportService {
         ctx.setVariable("hospitalName", report.getTestOrder() != null && report.getTestOrder().getHospital() != null
                 ? report.getTestOrder().getHospital().getName() : "");
 
+        // Dates (impression = aujourd'hui ; arrivée labo = date de création du CR)
+        ctx.setVariable("currentDate", LocalDate.now().format(DATE_FMT));
+        ctx.setVariable("createdAt",
+                report.getCreatedAt() != null ? report.getCreatedAt().format(DATE_FMT) : "");
+
+        // Statut : 1 = validé/livré → affiche les signatures (comme Laravel $data['status'] == 1)
+        boolean validated = report.getStatus() == ReportStatus.VALIDATED
+                || report.getStatus() == ReportStatus.DELIVERED;
+        ctx.setVariable("status", validated ? 1 : 0);
+
+        // Entête image du laboratoire : priorité au setting `entete` uploadé
+        // (data URI base64, comme entete_pdf_cr.png dans Laravel) ; repli sur le
+        // placeholder embarqué dans les ressources si aucun n'a été téléversé.
+        String enteteSetting = settingAppRepository.findByKey("entete")
+                .map(SettingApp::getValue).orElse("");
+        String enteteImg = (enteteSetting != null && enteteSetting.startsWith("data:"))
+                ? enteteSetting
+                : loadImageDataUri("pdf-assets/entete_pdf_cr.png");
+        ctx.setVariable("enteteImg", enteteImg);
+
         // Settings
-        ctx.setVariable("entete", settingAppRepository.findByKey("entete")
-                .map(SettingApp::getValue).orElse(""));
         ctx.setVariable("footer", settingAppRepository.findByKey("report_footer")
                 .map(SettingApp::getValue).orElse(""));
-        ctx.setVariable("reportReviewTitle", settingAppRepository.findByKey("report_review_title")
-                .map(SettingApp::getValue).orElse("Relu par"));
+        // Titre de revue : « Signé électroniquement par : » par défaut (réplique du
+        // rendu de référence CAAP), surchargé par le réglage report_review_title si défini.
+        String reviewTitle = settingAppRepository.findByKey("report_review_title")
+                .map(SettingApp::getValue).filter(v -> !v.isBlank())
+                .orElse("Signé électroniquement par :");
+        ctx.setVariable("reportReviewTitle", reviewTitle);
 
-        // Render HTML
-        String html = templateEngine.process("pdf/rapport", ctx);
+        // Image de signature du signataire 1 (embarquée si le fichier est disponible)
+        String signature1Img = "";
+        if (report.getSignatory1() != null
+                && report.getSignatory1().getSignature() != null
+                && !report.getSignatory1().getSignature().isBlank()) {
+            signature1Img = loadImageDataUri("pdf-assets/signatures/" + report.getSignatory1().getSignature());
+        }
+        ctx.setVariable("signature1Img", signature1Img);
+
+        // Render HTML puis normalisation XHTML (contenu éditeur → OpenHTMLToPDF)
+        String html = com.labo.anapath.common.pdf.PdfHtmlUtil.toXhtml(
+                templateEngine.process("pdf/rapport", ctx));
 
         // Convert to PDF
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
@@ -140,6 +176,31 @@ public class PdfReportServiceImpl implements PdfReportService {
             return outputStream.toByteArray();
         } catch (Exception e) {
             throw new InvalidOperationException("Erreur lors de la génération du PDF: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Charge une image depuis le classpath et la renvoie en data URI base64
+     * (embarquée dans le HTML, pour qu'OpenHTMLToPDF la rende sans baseUri).
+     * Renvoie une chaîne vide si l'image est absente.
+     */
+    private String loadImageDataUri(String classpathLocation) {
+        try {
+            ClassPathResource resource = new ClassPathResource(classpathLocation);
+            if (!resource.exists()) {
+                return "";
+            }
+            byte[] bytes;
+            try (InputStream in = resource.getInputStream()) {
+                bytes = in.readAllBytes();
+            }
+            String mime = classpathLocation.toLowerCase().endsWith(".jpg")
+                    || classpathLocation.toLowerCase().endsWith(".jpeg")
+                    ? "image/jpeg" : "image/png";
+            return "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(bytes);
+        } catch (Exception e) {
+            log.warn("Chargement image PDF échoué ({}): {}", classpathLocation, e.getMessage());
+            return "";
         }
     }
 }

@@ -2,6 +2,8 @@ package com.labo.anapath.common.storage;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -9,10 +11,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -25,8 +25,8 @@ public class FileController {
     private final FileStorageService fileStorageService;
 
     @GetMapping("/**")
-    public ResponseEntity<StreamingResponseBody> getFile(@PathVariable(required = false) String relativePath,
-                                                          jakarta.servlet.http.HttpServletRequest request) {
+    public ResponseEntity<Resource> getFile(@PathVariable(required = false) String relativePath,
+                                            jakarta.servlet.http.HttpServletRequest request) throws IOException {
         String path = request.getRequestURI().replaceFirst("/api/v1/files/", "");
         Path filePath = fileStorageService.resolve(path);
         Path basePath = fileStorageService.resolve("");
@@ -43,17 +43,28 @@ public class FileController {
         String contentType = detectContentType(filePath);
         String filename = filePath.getFileName().toString();
 
-        StreamingResponseBody body = outputStream -> {
-            try (InputStream inputStream = Files.newInputStream(filePath)) {
-                inputStream.transferTo(outputStream);
-            }
-        };
+        // Servir avec un Content-Length connu (FileSystemResource) plutôt qu'un
+        // StreamingResponseBody en Transfer-Encoding: chunked. Le chunked était
+        // rejeté par le navigateur (net::ERR_INCOMPLETE_CHUNKED_ENCODING) → l'aperçu
+        // et le téléchargement des pièces jointes échouaient.
+        Resource resource = new FileSystemResource(filePath);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
+                .contentLength(Files.size(filePath))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
                 .header("X-Content-Type-Options", "nosniff")
-                .body(body);
+                // Le CSP global de l'API est « default-src 'none' », ce qui implique
+                // « object-src 'none' » et bloque le lecteur PDF de Chrome (« Échec de
+                // chargement du document PDF »). On le pose ici (les writers Spring
+                // Security ne remplacent pas un en-tête déjà présent) avec une policy
+                // permettant l'affichage inline des fichiers servis (PDF, images).
+                .header("Content-Security-Policy",
+                        "default-src 'self'; object-src 'self' blob: data:; "
+                                + "img-src 'self' blob: data:; media-src 'self' blob: data:; "
+                                + "style-src 'self' 'unsafe-inline'; frame-ancestors 'self'")
+                .header("X-Frame-Options", "SAMEORIGIN")
+                .body(resource);
     }
 
     private String detectContentType(Path path) {

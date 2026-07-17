@@ -10,4 +10,5 @@ public interface ArticleService {
     List<ArticleResponseDto> search(String q, UUID branchId);
     ArticleResponseDto update(UUID id, ArticleRequestDto dto);
     void delete(UUID id);
+    long countStockMinimumReached(UUID branchId);
 }

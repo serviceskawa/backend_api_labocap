@@ -32,6 +32,7 @@ public interface TestOrderMapper {
     @Mapping(target = "typeOrderId", source = "typeOrder.id")
     @Mapping(target = "typeOrderTitle", source = "typeOrder.title")
     @Mapping(target = "archive", source = "archive")
+    @Mapping(target = "testAffiliate", source = "testAffiliate")
     @Mapping(target = "reportId", ignore = true)
     @Mapping(target = "reportStatus", ignore = true)
     @Mapping(target = "reportIsDelivered", ignore = true)
