@@ -24,4 +24,7 @@ public interface DetailsContratRepository extends JpaRepository<DetailsContrat, 
      * @return la ligne tarifaire si elle existe, sinon {@link Optional#empty()}
      */
     Optional<DetailsContrat> findByContratIdAndLabTestId(UUID contratId, UUID labTestId);
+
+    /** Règle tarifaire par catégorie (remise en pourcentage appliquée à toute la catégorie). */
+    Optional<DetailsContrat> findByContratIdAndCategoryTestId(UUID contratId, UUID categoryTestId);
 }

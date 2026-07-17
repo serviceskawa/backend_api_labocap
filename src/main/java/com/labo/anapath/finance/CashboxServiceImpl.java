@@ -65,6 +65,6 @@ public class CashboxServiceImpl implements CashboxService {
 
     private CashboxResponseDto toDto(Cashbox c) {
         return new CashboxResponseDto(c.getId(), c.getName(), c.getType(),
-                c.getBalance(), c.getBranchId(), c.getCreatedAt());
+                c.getBalance(), c.getStatut(), c.getBranchId(), c.getCreatedAt());
     }
 }

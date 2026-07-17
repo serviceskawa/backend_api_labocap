@@ -22,5 +22,6 @@ public interface ReportSuiviProjection {
     Boolean getIsCalled();
     Boolean getIsDelivered();
     String getRetrieverName();
+    String getRetrieverSignature();
     LocalDateTime getDeliveryDate();
 }

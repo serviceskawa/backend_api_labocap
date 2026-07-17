@@ -5,6 +5,7 @@ import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.contract.ContratRepository;
 import com.labo.anapath.patient.PatientRepository;
+import com.labo.anapath.setting.SettingInvoiceRepository;
 import com.labo.anapath.test.LabTestRepository;
 import com.labo.anapath.testorder.DetailTestOrder;
 import com.labo.anapath.testorder.TestOrder;
@@ -22,6 +23,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class InvoiceServiceImpl implements InvoiceService {
 
     private final InvoiceRepository invoiceRepository;
@@ -31,7 +33,11 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final LabTestRepository labTestRepository;
     private final CashboxRepository cashboxRepository;
     private final ContratRepository contratRepository;
+    private final RefundRequestRepository refundRequestRepository;
+    private final RefundReasonRepository refundReasonRepository;
+    private final SettingInvoiceRepository settingInvoiceRepository;
     private final FinanceMapper financeMapper;
+    private final com.labo.anapath.report.QrCodeService qrCodeService;
 
     @Override
     @Transactional(readOnly = true)
@@ -73,7 +79,48 @@ public class InvoiceServiceImpl implements InvoiceService {
         if (!invoice.getBranchId().equals(branchId)) {
             throw new ResourceNotFoundException("Facture", id);
         }
-        return financeMapper.toInvoiceResponseDto(invoice);
+        InvoiceResponseDto dto = financeMapper.toInvoiceResponseDto(invoice);
+        dto = financeMapper.withRefund(dto, findRefundFor(invoice));
+        return financeMapper.withQrcode(dto, buildQrcode(invoice));
+    }
+
+    /**
+     * QR code du reçu, généré à la demande comme le fait Laravel
+     * (`InvoiceController@show`) : il encode le code normalisé DGI, et retombe
+     * sur le nom du centre tant que la facture n'est pas normalisée.
+     */
+    private String buildQrcode(Invoice invoice) {
+        String content = invoice.getCodeNormalise() != null && !invoice.getCodeNormalise().isBlank()
+                ? invoice.getCodeNormalise()
+                : "Centre ADECHINA Anatomie Pathologique";
+        try {
+            return qrCodeService.generateBase64(content, 300);
+        } catch (Exception e) {
+            log.warn("QR code non généré pour la facture {}: {}", invoice.getId(), e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Remboursement rattaché à une facture d'avoir, ou null.
+     *
+     * <p>Réplique Laravel {@code InvoiceController::show} : le remboursement se
+     * cherche par l'identifiant de la facture de vente d'origine ({@code reference}),
+     * et non par celui de l'avoir lui-même.</p>
+     */
+    private InvoiceRefundDto findRefundFor(Invoice invoice) {
+        if (invoice.getStatusInvoice() != 1 || invoice.getReference() == null) {
+            return null;
+        }
+        return refundRequestRepository.findByInvoiceId(invoice.getReference().getId())
+                .map(refund -> new InvoiceRefundDto(
+                        refund.getCode(),
+                        refund.getRefundReasonId() == null ? "" :
+                                refundReasonRepository.findById(refund.getRefundReasonId())
+                                        .map(RefundReason::getLabel).orElse(""),
+                        refund.getMontant(),
+                        refund.getInvoice() == null ? "" : refund.getInvoice().getCode()))
+                .orElse(null);
     }
 
     @Override
@@ -119,6 +166,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setPaid(false);
         invoice.setStatus(InvoiceStatus.PENDING);
         invoice.setStatusInvoice(0); // vente
+        invoice.setDate(LocalDate.now()); // calque Laravel : 'date' => Carbon::now()
         invoice.setDueDate(dto.getDueDate());
 
         // 4. Génération automatique du code facture (format FAYYNNNN)
@@ -192,6 +240,16 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setPayment(dto.getPayment());
         invoice.setStatus(InvoiceStatus.PAID);
 
+        // Laravel updateStatus : le code saisi n'est enregistré en code_normalise que
+        // lorsque la normalisation automatique est désactivée. Quand elle est active,
+        // c'est MECeF qui fournit le code et la saisie est ignorée.
+        boolean invoiceNormalised = settingInvoiceRepository.findFirstByBranchId(invoice.getBranchId())
+                .map(setting -> Boolean.TRUE.equals(setting.getStatus()))
+                .orElse(false);
+        if (!invoiceNormalised) {
+            invoice.setCodeNormalise(dto.getCode());
+        }
+
         // R2 — JAMAIS par ID hardcodé : utiliser findByBranchIdAndType
         if (invoice.getStatusInvoice() == 0) {
             // Facture de vente → crédit caisse vente
@@ -213,7 +271,8 @@ public class InvoiceServiceImpl implements InvoiceService {
             contratRepository.save(invoice.getContrat());
         }
 
-        return financeMapper.toInvoiceResponseDto(invoiceRepository.save(invoice));
+        Invoice saved = invoiceRepository.save(invoice);
+        return financeMapper.withRefund(financeMapper.toInvoiceResponseDto(saved), findRefundFor(saved));
     }
 
     @Override

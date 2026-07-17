@@ -28,6 +28,14 @@
     </properties>
 
     <dependencies>
+        <!-- Rechargement à chaud en dev : surveille target/classes et redémarre
+             l'app automatiquement quand les classes changent (mvn compile). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
         <!-- Spring Boot Starters -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -143,6 +151,13 @@
             <groupId>com.openhtmltopdf</groupId>
             <artifactId>openhtmltopdf-svg-support</artifactId>
             <version>1.0.10</version>
+        </dependency>
+        <!-- Jsoup : normalise le HTML (contenu éditeur, balises non fermées,
+             entités &nbsp;) en XHTML bien formé exigé par OpenHTMLToPDF -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.17.2</version>
         </dependency>
 
         <!-- Mail -->

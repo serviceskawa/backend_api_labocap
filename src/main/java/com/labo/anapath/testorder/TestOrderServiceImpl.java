@@ -228,7 +228,11 @@ public class TestOrderServiceImpl implements TestOrderService {
                 double disc = detailDto.getDiscount() != null ? detailDto.getDiscount() : 0.0;
                 detail.setPrice(price);
                 detail.setDiscount(disc);
-                detail.setTotal(price - (price * disc / 100));
+                // La remise (disc) est un MONTANT (amountRemise du contrat), pas un
+                // pourcentage : total = prix - remise (borné à 0), cohérent avec le
+                // calcul du frontend. L'ancienne formule prix - prix*disc/100 donnait
+                // des totaux aberrants (ex. remise 5000 sur 25000 → -1 225 000).
+                detail.setTotal(Math.max(0.0, price - disc));
                 return detail;
             }).toList();
             order.getDetails().addAll(details);
@@ -278,6 +282,38 @@ public class TestOrderServiceImpl implements TestOrderService {
             order.setTypeOrder(typeOrderRepository.findByIdAndBranchId(dto.getTypeOrderId(), branchId)
                     .orElseThrow(() -> new ResourceNotFoundException("Type de bon", dto.getTypeOrderId())));
         }
+
+        // Remplacement des analyses (details) : le front envoie la liste complète
+        // voulue à chaque ajout/modif/suppression. orphanRemoval supprime les
+        // anciennes lignes, le cascade persiste les nouvelles.
+        if (dto.getDetails() != null) {
+            order.getDetails().clear();
+            List<DetailTestOrder> details = dto.getDetails().stream().map(detailDto -> {
+                LabTest labTest = labTestRepository.findByIdAndBranchId(detailDto.getLabTestId(), branchId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Analyse", detailDto.getLabTestId()));
+                DetailTestOrder detail = new DetailTestOrder();
+                detail.setTestOrder(order);
+                detail.setLabTest(labTest);
+                detail.setTestName(labTest.getName() != null ? labTest.getName() : "");
+                double price = labTest.getPrice() != null ? labTest.getPrice().doubleValue() : 0.0;
+                double disc = detailDto.getDiscount() != null ? detailDto.getDiscount() : 0.0;
+                detail.setPrice(price);
+                detail.setDiscount(disc);
+                // La remise (disc) est un MONTANT (amountRemise du contrat), pas un
+                // pourcentage : total = prix - remise (borné à 0), cohérent avec le
+                // calcul du frontend. L'ancienne formule prix - prix*disc/100 donnait
+                // des totaux aberrants (ex. remise 5000 sur 25000 → -1 225 000).
+                detail.setTotal(Math.max(0.0, price - disc));
+                return detail;
+            }).toList();
+            order.getDetails().addAll(details);
+            double subtotal = details.stream().mapToDouble(DetailTestOrder::getPrice).sum();
+            double total = details.stream().mapToDouble(DetailTestOrder::getTotal).sum();
+            order.setSubtotal(subtotal);
+            order.setTotal(total);
+            order.setDiscount(subtotal - total);
+        }
+
         return testOrderMapper.toResponseDto(testOrderRepository.save(order));
     }
 
@@ -414,7 +450,8 @@ public class TestOrderServiceImpl implements TestOrderService {
                 report != null ? report.getStatus().name() : null,
                 report != null && report.isDelivered(),
                 invoice != null ? invoice.getId() : null,
-                dto.archive()
+                dto.archive(),
+                dto.testAffiliate()
         );
     }
 
@@ -434,6 +471,7 @@ public class TestOrderServiceImpl implements TestOrderService {
         if (invoice == null) {
             invoice = new Invoice();
             invoice.setBranchId(branchId);
+            invoice.setDate(LocalDate.now()); // calque Laravel : 'date' => Carbon::now()
             invoice.setTestOrder(order);
             invoice.setPatient(order.getPatient());
             invoice.setContrat(order.getContrat());
@@ -536,32 +574,37 @@ public class TestOrderServiceImpl implements TestOrderService {
      */
     // Algorithme generateCodeExamen — équivalent Java de la fonction PHP Laravel
     // Format : {prefix}{yy2digit}-{seq4}  ex: EX26-0001
+    //
+    // Robustesse (cas des données migrées Laravel) :
+    //  - la séquence max est calculée NUMÉRIQUEMENT (pas en tri texte) et filtrée
+    //    sur l'année portée par le CODE lui-même (pas created_at) ;
+    //  - une pré-vérification d'existence incrémente la séquence tant que le code
+    //    candidat existe déjà (trous, préfixes/longueurs hétérogènes, doublons hérités),
+    //    ce qui évite de générer un code déjà pris.
     private String generateCodeExamen(UUID branchId) {
         int year = LocalDate.now().getYear();
-        List<TestOrder> lastOrders = testOrderRepository.findByBranchIdAndCodeNotNullAndYear(
-                branchId, year, PageRequest.of(0, 1));
+        String yearToken = String.valueOf(year % 100);
 
-        String seq;
-        if (lastOrders.isEmpty()) {
-            seq = "0001";
-        } else {
-            String lastCode = lastOrders.get(0).getCode();
-            String last4 = lastCode.length() >= 4
-                    ? lastCode.substring(lastCode.length() - 4) : lastCode;
-            try {
-                int next = Integer.parseInt(last4) + 1;
-                seq = String.format("%04d", next);
-            } catch (NumberFormatException e) {
-                seq = "0001";
-            }
-        }
-
+        // Préfixe historique Laravel (vide par défaut → « 26-0003 », pas « EX26-0003 »).
         String prefix = settingRepository
                 .findByKeyAndBranchId("prefixe_code_demande_examen", branchId)
-                .map(s -> s.getValue() != null ? s.getValue() : "EX")
-                .orElse("EX");
+                .map(s -> s.getValue() != null ? s.getValue() : "")
+                .orElse("");
 
-        return prefix + (year % 100) + "-" + seq;
+        int next = testOrderRepository.findMaxSequenceForYear(branchId, yearToken) + 1;
+        String code = prefix + yearToken + "-" + String.format("%04d", next);
+
+        // Pré-vérification : saute les codes déjà existants (y compris supprimés)
+        // pour ne jamais proposer un code en collision. Borne de sécurité pour
+        // éviter toute boucle infinie sur des données anormales.
+        int guard = 0;
+        while (testOrderRepository.existsByCodeIncludingDeleted(code) && guard < 10_000) {
+            next++;
+            guard++;
+            code = prefix + yearToken + "-" + String.format("%04d", next);
+        }
+
+        return code;
     }
 
     /**
@@ -622,6 +665,9 @@ public class TestOrderServiceImpl implements TestOrderService {
         Report report = reportRepository.findByTestOrderId(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu du bon", id));
         report.setDelivered(true);
+        // Le statut du rapport doit aussi passer à DELIVERED : la liste des demandes
+        // affiche reportStatus (report.getStatus()), pas seulement le drapeau delivered.
+        report.setStatus(ReportStatus.DELIVERED);
         reportRepository.save(report);
 
         log.info("Bon d'examen livré: id={}", id);
@@ -673,6 +719,21 @@ public class TestOrderServiceImpl implements TestOrderService {
         }
         testOrderRepository.save(order);
         return existing;
+    }
+
+    @Override
+    @Transactional
+    public String uploadArchive(UUID id, UUID branchId, org.springframework.web.multipart.MultipartFile file) {
+        TestOrder order = testOrderRepository.findByIdAndBranchId(id, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", id));
+        try {
+            order.setArchive(fileStorageService.store(file));
+        } catch (java.io.IOException e) {
+            throw new com.labo.anapath.common.exception.BusinessException(
+                    "Erreur lors du stockage de la pièce jointe: " + file.getOriginalFilename());
+        }
+        testOrderRepository.save(order);
+        return order.getArchive();
     }
 
     @Override
@@ -810,17 +871,35 @@ public class TestOrderServiceImpl implements TestOrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Analyse", labTestId));
         BigDecimal basePrice = labTest.getPrice() != null ? labTest.getPrice() : BigDecimal.ZERO;
 
+        // Résolution de la règle tarifaire comme dans Laravel : d'abord une règle
+        // propre à l'analyse (lab_test_id), sinon une règle par catégorie
+        // (les contrats migrés définissent surtout des remises par catégorie).
         DetailsContrat details = detailsContratRepository
                 .findByContratIdAndLabTestId(contratId, labTestId)
                 .orElse(null);
+        if (details == null && labTest.getCategoryTest() != null) {
+            details = detailsContratRepository
+                    .findByContratIdAndCategoryTestId(contratId, labTest.getCategoryTest().getId())
+                    .orElse(null);
+        }
 
         if (details == null) {
             return new DiscountDto(basePrice, null, BigDecimal.ZERO, basePrice);
         }
 
-        BigDecimal contractPrice      = details.getPrice();
-        BigDecimal discount           = details.getAmountRemise() != null ? details.getAmountRemise() : BigDecimal.ZERO;
-        BigDecimal priceAfterDiscount = details.getAmountAfterRemise() != null ? details.getAmountAfterRemise() : basePrice;
+        // La remise est un MONTANT : amount_remise s'il est défini, sinon calculé
+        // depuis le pourcentage (règles par catégorie migrées : pourcentage seul).
+        BigDecimal discount;
+        if (details.getAmountRemise() != null && details.getAmountRemise().signum() > 0) {
+            discount = details.getAmountRemise();
+        } else if (details.getPourcentage() != null && details.getPourcentage().signum() > 0) {
+            discount = basePrice.multiply(details.getPourcentage())
+                    .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+        } else {
+            discount = BigDecimal.ZERO;
+        }
+        BigDecimal priceAfterDiscount = basePrice.subtract(discount).max(BigDecimal.ZERO);
+        BigDecimal contractPrice = details.getPrice();
         return new DiscountDto(basePrice, contractPrice, discount, priceAfterDiscount);
     }
 }

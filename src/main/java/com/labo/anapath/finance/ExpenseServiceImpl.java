@@ -7,11 +7,14 @@ import com.labo.anapath.inventory.ArticleRepository;
 import com.labo.anapath.inventory.Movement;
 import com.labo.anapath.inventory.MovementRepository;
 import com.labo.anapath.inventory.MovementType;
+import com.labo.anapath.inventory.Supplier;
+import com.labo.anapath.inventory.SupplierRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -28,6 +31,8 @@ public class ExpenseServiceImpl implements ExpenseService {
     private final CashboxOperationRepository cashboxOperationRepository;
     private final ArticleRepository articleRepository;
     private final MovementRepository movementRepository;
+    private final SupplierRepository supplierRepository;
+    private final com.labo.anapath.testorder.FileStorageService fileStorageService;
 
     @Override
     @Transactional(readOnly = true)
@@ -46,19 +51,40 @@ public class ExpenseServiceImpl implements ExpenseService {
 
     @Override
     @Transactional
-    public ExpenseResponseDto create(ExpenseRequestDto dto, UUID branchId) {
+    public ExpenseResponseDto create(ExpenseCreateRequestDto dto, UUID branchId) {
         Expense expense = new Expense();
         expense.setBranchId(branchId);
-        expense.setAmount(dto.getAmount());
         expense.setExpenseCategorieId(dto.getExpenseCategorieId());
         expense.setDescription(dto.getDescription());
-        expense.setSupplierId(dto.getSupplierId());
-        expense.setInvoiceNumber(dto.getInvoiceNumber());
-        expense.setDate(dto.getDate() != null ? dto.getDate() : LocalDate.now());
-        expense.setPayment(dto.getPayment());
-        expense.setReceipt(dto.getReceipt());
+        expense.setSupplierId(resolveSupplierId(dto, branchId));
+        // Le montant est saisi sur la page détail, ou construit par l'ajout de
+        // lignes d'articles : la dépense naît à zéro et non payée.
+        expense.setAmount(BigDecimal.ZERO);
+        expense.setDate(LocalDate.now());
         expense.setPaid(0);
         return toDto(expenseRepository.save(expense));
+    }
+
+    /**
+     * Fournisseur de la dépense : celui explicitement choisi, sinon celui dont le
+     * nom a été saisi. Un nom inconnu crée le fournisseur, comme dans Laravel.
+     * La recherche ignore la casse (pour ne pas créer « ACME » à côté d'« Acme »)
+     * et un nom vide ne crée rien (la colonne name est NOT NULL).
+     */
+    private UUID resolveSupplierId(ExpenseCreateRequestDto dto, UUID branchId) {
+        if (dto.getSupplierId() != null) return dto.getSupplierId();
+
+        String name = dto.getSupplierName() != null ? dto.getSupplierName().trim() : "";
+        if (name.isEmpty()) return null;
+
+        return supplierRepository.findFirstByBranchIdAndNameIgnoreCase(branchId, name)
+                .map(Supplier::getId)
+                .orElseGet(() -> {
+                    Supplier created = new Supplier();
+                    created.setBranchId(branchId);
+                    created.setName(name);
+                    return supplierRepository.save(created).getId();
+                });
     }
 
     @Override
@@ -73,6 +99,23 @@ public class ExpenseServiceImpl implements ExpenseService {
         if (dto.getDate() != null) expense.setDate(dto.getDate());
         expense.setPayment(dto.getPayment());
         expense.setReceipt(dto.getReceipt());
+        return toDto(expenseRepository.save(expense));
+    }
+
+    /**
+     * Enregistre la preuve d'achat et la rattache à la dépense. Le répertoire
+     * « preuves » reprend celui utilisé par Laravel.
+     */
+    @Override
+    @Transactional
+    public ExpenseResponseDto uploadReceipt(UUID id, MultipartFile file) {
+        Expense expense = findExpense(id);
+        try {
+            expense.setReceipt(fileStorageService.store(file, "preuves"));
+        } catch (java.io.IOException e) {
+            throw new BusinessException(
+                    "Erreur lors du stockage du fichier: " + file.getOriginalFilename());
+        }
         return toDto(expenseRepository.save(expense));
     }
 

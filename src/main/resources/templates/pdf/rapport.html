@@ -1,76 +1,172 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html lang="fr" xmlns:th="http://www.thymeleaf.org">
+
 <head>
-    <meta charset="UTF-8"/>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <title th:text="${code}">Compte rendu</title>
     <style>
-        body { font-family: Arial, sans-serif; font-size: 12px; margin: 20px; }
-        .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
-        .patient-info { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
-        .patient-info p { margin: 4px 0; }
-        .section { margin: 15px 0; }
-        .section h3 { border-bottom: 1px solid #666; color: #333; }
-        .signature-zone { margin-top: 40px; display: flex; justify-content: space-between; align-items: flex-end; }
-        .signature-block { text-align: center; min-width: 150px; }
-        .footer { margin-top: 30px; border-top: 1px solid #333; padding-top: 8px; text-align: center; font-size: 10px; }
-        strong { font-weight: bold; }
+        /* Marges calées sur le compte rendu Laravel de référence (CO26-2568) :
+           ~22pt à gauche/droite et ~36pt sous le pied de page. La marge basse
+           doit loger le pied de page complet (3 lignes) PLUS cet espace : trop
+           courte, le texte débordait jusqu'au bord de la feuille. */
+        @page {
+            size: A4;
+            margin: 15px 30px 115px 30px;
+            @bottom-center { content: element(pagefooter); }
+        }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+        .entete img { width: 100%; }
+        table.meta-row { width: 100%; border-collapse: collapse; margin-top: 22px; }
+        table.meta-row td { vertical-align: top; padding: 0; }
+        .meta { font-size: 13px; line-height: 1.6; }
+        .qr-cell { text-align: right; width: 90px; }
+        .qr-cell img { width: 80px; display: inline-block; vertical-align: top; }
+        .title-band {
+            background-color: #0070C1;
+            width: 96%;
+            padding: 15px;
+            color: white;
+            text-align: center;
+            font-size: 16px;
+            text-transform: uppercase;
+            margin-top: 20px;
+        }
+        .section-label {
+            display: inline-block;
+            padding-left: 10px;
+            padding-right: 5px;
+            margin-top: 15px;
+            font-size: 16px;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+        table.infos { width: 100%; margin-left: 15px; font-size: 13px; margin-top: 5px; border-collapse: collapse; }
+        table.infos th { text-align: left; width: 25%; font-weight: bold; }
+        table.infos td { width: 25%; }
+        hr.sep { margin-top: 15px; border: none; border-top: 1px solid #0070C1; }
+        .content { font-size: 13px; }
+        table.sign { width: 100%; margin-top: 40px; }
+        table.sign td { vertical-align: bottom; font-size: 13px; width: 50%; text-align: left; }
+        .sign-name { font-weight: bold; }
+        .sign-space { min-height: 45px; }
+        /* Pied de page : placé dans la marge basse de CHAQUE page (position: running). */
+        .page-footer {
+            position: running(pagefooter);
+            width: 100%;
+            font-size: 12px;
+            text-align: left;
+            border-top: 1px solid #cccccc;
+            padding-top: 6px;
+            /* Décolle le pied de page du bord bas de la feuille. Le pied étant
+               centré dans la boîte de marge, cette valeur ne compte qu'à moitié. */
+            margin-bottom: 30px;
+        }
     </style>
 </head>
+
 <body>
 
-    <div class="header" th:utext="${entete}">En-tête du laboratoire</div>
-
-    <div class="patient-info">
-        <p><strong>N° bon d'examen :</strong> <span th:text="${testOrderCode}"></span></p>
-        <p><strong>Patient :</strong> <span th:text="${patientLastname + ' ' + patientFirstname}"></span></p>
-        <p><strong>Âge :</strong> <span th:text="${patientAge + ' ' + patientAgeUnit}"></span></p>
-        <p><strong>Genre :</strong> <span th:text="${patientGenre}"></span></p>
-        <p><strong>Médecin prescripteur :</strong> <span th:text="${doctorName}"></span></p>
-        <p><strong>Hôpital :</strong> <span th:text="${hospitalName}"></span></p>
-        <p><strong>Date prélèvement :</strong> <span th:text="${prelevementDate}"></span></p>
-        <p><strong>Date signature :</strong> <span th:text="${signatureDate}"></span></p>
+    <!-- Entête labo en pleine largeur -->
+    <div class="entete" th:if="${!#strings.isEmpty(enteteImg)}">
+        <img th:src="${enteteImg}" alt=""/>
     </div>
 
-    <div class="section">
-        <h3 th:text="${title}">Résultats</h3>
-        <div th:utext="${content}">Contenu macroscopique</div>
+    <!-- N° ANAPATH + dates (gauche) et QR (droite) sur la même ligne -->
+    <table class="meta-row">
+        <tr>
+            <td>
+                <div class="meta">
+                    <b>N° ANAPTH :</b> <span th:text="${testOrderCode}"></span>
+                    <b th:text="${#strings.isEmpty(testAffiliate) ? '' : '| Examen reference : '}"></b>
+                    <span th:text="${#strings.isEmpty(testAffiliate) ? '' : testAffiliate}"></span>
+                    <br/>
+                    <b>Date validation:</b> <span th:text="${signatureDate}"></span>
+                    <br/>
+                    <b>Date impression:</b> <span th:text="${currentDate}"></span>
+                </div>
+            </td>
+            <td class="qr-cell">
+                <img th:if="${!#strings.isEmpty(qrcode)}" th:src="${qrcode}" alt=""/>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Bandeau titre -->
+    <div class="title-band">
+        <b th:text="${title}"></b>
     </div>
 
-    <div class="section" th:if="${!#strings.isEmpty(contentMicro)}">
-        <h3>Microscopie</h3>
-        <div th:utext="${contentMicro}">Contenu microscopique</div>
+    <!-- Informations prélèvement -->
+    <div style="margin-top: 10px;">
+        <span class="section-label">Informations prélèvement</span>
+
+        <table class="infos">
+            <tbody>
+                <tr>
+                    <th>Nom :</th>
+                    <td th:text="${patientFirstname}"></td>
+                    <th>Date prélèvement :</th>
+                    <td th:text="${prelevementDate}"></td>
+                </tr>
+                <tr>
+                    <th>Prénoms :</th>
+                    <td th:text="${patientLastname}"></td>
+                    <th>Date d’arrivée labo :</th>
+                    <td th:text="${createdAt}"></td>
+                </tr>
+                <tr>
+                    <th>Age :</th>
+                    <td th:text="${patientAge + ' ' + patientAgeUnit}"></td>
+                    <th>Service demandeur :</th>
+                    <td th:text="${hospitalName}"></td>
+                </tr>
+                <tr>
+                    <th>Sexe :</th>
+                    <td th:text="${patientGenre}"></td>
+                    <th>Médecin prescripteur :</th>
+                    <td th:text="${doctorName}"></td>
+                </tr>
+            </tbody>
+        </table>
     </div>
 
-    <div class="section" th:if="${!#strings.isEmpty(contentSupplementaire)}">
-        <h3>Description supplémentaire</h3>
-        <div th:utext="${contentSupplementaire}"></div>
+    <hr class="sep"/>
+
+    <!-- Contenu (HTML brut : macro / micro / compléments) -->
+    <span class="content" th:utext="${content}"></span>
+    <span class="content" th:utext="${contentMicro}"></span>
+    <th:block th:if="${!#strings.isEmpty(contentSupplementaire)}">
+        <span class="content" th:utext="${contentSupplementaire}"></span>
+        <span class="content" th:utext="${contentSupplementaireMicro}"></span>
+    </th:block>
+
+    <!-- Signatures (uniquement si compte rendu validé) — réplique canva_caap :
+         gauche = signataire (signature manuscrite + nom),
+         droite = titre de revue (« Signé électroniquement par : ») + relecteur. -->
+    <div th:if="${status == 1}">
+        <table class="sign">
+            <tr>
+                <td>
+                    <th:block th:if="${!#strings.isEmpty(signator)}">
+                        <div class="sign-space">
+                            <img th:if="${!#strings.isEmpty(signature1Img)}" width="85" th:src="${signature1Img}" alt=""/>
+                        </div>
+                        <span th:text="${signator}"></span>
+                    </th:block>
+                </td>
+                <td>
+                    <th:block th:if="${!#strings.isEmpty(reviewedBy)}">
+                        <span th:text="${reportReviewTitle}"></span><br/>
+                        <span class="sign-name" th:text="${reviewedBy}"></span>
+                    </th:block>
+                </td>
+            </tr>
+        </table>
     </div>
 
-    <div class="section" th:if="${!#strings.isEmpty(contentSupplementaireMicro)}">
-        <h3>Description supplémentaire (micro)</h3>
-        <div th:utext="${contentSupplementaireMicro}"></div>
-    </div>
-
-    <div class="section" th:if="${!#strings.isEmpty(reviewedBy)}">
-        <p><strong th:text="${reportReviewTitle}">Relu par</strong> : <span th:text="${reviewedBy}"></span></p>
-    </div>
-
-    <div class="signature-zone">
-        <div class="signature-block" th:if="${!#strings.isEmpty(signator)}">
-            <img th:if="${!#strings.isEmpty(signature1)}" th:src="${signature1}" height="60" alt="Signature"/>
-            <p th:text="${signator}"></p>
-        </div>
-        <div class="signature-block" th:if="${!#strings.isEmpty(signatory2Name)}">
-            <p th:text="${signatory2Name}"></p>
-        </div>
-        <div class="signature-block" th:if="${!#strings.isEmpty(signatory3Name)}">
-            <p th:text="${signatory3Name}"></p>
-        </div>
-        <div class="signature-block">
-            <img th:if="${!#strings.isEmpty(qrcode)}" th:src="${qrcode}" width="80" height="80" alt="QR Code"/>
-        </div>
-    </div>
-
-    <div class="footer" th:utext="${footer}">Pied de page</div>
+    <!-- Pied de page (rendu en bas de chaque page via position: running) -->
+    <div class="page-footer" th:text="${footer}"></div>
 
 </body>
+
 </html>

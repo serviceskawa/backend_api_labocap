@@ -40,6 +40,22 @@ public interface TitleReportRepository extends JpaRepository<TitleReport, UUID> 
     void unsetDefaultForBranch(@Param("branchId") UUID branchId);
 
     /**
+     * Désactive le flag {@code isDefault} sur tous les titres d'une branche SAUF celui indiqué.
+     *
+     * <p>{@code flushAutomatically = true} : les changements en attente sur l'entité courante
+     * (dont son passage à {@code isDefault=true}) sont écrits AVANT ce bulk update.
+     * {@code clearAutomatically = true} : vide le contexte de persistance après, pour éviter
+     * qu'un instantané Hibernate périmé ne réécrive une valeur incorrecte au commit.
+     *
+     * @param branchId identifiant de la branche
+     * @param exceptId identifiant du titre à conserver comme défaut
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Transactional
+    @Query("UPDATE TitleReport t SET t.isDefault = false WHERE t.branchId = :branchId AND t.id <> :exceptId")
+    void unsetDefaultForBranchExcept(@Param("branchId") UUID branchId, @Param("exceptId") UUID exceptId);
+
+    /**
      * Retourne le titre de rapport marqué comme "par défaut" pour la branche donnée, s'il existe.
      *
      * @param branchId identifiant de la branche

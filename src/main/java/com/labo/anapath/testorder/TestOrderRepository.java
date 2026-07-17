@@ -286,6 +286,40 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             @Param("year") int year,
             Pageable pageable);
 
+    /**
+     * Renvoie la plus grande séquence numérique parmi les codes de la branche
+     * dont l'année (les 2 chiffres avant le {@code -}) correspond à {@code yearToken}.
+     *
+     * <p>Robuste face aux données migrées : le tri est <b>numérique</b> (sur la
+     * séquence extraite en fin de code), et le filtre d'année porte sur le
+     * <b>code lui-même</b> (et non {@code created_at}), ce qui évite de calculer
+     * un « prochain » code qui entre en collision avec un code déjà existant.
+     *
+     * @param branchId  identifiant de la branche
+     * @param yearToken les 2 chiffres de l'année (ex. « 26 »)
+     * @return la séquence max (0 si aucun code pour l'année)
+     */
+    @Query(value = """
+            SELECT COALESCE(MAX(CAST(regexp_replace(t.code, '^.*-', '') AS INTEGER)), 0)
+            FROM test_orders t
+            WHERE t.deleted_at IS NULL AND t.branch_id = :branchId
+              AND t.code ~ (:yearToken || '-[0-9]+$')
+            """, nativeQuery = true)
+    int findMaxSequenceForYear(
+            @Param("branchId") UUID branchId,
+            @Param("yearToken") String yearToken);
+
+    /**
+     * Teste l'existence d'un code, <b>y compris sur les bons supprimés</b>
+     * (l'index d'unicité de la colonne {@code code} porte sur toutes les lignes).
+     * Utilisé en pré-vérification avant l'insertion pour éviter la collision.
+     *
+     * @param code code candidat
+     * @return true si un bon (même supprimé) porte déjà ce code
+     */
+    @Query(value = "SELECT EXISTS(SELECT 1 FROM test_orders WHERE code = :code)", nativeQuery = true)
+    boolean existsByCodeIncludingDeleted(@Param("code") String code);
+
     // -------------------------------------------------------------------------
     // Myspace — statistiques des bons assignés à un utilisateur
     // -------------------------------------------------------------------------

@@ -28,4 +28,6 @@ public class CashboxOperationCreateDto {
     private LocalDate operationDate;
     private String reference;
     private String chequeNumber;
+    /** Banque associée à l'approvisionnement (dépôt par chèque / virement). */
+    private UUID bankId;
 }

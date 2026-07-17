@@ -29,7 +29,7 @@ public class RefundRequestController {
     private final RefundService refundService;
 
     @PostMapping
-    @PreAuthorize("hasAuthority('edit-invoices')")
+    @PreAuthorize("hasAuthority('create-refund-requests')")
     public ResponseEntity<ApiResponse<RefundRequestResponseDto>> create(
             @Valid @RequestBody RefundRequestCreateDto dto,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -38,8 +38,9 @@ public class RefundRequestController {
                         refundService.create(dto, principal.getBranchId(), principal.getId())));
     }
 
+    // Laravel réserve le changement de statut à `view-process-refund-request`.
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAuthority('edit-invoices')")
+    @PreAuthorize("hasAuthority('view-process-refund-request')")
     public ResponseEntity<ApiResponse<RefundRequestStatusResult>> updateStatus(
             @PathVariable UUID id,
             @Valid @RequestBody RefundRequestStatusUpdateDto dto,
@@ -49,7 +50,7 @@ public class RefundRequestController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('view-invoices')")
+    @PreAuthorize("hasAuthority('view-refund-requests')")
     public ResponseEntity<ApiResponse<PageResponse<RefundRequestResponseDto>>> findAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -58,14 +59,28 @@ public class RefundRequestController {
                 refundService.findAll(page, size, principal.getBranchId())));
     }
 
+    /**
+     * Nombre de demandes en attente, pour le badge du menu « Remboursements »
+     * (équivalent du helper Laravel {@code getnbrRefundRequestPending}).
+     *
+     * @return objet JSON {@code { "count": N }}
+     */
+    @GetMapping("/count-pending")
+    @PreAuthorize("hasAuthority('view-refund-requests')")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> countPending(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        long count = refundService.countPending(principal.getBranchId());
+        return ResponseEntity.ok(ApiResponse.success(java.util.Map.of("count", count)));
+    }
+
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('view-invoices')")
+    @PreAuthorize("hasAuthority('view-refund-requests')")
     public ResponseEntity<ApiResponse<RefundRequestResponseDto>> findById(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(refundService.findById(id)));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('edit-invoices')")
+    @PreAuthorize("hasAuthority('delete-refund-requests')")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
         refundService.delete(id);
         return ResponseEntity.ok(ApiResponse.success("Demande supprimée", null));

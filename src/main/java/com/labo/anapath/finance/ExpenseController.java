@@ -50,7 +50,7 @@ public class ExpenseController {
     @PostMapping
     @PreAuthorize("hasAuthority('create-expenses')")
     public ResponseEntity<ApiResponse<ExpenseResponseDto>> create(
-            @Valid @RequestBody ExpenseRequestDto dto,
+            @Valid @RequestBody ExpenseCreateRequestDto dto,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Dépense créée",

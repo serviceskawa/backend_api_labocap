@@ -172,6 +172,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
                 r.is_called as isCalled,
                 r.is_delivered as isDelivered,
                 r.retriever_name as retrieverName,
+                r.retriever_signature as retrieverSignature,
                 r.delivery_date as deliveryDate
             FROM reports r
             JOIN test_orders t ON r.test_order_id = t.id

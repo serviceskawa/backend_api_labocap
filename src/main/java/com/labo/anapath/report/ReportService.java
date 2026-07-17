@@ -21,7 +21,7 @@ public interface ReportService {
 
     ReportResponseDto createOrUpdate(ReportRequestDto dto, UUID branchId);
 
-    ReportResponseDto update(UUID id, ReportRequestDto dto);
+    ReportResponseDto update(UUID id, ReportRequestDto dto, UUID userId, UUID branchId);
 
     void delete(UUID id);
 

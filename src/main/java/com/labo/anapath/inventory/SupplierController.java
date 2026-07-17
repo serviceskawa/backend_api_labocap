@@ -30,7 +30,7 @@ public class SupplierController {
     private final SupplierService supplierService;
 
     @GetMapping
-    @PreAuthorize("hasAuthority('view-articles')")
+    @PreAuthorize("hasAuthority('view-suppliers')")
     public ResponseEntity<ApiResponse<PageResponse<SupplierResponseDto>>> findAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -40,7 +40,7 @@ public class SupplierController {
     }
 
     @GetMapping("/search")
-    @PreAuthorize("hasAuthority('view-articles')")
+    @PreAuthorize("hasAuthority('view-suppliers')")
     public ResponseEntity<ApiResponse<List<SupplierResponseDto>>> search(
             @RequestParam String q,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -49,13 +49,13 @@ public class SupplierController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('view-articles')")
+    @PreAuthorize("hasAuthority('view-suppliers')")
     public ResponseEntity<ApiResponse<SupplierResponseDto>> findById(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(supplierService.findById(id)));
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('edit-articles')")
+    @PreAuthorize("hasAuthority('create-suppliers')")
     public ResponseEntity<ApiResponse<SupplierResponseDto>> create(
             @Valid @RequestBody SupplierRequestDto dto,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -65,7 +65,7 @@ public class SupplierController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('edit-articles')")
+    @PreAuthorize("hasAuthority('edit-suppliers')")
     public ResponseEntity<ApiResponse<SupplierResponseDto>> update(
             @PathVariable UUID id, @Valid @RequestBody SupplierRequestDto dto) {
         return ResponseEntity.ok(ApiResponse.success("Fournisseur mis à jour",
@@ -73,7 +73,7 @@ public class SupplierController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('edit-articles')")
+    @PreAuthorize("hasAuthority('delete-suppliers')")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
         supplierService.delete(id);
         return ResponseEntity.ok(ApiResponse.success("Fournisseur supprimé", null));

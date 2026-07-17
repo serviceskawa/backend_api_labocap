@@ -47,6 +47,21 @@ public class ArticleController {
                 articleService.search(q, principal.getBranchId())));
     }
 
+    /**
+     * Nombre d'articles ayant atteint le stock minimum, pour le badge du menu
+     * « Stocks » (équivalent du helper Laravel {@code getnbrStockMinim}).
+     *
+     * @param principal principal Spring Security contenant le branchId
+     * @return objet JSON {@code { "count": N }}
+     */
+    @GetMapping("/count-stock-minimum")
+    @PreAuthorize("hasAuthority('view-articles')")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> countStockMinimum(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        long count = articleService.countStockMinimumReached(principal.getBranchId());
+        return ResponseEntity.ok(ApiResponse.success(java.util.Map.of("count", count)));
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('view-articles')")
     public ResponseEntity<ApiResponse<ArticleResponseDto>> findById(@PathVariable UUID id) {
@@ -54,7 +69,7 @@ public class ArticleController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('edit-articles')")
+    @PreAuthorize("hasAuthority('create-articles')")
     public ResponseEntity<ApiResponse<ArticleResponseDto>> create(
             @Valid @RequestBody ArticleRequestDto dto,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -72,7 +87,7 @@ public class ArticleController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('edit-articles')")
+    @PreAuthorize("hasAuthority('delete-articles')")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
         articleService.delete(id);
         return ResponseEntity.ok(ApiResponse.success("Article supprimé", null));

@@ -3,58 +3,160 @@
 <head>
     <meta charset="UTF-8"/>
     <style>
-        @page { size: A4; margin: 18mm 15mm; }
-        body { font-family: Arial, sans-serif; font-size: 12px; color: #222; margin: 0; }
-        .header { text-align: center; margin-bottom: 12px; }
-        .title { font-size: 15px; font-weight: bold; margin: 8px 0 16px; }
-        .sub { color: #555; font-size: 12px; margin-bottom: 12px; }
-        table.recap { width: 100%; border-collapse: collapse; margin-top: 8px; }
-        table.recap th, table.recap td { border: 1px solid #ddd; padding: 6px 8px; text-align: right; }
-        table.recap th { background-color: #f3f3f3; font-size: 11px; text-transform: uppercase; text-align: right; }
-        table.recap th.lbl, table.recap td.lbl { text-align: left; }
-        table.recap tr.total td { font-weight: bold; background-color: #fafafa; }
-        .closing { margin-top: 20px; font-size: 16px; font-weight: bold; }
+        @page { size: A4; margin: 10mm; }
+
+        body {
+            font-family: "Helvetica Neue", "Nunito", Arial, sans-serif;
+            font-size: 14px;
+            color: #6c757d;
+            margin: 0;
+            background: #ffffff;
+        }
+
+        .wrapper { padding: 0; }
+
+        /* --- Cartes (Bootstrap .card) --- */
+        .card {
+            background-color: #fff;
+            border: 1px solid #eef2f7;
+            border-radius: 0.25rem;
+            margin-bottom: 24px;
+        }
+        .card-body { padding: 1.5rem; }
+        .card .card.inner { margin-top: 8px; }
+
+        /* --- En-tête (logo + identifiant) --- */
+        .clearfix::after { content: ""; display: block; clear: both; }
+        .logo-wrap { float: left; margin-bottom: 16px; margin-right: 16px; }
+        .logo-wrap img { height: 100px; }
+        .head-id { overflow: hidden; }
+        .head-id h4 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 700;
+            color: #343a40;
+            line-height: 1.3;
+        }
+
+        /* --- Tableau récapitulatif (Bootstrap .table) --- */
+        .table-responsive { width: 100%; }
+        table.table {
+            width: 100%;
+            margin-bottom: 0;
+            border-collapse: collapse;
+            color: #6c757d;
+        }
+        table.table th,
+        table.table td {
+            padding: 0.75rem;
+            vertical-align: middle;
+            border-top: 1px solid #eef2f7;
+            text-align: left;
+        }
+        table.table thead.table-light th {
+            border-top: 0;
+            border-bottom: 2px solid #eef2f7;
+            background-color: #f1f3fa;
+            color: #6c757d;
+            font-weight: 600;
+        }
+        table.table tbody tr.total td {
+            font-weight: 900;
+            color: #343a40;
+        }
+
+        /* --- Commentaire (label + input readonly) --- */
+        .comment-row { padding: 0 1.5rem 1.5rem 1.5rem; }
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #6c757d;
+            font-size: 14px;
+        }
+        .form-control {
+            display: block;
+            width: 100%;
+            padding: 0.45rem 0.9rem;
+            font-size: 14px;
+            color: #6c757d;
+            background-color: #fff;
+            border: 1px solid #ced4da;
+            border-radius: 0.2rem;
+            box-sizing: border-box;
+            min-height: 38px;
+        }
+
+        /* --- Solde de fermeture --- */
+        .closing { margin-top: 8px; }
+        .closing-col {
+            width: 50%;
+            font-size: 20px;
+            font-weight: 900;
+            color: #343a40;
+        }
     </style>
 </head>
 <body>
-    <!-- En-tête laboratoire -->
-    <div class="header" th:utext="${entete}">En-tête du laboratoire</div>
+    <div class="wrapper">
+        <div class="card">
+            <div class="card-body">
 
-    <div class="title">
-        Clôture de caisse — <span th:text="${cashboxName}">Caisse</span>
-        <span th:if="${code != ''}"> (ID <span th:text="${code}">CODE</span>)</span>
-    </div>
-    <div class="sub">
-        Ouverture : <span th:text="${openedAt}"></span>
-        &nbsp;&nbsp;•&nbsp;&nbsp;
-        Fermeture : <span th:text="${closedAt}"></span>
-    </div>
+                <!-- En-tête : logo + identifiant / dates -->
+                <div class="clearfix">
+                    <div class="logo-wrap">
+                        <img th:if="${logoImg != ''}" th:src="${logoImg}" alt=""/>
+                    </div>
+                    <div class="head-id">
+                        <h4>ID <span th:text="${code}">CODE</span>
+                            : <span th:text="${createdAt}"></span> - <span th:text="${updatedAt}"></span></h4>
+                    </div>
+                </div>
 
-    <table class="recap">
-        <thead>
-            <tr>
-                <th class="lbl">Mode de paiement</th>
-                <th>Fond initial</th>
-                <th>Vente</th>
-                <th>Solde</th>
-                <th>Comptage</th>
-                <th>Écart</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr th:each="r : ${rows}" th:classappend="${r.total} ? 'total' : ''">
-                <td class="lbl" th:text="${r.method}">Mode</td>
-                <td th:text="${r.fondInitial}">0</td>
-                <td th:text="${r.vente}">0</td>
-                <td th:text="${r.solde}">0</td>
-                <td th:text="${r.comptage}">0</td>
-                <td th:text="${r.ecart}">0</td>
-            </tr>
-        </tbody>
-    </table>
+                <!-- Récapitulatif par mode de paiement -->
+                <div class="card inner">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Mode de paiement</th>
+                                        <th>Fond initial</th>
+                                        <th>Vente</th>
+                                        <th>Solde</th>
+                                        <th>Comptage</th>
+                                        <th>Ecart</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr th:each="r : ${rows}" th:classappend="${r.total} ? 'total' : ''">
+                                        <td th:text="${r.method}">Mode</td>
+                                        <td th:text="${r.fondInitial}">-</td>
+                                        <td th:text="${r.vente}">-</td>
+                                        <td th:text="${r.solde}">-</td>
+                                        <td th:text="${r.comptage}">-</td>
+                                        <td th:text="${r.ecart}">-</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
 
-    <div class="closing">
-        SOLDE DE FERMETURE : <span th:text="${closingBalance}">0</span> F CFA
+                    <!-- Commentaire -->
+                    <div class="comment-row">
+                        <label class="form-label">Commentaire</label>
+                        <input class="form-control" readonly="readonly" th:value="${description}"/>
+                    </div>
+                </div>
+
+                <!-- Solde de fermeture -->
+                <div class="closing">
+                    <div class="closing-col">
+                        SOLDE DE FERMETURE : <span th:text="${closeBalance}">0</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
     </div>
 </body>
 </html>

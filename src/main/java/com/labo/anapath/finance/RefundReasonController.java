@@ -29,7 +29,9 @@ public class RefundReasonController {
     private final RefundReasonRepository refundReasonRepository;
 
     @GetMapping
-    @PreAuthorize("hasAuthority('view-invoices')")
+    // `view-refund-requests` suffit : le formulaire de demande doit pouvoir
+    // alimenter son select de raisons sans accès à l'écran Paramètres.
+    @PreAuthorize("hasAnyAuthority('view-refund-reasons','view-refund-requests')")
     public ResponseEntity<ApiResponse<List<RefundReasonResponseDto>>> findAll(
             @AuthenticationPrincipal UserPrincipal principal) {
         List<RefundReasonResponseDto> list = refundReasonRepository.findAll()
@@ -41,7 +43,7 @@ public class RefundReasonController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('edit-invoices')")
+    @PreAuthorize("hasAuthority('create-refund-reasons')")
     public ResponseEntity<ApiResponse<RefundReasonResponseDto>> create(
             @Valid @RequestBody RefundReasonRequestDto dto,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -55,7 +57,7 @@ public class RefundReasonController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('edit-invoices')")
+    @PreAuthorize("hasAuthority('edit-refund-reasons')")
     public ResponseEntity<ApiResponse<RefundReasonResponseDto>> update(
             @PathVariable UUID id,
             @Valid @RequestBody RefundReasonRequestDto dto,
@@ -68,7 +70,7 @@ public class RefundReasonController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('edit-invoices')")
+    @PreAuthorize("hasAuthority('delete-refund-reasons')")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

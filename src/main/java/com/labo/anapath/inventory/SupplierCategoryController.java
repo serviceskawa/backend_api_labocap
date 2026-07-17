@@ -27,8 +27,10 @@ public class SupplierCategoryController {
 
     private final SupplierCategoryService supplierCategoryService;
 
+    // `view-suppliers` suffit : le formulaire fournisseur doit pouvoir alimenter
+    // son select de catégories sans exiger l'accès à l'écran Catégories.
     @GetMapping
-    @PreAuthorize("hasAuthority('view-articles')")
+    @PreAuthorize("hasAnyAuthority('view-supplier-categories','view-suppliers')")
     public ResponseEntity<ApiResponse<List<SupplierCategoryResponseDto>>> findAll(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
@@ -36,7 +38,7 @@ public class SupplierCategoryController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('edit-articles')")
+    @PreAuthorize("hasAuthority('create-supplier-categories')")
     public ResponseEntity<ApiResponse<SupplierCategoryResponseDto>> create(
             @Valid @RequestBody SupplierCategoryRequestDto dto,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -46,7 +48,7 @@ public class SupplierCategoryController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('edit-articles')")
+    @PreAuthorize("hasAuthority('edit-supplier-categories')")
     public ResponseEntity<ApiResponse<SupplierCategoryResponseDto>> update(
             @PathVariable UUID id,
             @Valid @RequestBody SupplierCategoryRequestDto dto) {
@@ -55,7 +57,7 @@ public class SupplierCategoryController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('edit-articles')")
+    @PreAuthorize("hasAuthority('delete-supplier-categories')")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
         supplierCategoryService.delete(id);
         return ResponseEntity.ok(ApiResponse.success("Catégorie supprimée", null));

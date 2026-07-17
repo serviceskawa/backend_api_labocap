@@ -50,8 +50,12 @@ public class ArticleServiceImpl implements ArticleService {
         article.setDescription(dto.getDescription());
         article.setLotNumber(dto.getLotNumber());
         article.setExpirationDate(dto.getExpirationDate());
-        if (dto.getMinimumStock() != null) {
-            article.setMinimumStock(dto.getMinimumStock());
+        article.setMinimumStock(
+                dto.getMinimumStock() != null ? dto.getMinimumStock() : BigDecimal.ZERO);
+        // Le formulaire Laravel n'expose pas le prix (`prix` y est commenté) alors
+        // que la colonne est NOT NULL : on retombe sur 0, valeur de tout le parc.
+        if (article.getPurchasePrice() == null) {
+            article.setPurchasePrice(BigDecimal.ZERO);
         }
         if (dto.getSupplierId() != null) {
             article.setSupplier(supplierRepository.findById(dto.getSupplierId())
@@ -61,7 +65,8 @@ public class ArticleServiceImpl implements ArticleService {
         article.setQuantity(initialQty);
         Article saved = articleRepository.save(article);
 
-        if (initialQty.compareTo(BigDecimal.ZERO) > 0) {
+        // Laravel trace le stock initial systématiquement, y compris à quantité 0.
+        {
             Movement movement = new Movement();
             movement.setBranchId(branchId);
             movement.setArticle(saved);
@@ -90,11 +95,13 @@ public class ArticleServiceImpl implements ArticleService {
         Article article = articleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Article", id));
         article.setName(dto.getName());
-        article.setCode(dto.getCode());
-        article.setDescription(dto.getDescription());
-        article.setUnit(dto.getUnit());
-        article.setLotNumber(dto.getLotNumber());
-        article.setExpirationDate(dto.getExpirationDate());
+        // Champs absents du formulaire (Laravel ne les expose pas) : on ne les écrase
+        // que si le client les fournit, sinon une simple édition les viderait.
+        if (dto.getCode() != null) article.setCode(dto.getCode());
+        if (dto.getDescription() != null) article.setDescription(dto.getDescription());
+        if (dto.getUnit() != null) article.setUnit(dto.getUnit());
+        if (dto.getLotNumber() != null) article.setLotNumber(dto.getLotNumber());
+        if (dto.getExpirationDate() != null) article.setExpirationDate(dto.getExpirationDate());
         if (dto.getPurchasePrice() != null) article.setPurchasePrice(dto.getPurchasePrice());
         if (dto.getMinimumStock() != null) article.setMinimumStock(dto.getMinimumStock());
         if (dto.getSupplierId() != null) {
@@ -112,5 +119,11 @@ public class ArticleServiceImpl implements ArticleService {
         Article article = articleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Article", id));
         articleRepository.delete(article);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countStockMinimumReached(UUID branchId) {
+        return articleRepository.countStockMinimumReached(branchId);
     }
 }

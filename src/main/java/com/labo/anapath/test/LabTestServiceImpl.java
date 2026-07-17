@@ -52,7 +52,8 @@ public class LabTestServiceImpl implements LabTestService {
     @Override
     @Transactional(readOnly = true)
     public List<LabTestResponseDto> findAll(UUID branchId) {
-        return labTestRepository.findAllByBranchIdOrderByName(branchId)
+        // Tri du plus récemment créé au plus ancien (formulaire d'ajout d'examen).
+        return labTestRepository.findAllByBranchIdOrderByCreatedAtDesc(branchId)
                 .stream().map(mapper::toLabTestResponseDto).toList();
     }
 

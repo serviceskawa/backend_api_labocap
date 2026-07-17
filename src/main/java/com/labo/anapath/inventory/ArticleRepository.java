@@ -21,4 +21,12 @@ public interface ArticleRepository extends JpaRepository<Article, UUID> {
 
     @Query("SELECT COUNT(a) FROM Article a WHERE a.branchId = :branchId AND a.quantity > 0 AND a.quantity < a.minimumStock")
     long countLowStock(@Param("branchId") UUID branchId);
+
+    /**
+     * Nombre d'articles ayant atteint le stock minimum, au sens du badge « Stocks »
+     * de Laravel (helper {@code getnbrStockMinim} : {@code quantity <= minimum_stock}).
+     * Se distingue de {@link #countLowStock} qui exclut les articles en rupture.
+     */
+    @Query("SELECT COUNT(a) FROM Article a WHERE a.branchId = :branchId AND a.quantity <= a.minimumStock")
+    long countStockMinimumReached(@Param("branchId") UUID branchId);
 }

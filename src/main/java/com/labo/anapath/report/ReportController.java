@@ -181,8 +181,10 @@ public class ReportController {
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('edit-reports')")
     public ResponseEntity<ApiResponse<ReportResponseDto>> update(
-            @PathVariable UUID id, @Valid @RequestBody ReportRequestDto dto) {
-        return ResponseEntity.ok(ApiResponse.success("Compte-rendu mis à jour", reportService.update(id, dto)));
+            @PathVariable UUID id, @Valid @RequestBody ReportRequestDto dto,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success("Compte-rendu mis à jour",
+                reportService.update(id, dto, principal.getId(), principal.getBranchId())));
     }
 
     /**
@@ -206,7 +208,7 @@ public class ReportController {
      * @return le CR validé
      */
     @PostMapping("/{id}/validate")
-    @PreAuthorize("hasAuthority('validate-reports')")
+    @PreAuthorize("hasAuthority('edit-reports')")
     public ResponseEntity<ApiResponse<ReportResponseDto>> validate(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -223,7 +225,7 @@ public class ReportController {
      * @return le CR passé au statut DELIVERED
      */
     @PostMapping("/{id}/deliver")
-    @PreAuthorize("hasAuthority('deliver-reports')")
+    @PreAuthorize("hasAuthority('edit-reports')")
     public ResponseEntity<ApiResponse<ReportResponseDto>> deliver(
             @PathVariable UUID id,
             @RequestParam String receiverName,
@@ -233,7 +235,7 @@ public class ReportController {
     }
 
     @PatchMapping("/{id}/delivered-patient")
-    @PreAuthorize("hasAuthority('deliver-reports')")
+    @PreAuthorize("hasAuthority('edit-reports')")
     public ResponseEntity<ApiResponse<ReportResponseDto>> markDelivered(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -242,7 +244,7 @@ public class ReportController {
     }
 
     @PatchMapping("/{id}/informed-patient")
-    @PreAuthorize("hasAuthority('deliver-reports')")
+    @PreAuthorize("hasAuthority('edit-reports')")
     public ResponseEntity<ApiResponse<ReportResponseDto>> markInformed(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -251,7 +253,7 @@ public class ReportController {
     }
 
     @PostMapping("/{id}/store-signature")
-    @PreAuthorize("hasAuthority('deliver-reports')")
+    @PreAuthorize("hasAuthority('edit-reports')")
     public ResponseEntity<ApiResponse<ReportResponseDto>> storeSignature(
             @PathVariable UUID id,
             @Valid @RequestBody StoreSignatureRequestDto dto,
@@ -261,7 +263,7 @@ public class ReportController {
     }
 
     @PostMapping("/{id}/call")
-    @PreAuthorize("hasAuthority('deliver-reports')")
+    @PreAuthorize("hasAuthority('edit-reports')")
     public ResponseEntity<ApiResponse<CallResponseDto>> callPatient(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -270,7 +272,7 @@ public class ReportController {
     }
 
     @PostMapping("/{id}/sms")
-    @PreAuthorize("hasAuthority('deliver-reports')")
+    @PreAuthorize("hasAuthority('edit-reports')")
     public ResponseEntity<ApiResponse<SmsResponseDto>> sendSms(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {

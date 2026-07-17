@@ -8,7 +8,11 @@ import java.util.UUID;
 public record RefundRequestResponseDto(
         UUID id,
         UUID invoiceId,
+        /** Code lisible de la facture de référence (colonne « Facture référence »). */
+        String invoiceCode,
         UUID refundReasonId,
+        /** Libellé de la raison, affiché dans la colonne « Objet ». */
+        String refundReasonLabel,
         BigDecimal montant,
         String note,
         String attachment,
@@ -16,5 +20,7 @@ public record RefundRequestResponseDto(
         String status,
         List<RefundRequestLogDto> logs,
         UUID branchId,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        /** Alimente la colonne « Dernière actualisation ». */
+        LocalDateTime updatedAt
 ) {}

@@ -24,5 +24,6 @@ public record ReportSuiviRowDto(
         boolean isCalled,
         boolean isDelivered,
         String retrieverName,
+        String retrieverSignature,
         LocalDateTime deliveryDate
 ) {}

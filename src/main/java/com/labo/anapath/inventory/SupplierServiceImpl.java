@@ -4,6 +4,7 @@ import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,7 +22,9 @@ public class SupplierServiceImpl implements SupplierService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<SupplierResponseDto> findAll(int page, int size, UUID branchId) {
-        return PageResponse.of(supplierRepository.findByBranchId(branchId, PageRequest.of(page, size))
+        // Laravel liste les fournisseurs via `latest()` : du plus récent au plus ancien.
+        PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        return PageResponse.of(supplierRepository.findByBranchId(branchId, pageable)
                 .map(inventoryMapper::toSupplierResponseDto));
     }
 

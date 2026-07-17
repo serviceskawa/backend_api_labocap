@@ -65,8 +65,8 @@ public class MovementServiceImpl implements MovementService {
         } else if (dto.getType() == MovementType.OUT) {
             BigDecimal newQty = article.getQuantity().subtract(dto.getQuantity());
             if (newQty.compareTo(BigDecimal.ZERO) < 0) {
-                throw new BusinessException("Stock insuffisant pour l'article: " + article.getName()
-                        + ". Stock actuel: " + article.getQuantity());
+                throw new BusinessException(
+                        "Échec de l'enregistrement, la quantite en stock est inferieur a la quantite a diminuer ! ");
             }
             article.setQuantity(newQty);
         } else if (dto.getType() == MovementType.ADJUSTMENT) {

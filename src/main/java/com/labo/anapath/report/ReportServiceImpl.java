@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -251,6 +252,7 @@ public class ReportServiceImpl implements ReportService {
                 Boolean.TRUE.equals(p.getIsCalled()),
                 Boolean.TRUE.equals(p.getIsDelivered()),
                 p.getRetrieverName(),
+                p.getRetrieverSignature(),
                 p.getDeliveryDate()
         )));
     }
@@ -377,15 +379,99 @@ public class ReportServiceImpl implements ReportService {
      */
     @Override
     @Transactional
-    public ReportResponseDto update(UUID id, ReportRequestDto dto) {
+    public ReportResponseDto update(UUID id, ReportRequestDto dto, UUID userId, UUID branchId) {
         Report report = reportRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
         if (report.getStatus() == ReportStatus.DELIVERED) {
             throw new InvalidOperationException("Impossible de modifier un compte-rendu déjà livré.");
         }
+
+        // -------------------------------------------------------------------
+        // Réplique EXACTE de ReportController@store (Laravel) : un unique
+        // enregistrement pilote le contenu ET le statut du compte-rendu.
+        // Le select « État du compte rendu » envoie :
+        //   - "VALIDATED" (Terminé)           → statut VALIDATED
+        //   - "DRAFT"     (En attente relecture) → statut DRAFT
+        // -------------------------------------------------------------------
+
+        // Relecteur nouvellement (ré)assigné → notification (Laravel : AssignedReviewer)
+        UUID currentReviewerId = report.getReviewedBy() != null ? report.getReviewedBy().getId() : null;
+        boolean reviewerChanged = dto.getReviewedById() != null
+                && !dto.getReviewedById().equals(currentReviewerId);
+
+        // Contenu (macro = content/description, micro = contentMicro, compléments)
         report.setContent(dto.getContent());
+        report.setContentMicro(dto.getContentMicro());
         report.setComment(dto.getComment());
-        return reportMapper.toResponseDto(reportRepository.save(report));
+        report.setCommentSup(dto.getCommentSup());
+        report.setDescriptionSupplementaire(
+                dto.getDescriptionSupplementaire() != null ? dto.getDescriptionSupplementaire() : "");
+        report.setDescriptionSupplementaireMicro(
+                dto.getDescriptionSupplementaireMicro() != null ? dto.getDescriptionSupplementaireMicro() : "");
+        report.setReceiverName(dto.getReceiverName());
+
+        // Titre
+        if (dto.getTitleId() != null) {
+            report.setTitleReport(titleReportRepository.findById(dto.getTitleId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Titre", dto.getTitleId())));
+        } else {
+            report.setTitleReport(null);
+        }
+
+        // Signataires (1 = « Signé par », 2/3 optionnels)
+        report.setSignatory1(dto.getSignatory1Id() != null
+                ? userRepository.findById(dto.getSignatory1Id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", dto.getSignatory1Id()))
+                : null);
+        report.setSignatory2(dto.getSignatory2Id() != null
+                ? userRepository.findById(dto.getSignatory2Id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", dto.getSignatory2Id()))
+                : null);
+        report.setSignatory3(dto.getSignatory3Id() != null
+                ? userRepository.findById(dto.getSignatory3Id())
+                    .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", dto.getSignatory3Id()))
+                : null);
+
+        // Relecteur (avis de relecture)
+        User reviewer = dto.getReviewedById() != null
+                ? userRepository.findById(dto.getReviewedById())
+                    .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", dto.getReviewedById()))
+                : null;
+        report.setReviewedBy(reviewer);
+
+        // Statut piloté par le select (Laravel : $request->status == 1 / == 0)
+        if ("VALIDATED".equalsIgnoreCase(dto.getStatus())) {
+            report.setStatus(ReportStatus.VALIDATED);
+            report.setDeliveryDate(LocalDateTime.now());
+        } else if ("DRAFT".equalsIgnoreCase(dto.getStatus())) {
+            report.setStatus(ReportStatus.DRAFT);
+        }
+
+        // La demande liée pointe vers le signataire 1 (Laravel : order.assigned_to_user_id)
+        if (report.getTestOrder() != null) {
+            report.getTestOrder().setAssignedToUserId(dto.getSignatory1Id());
+            testOrderRepository.save(report.getTestOrder());
+        }
+
+        // Date de signature quand validé/livré (Laravel : signature_date = now())
+        if (report.getStatus() == ReportStatus.VALIDATED || report.getStatus() == ReportStatus.DELIVERED) {
+            report.setSignatureDate(LocalDateTime.now());
+        }
+
+        // Tags : synchronisation (remplace l'ensemble, comme tags()->sync()/attach())
+        List<Tag> tags = (dto.getTagIds() != null && !dto.getTagIds().isEmpty())
+                ? tagRepository.findAllById(dto.getTagIds())
+                : new ArrayList<>();
+        report.setTags(tags);
+
+        Report saved = reportRepository.save(report);
+
+        if (reviewerChanged && reviewer != null) {
+            notifyAssignedReviewer(saved, reviewer);
+        }
+        logAction(saved.getId(), "Mettre à jour", userId);
+
+        return reportMapper.toResponseDto(saved);
     }
 
     /**
@@ -435,6 +521,12 @@ public class ReportServiceImpl implements ReportService {
         report.setStatus(ReportStatus.DELIVERED);
         report.setDelivered(true);
         report.setReceiverName(receiverName);
+        // La demande d'examen associée passe aussi à DELIVERED : sinon la liste et
+        // les détails de la demande (qui affichent order.status) restent « Validé »
+        // alors que le compte-rendu est livré.
+        if (report.getTestOrder() != null) {
+            report.getTestOrder().setStatus(com.labo.anapath.testorder.TestOrderStatus.DELIVERED);
+        }
         Report saved = reportRepository.save(report);
         logAction(id, "Livré", userId);
         return reportMapper.toResponseDto(saved);
@@ -447,6 +539,11 @@ public class ReportServiceImpl implements ReportService {
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
         report.setDelivered(true);
         report.setDeliveryDate(LocalDateTime.now());
+        // Cohérence : statut du rapport ET de la demande passent à DELIVERED.
+        report.setStatus(ReportStatus.DELIVERED);
+        if (report.getTestOrder() != null) {
+            report.getTestOrder().setStatus(com.labo.anapath.testorder.TestOrderStatus.DELIVERED);
+        }
         Report saved = reportRepository.save(report);
         logAction(id, "Livré", userId);
         return reportMapper.toResponseDto(saved);
