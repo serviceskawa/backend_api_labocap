@@ -136,7 +136,8 @@ public class PdfReportServiceImpl implements PdfReportService {
 
         // Settings
         ctx.setVariable("footer", settingAppRepository.findByKey("report_footer")
-                .map(SettingApp::getValue).orElse(""));
+                .map(SettingApp::getValue).filter(v -> !v.isBlank())
+                .orElse(SettingApp.DEFAULT_REPORT_FOOTER));
         // Titre de revue : « Signé électroniquement par : » par défaut (réplique du
         // rendu de référence CAAP), surchargé par le réglage report_review_title si défini.
         String reviewTitle = settingAppRepository.findByKey("report_review_title")

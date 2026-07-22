@@ -44,6 +44,28 @@ public class DocServiceImpl implements DocService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<DocResponseDto> findByCategory(UUID categoryId, UUID branchId) {
+        return docRepository
+                .findByBranchIdAndDocumentationCategoryIdOrderByCreatedAtDesc(branchId, categoryId)
+                .stream().map(docMapper::toResponseDto).toList();
+    }
+
+    @Override
+    @Transactional
+    public DocResponseDto updateTitle(UUID id, String title, MultipartFile file) {
+        Doc doc = docRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Document", id));
+        doc.setTitle(title);
+        // Fichier fourni → remplace la pièce jointe courante, sans nouvelle version.
+        if (file != null && !file.isEmpty()) {
+            doc.setAttachment(fileStorageService.store(file, "documents"));
+            doc.setFileSize(file.getSize());
+        }
+        return docMapper.toResponseDto(docRepository.save(doc));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public DocResponseDto findById(UUID id) {
         return docMapper.toResponseDto(docRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Document", id)));

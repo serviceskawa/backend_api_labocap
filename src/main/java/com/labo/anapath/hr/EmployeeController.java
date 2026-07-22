@@ -15,9 +15,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
@@ -93,6 +96,22 @@ public class EmployeeController {
     public ResponseEntity<ApiResponse<EmployeeResponseDto>> update(
             @PathVariable UUID id, @Valid @RequestBody EmployeeRequestDto dto) {
         return ResponseEntity.ok(ApiResponse.success("Employé mis à jour", employeeService.update(id, dto)));
+    }
+
+    /**
+     * Téléverse la photo de profil d'un employé (multipart).
+     *
+     * @param id   identifiant UUID de l'employé
+     * @param file fichier image
+     * @return l'employé mis à jour, avec son nouveau {@code photoUrl}
+     */
+    @PostMapping(value = "/{id}/photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('edit-employees')")
+    public ResponseEntity<ApiResponse<EmployeeResponseDto>> uploadPhoto(
+            @PathVariable UUID id,
+            @RequestPart("file") MultipartFile file) {
+        return ResponseEntity.ok(
+                ApiResponse.success("Photo mise à jour", employeeService.uploadPhoto(id, file)));
     }
 
     /**

@@ -1,11 +1,13 @@
 package com.labo.anapath.common.audit;
 
+import com.labo.anapath.common.branch.BranchContext;
 import jakarta.persistence.Column;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
+import jakarta.persistence.PrePersist;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -75,4 +77,17 @@ public abstract class AuditableEntity {
      */
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    /**
+     * Estampe automatiquement la branche à la création si elle n'a pas déjà été
+     * renseignée explicitement — analogue du hook {@code creating} du
+     * {@code BranchScopeTrait} de Laravel qui pose {@code branch_id = selected_branch_id}.
+     * La valeur provient de {@link BranchContext} (branche active de la requête).
+     */
+    @PrePersist
+    protected void stampBranchOnCreate() {
+        if (branchId == null) {
+            branchId = BranchContext.get();
+        }
+    }
 }

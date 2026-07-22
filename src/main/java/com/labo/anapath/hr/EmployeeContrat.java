@@ -59,6 +59,34 @@ public class EmployeeContrat {
     @Column(name = "salary", nullable = false, precision = 10, scale = 2)
     private BigDecimal salary = BigDecimal.ZERO;
 
+    // ── Onglet « Contrat » (calque du wizard contrat Laravel) ───────────────
+
+    @Column(name = "probation_end_date")
+    private LocalDate probationEndDate;
+
+    @Column(name = "weekly_work_hours")
+    private Integer weeklyWorkHours;
+
+    @Column(name = "working_days_per_week")
+    private Integer workingDaysPerWeek;
+
+    @Column(name = "termination_reason", columnDefinition = "text")
+    private String terminationReason;
+
+    // ── Onglet « Paie » ─────────────────────────────────────────────────────
+
+    @Column(name = "hourly_gross_rate", precision = 10, scale = 2)
+    private BigDecimal hourlyGrossRate;
+
+    @Column(name = "transport_allowance", precision = 10, scale = 2)
+    private BigDecimal transportAllowance;
+
+    @Column(name = "iban", length = 50)
+    private String iban;
+
+    @Column(name = "bic", length = 20)
+    private String bic;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

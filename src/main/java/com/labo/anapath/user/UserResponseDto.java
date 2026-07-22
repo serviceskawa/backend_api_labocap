@@ -1,8 +1,10 @@
 package com.labo.anapath.user;
 
+import com.labo.anapath.branch.BranchResponseDto;
 import com.labo.anapath.role.PermissionResponseDto;
 import com.labo.anapath.role.RoleResponseDto;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -31,10 +33,13 @@ public record UserResponseDto(
         String lastname,
         String email,
         String phone,
+        String whatsapp,
+        BigDecimal commission,
         boolean isActive,
         UUID branchId,
         LocalDateTime createdAt,
         List<RoleResponseDto> roles,
+        List<BranchResponseDto> branches,
         String signature,
         List<PermissionResponseDto> directPermissions
 ) {}

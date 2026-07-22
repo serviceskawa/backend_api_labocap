@@ -331,10 +331,12 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
      * @param branchId identifiant de la branche (isolation multi-tenant)
      * @return nombre total de bons assignés
      */
-    @Query("SELECT COUNT(t) FROM TestOrder t WHERE t.assignedToUserId = :userId AND t.branchId = :branchId")
+    @Query("SELECT COUNT(t) FROM TestOrder t WHERE t.branchId = :branchId " +
+           "AND (:seeAll = TRUE OR t.assignedToUserId = :userId)")
     long countByAssignedToUserIdAndBranchId(
             @Param("userId") UUID userId,
-            @Param("branchId") UUID branchId);
+            @Param("branchId") UUID branchId,
+            @Param("seeAll") boolean seeAll);
 
     /**
      * Compte les bons d'examen assignés à un utilisateur pour une branche et un statut donnés.
@@ -357,10 +359,12 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
      * @param branchId identifiant de la branche (isolation multi-tenant)
      * @return nombre de bons urgents
      */
-    @Query("SELECT COUNT(t) FROM TestOrder t WHERE t.assignedToUserId = :userId AND t.branchId = :branchId AND t.isUrgent = true")
+    @Query("SELECT COUNT(t) FROM TestOrder t WHERE t.branchId = :branchId AND t.isUrgent = true " +
+           "AND (:seeAll = TRUE OR t.assignedToUserId = :userId)")
     long countUrgentByAssignedToUserIdAndBranchId(
             @Param("userId") UUID userId,
-            @Param("branchId") UUID branchId);
+            @Param("branchId") UUID branchId,
+            @Param("seeAll") boolean seeAll);
 
     /**
      * Compte les bons d'examen en retard (PENDING assignés il y a plus de 48 h).
@@ -373,13 +377,15 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
      */
     @Query("SELECT COUNT(t) FROM TestOrder t " +
            "LEFT JOIN com.labo.anapath.report.Report r ON r.testOrder.id = t.id " +
-           "WHERE t.assignedToUserId = :userId AND t.branchId = :branchId " +
+           "WHERE t.branchId = :branchId " +
+           "AND (:seeAll = TRUE OR t.assignedToUserId = :userId) " +
            "AND (r IS NULL OR r.status NOT IN (com.labo.anapath.report.ReportStatus.VALIDATED, com.labo.anapath.report.ReportStatus.DELIVERED)) " +
            "AND t.assignmentDate IS NOT NULL AND t.assignmentDate < :cutoff")
     long countLateByAssignedToUserIdAndBranchId(
             @Param("userId") UUID userId,
             @Param("branchId") UUID branchId,
-            @Param("cutoff") LocalDateTime cutoff);
+            @Param("cutoff") LocalDateTime cutoff,
+            @Param("seeAll") boolean seeAll);
 
     /**
      * Compte les bons assignés dont le rapport n'est pas encore terminé
@@ -387,18 +393,22 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
      */
     @Query("SELECT COUNT(t) FROM TestOrder t " +
            "LEFT JOIN com.labo.anapath.report.Report r ON r.testOrder.id = t.id " +
-           "WHERE t.assignedToUserId = :userId AND t.branchId = :branchId " +
+           "WHERE t.branchId = :branchId " +
+           "AND (:seeAll = TRUE OR t.assignedToUserId = :userId) " +
            "AND (r IS NULL OR r.status NOT IN (com.labo.anapath.report.ReportStatus.VALIDATED, com.labo.anapath.report.ReportStatus.DELIVERED))")
-    long countAssignedReportPending(@Param("userId") UUID userId, @Param("branchId") UUID branchId);
+    long countAssignedReportPending(@Param("userId") UUID userId, @Param("branchId") UUID branchId,
+                                    @Param("seeAll") boolean seeAll);
 
     /**
      * Compte les bons assignés dont le rapport est terminé (VALIDATED ou DELIVERED).
      */
     @Query("SELECT COUNT(t) FROM TestOrder t " +
            "JOIN com.labo.anapath.report.Report r ON r.testOrder.id = t.id " +
-           "WHERE t.assignedToUserId = :userId AND t.branchId = :branchId " +
+           "WHERE t.branchId = :branchId " +
+           "AND (:seeAll = TRUE OR t.assignedToUserId = :userId) " +
            "AND r.status IN (com.labo.anapath.report.ReportStatus.VALIDATED, com.labo.anapath.report.ReportStatus.DELIVERED)")
-    long countAssignedReportDone(@Param("userId") UUID userId, @Param("branchId") UUID branchId);
+    long countAssignedReportDone(@Param("userId") UUID userId, @Param("branchId") UUID branchId,
+                                 @Param("seeAll") boolean seeAll);
 
     /**
      * Compte les bons d'examen immuno assignés dont le rapport n'est pas terminé.
@@ -410,13 +420,15 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
      */
     @Query("SELECT COUNT(t) FROM TestOrder t " +
            "LEFT JOIN com.labo.anapath.report.Report r ON r.testOrder.id = t.id " +
-           "WHERE t.assignedToUserId = :userId AND t.branchId = :branchId " +
+           "WHERE t.branchId = :branchId " +
+           "AND (:seeAll = TRUE OR t.assignedToUserId = :userId) " +
            "AND t.typeOrder.id IN :typeIds " +
            "AND (r IS NULL OR r.status NOT IN (com.labo.anapath.report.ReportStatus.VALIDATED, com.labo.anapath.report.ReportStatus.DELIVERED))")
     long countImmunoPendingByAssignedToUserId(
             @Param("userId") UUID userId,
             @Param("branchId") UUID branchId,
-            @Param("typeIds") List<UUID> typeIds);
+            @Param("typeIds") List<UUID> typeIds,
+            @Param("seeAll") boolean seeAll);
 
     // -------------------------------------------------------------------------
     // Myspace — liste paginée des bons assignés à un utilisateur
@@ -438,7 +450,7 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             JOIN patients pat ON pat.id = t.patient_id AND pat.deleted_at IS NULL
             LEFT JOIN reports r ON r.test_order_id = t.id AND r.deleted_at IS NULL
             WHERE t.deleted_at IS NULL
-              AND t.assigned_to_user_id = :userId
+              AND (:seeAll = TRUE OR t.assigned_to_user_id = :userId)
               AND t.branch_id = :branchId
               AND (:status IS NULL
                    OR (:status = 'PENDING'   AND (r.id IS NULL OR r.status NOT IN ('VALIDATED', 'DELIVERED')))
@@ -464,7 +476,7 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             JOIN patients pat ON pat.id = t.patient_id AND pat.deleted_at IS NULL
             LEFT JOIN reports r ON r.test_order_id = t.id AND r.deleted_at IS NULL
             WHERE t.deleted_at IS NULL
-              AND t.assigned_to_user_id = :userId
+              AND (:seeAll = TRUE OR t.assigned_to_user_id = :userId)
               AND t.branch_id = :branchId
               AND (:status IS NULL
                    OR (:status = 'PENDING'   AND (r.id IS NULL OR r.status NOT IN ('VALIDATED', 'DELIVERED')))
@@ -494,6 +506,7 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             @Param("fromDate") String fromDate,
             @Param("toDate") String toDate,
             @Param("search") String search,
+            @Param("seeAll") boolean seeAll,
             Pageable pageable);
 
     // -------------------------------------------------------------------------

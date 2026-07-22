@@ -52,7 +52,8 @@ public class PayrollPdfServiceImpl implements PayrollPdfService {
         ctx.setVariable("entete", settingAppRepository.findByKey("entete")
                 .map(SettingApp::getValue).orElse(""));
         ctx.setVariable("footer", settingAppRepository.findByKey("report_footer")
-                .map(SettingApp::getValue).orElse(""));
+                .map(SettingApp::getValue).filter(v -> !v.isBlank())
+                .orElse(SettingApp.DEFAULT_REPORT_FOOTER));
 
         // Employé
         ctx.setVariable("employeeName",

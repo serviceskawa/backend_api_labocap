@@ -1,7 +1,9 @@
 package com.labo.anapath.hr;
 
 import com.labo.anapath.common.dto.PageResponse;
+import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
+import com.labo.anapath.common.storage.FileStorageService;
 import com.labo.anapath.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -9,6 +11,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
@@ -24,6 +27,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     private final EmployeeRepository employeeRepository;
     private final UserRepository userRepository;
     private final EmployeeMapper employeeMapper;
+    private final FileStorageService fileStorageService;
 
     /**
      * {@inheritDoc}
@@ -79,6 +83,21 @@ public class EmployeeServiceImpl implements EmployeeService {
         employee.setPosition(dto.getPosition());
         if (dto.getSalary() != null) employee.setSalary(dto.getSalary());
         if (dto.getHireDate() != null) employee.setHireDate(dto.getHireDate());
+        // Champs de profil : édités depuis la fiche détaillée. Un null conserve
+        // l'existant, pour que l'édition rapide depuis la liste (qui ne renvoie
+        // pas ces champs) n'écrase pas le profil.
+        if (dto.getAddress() != null) employee.setAddress(dto.getAddress());
+        if (dto.getDateOfBirth() != null) employee.setDateOfBirth(dto.getDateOfBirth());
+        if (dto.getPlaceOfBirth() != null) employee.setPlaceOfBirth(dto.getPlaceOfBirth());
+        if (dto.getCnssNumber() != null) employee.setCnssNumber(dto.getCnssNumber());
+        if (dto.getPhotoUrl() != null) employee.setPhotoUrl(dto.getPhotoUrl());
+        if (dto.getGender() != null) employee.setGender(dto.getGender());
+        if (dto.getNationality() != null) employee.setNationality(dto.getNationality());
+        if (dto.getCity() != null) employee.setCity(dto.getCity());
+        if (dto.getUserId() != null) {
+            employee.setUser(userRepository.findById(dto.getUserId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", dto.getUserId())));
+        }
         return employeeMapper.toResponseDto(employeeRepository.save(employee));
     }
 
@@ -89,5 +108,33 @@ public class EmployeeServiceImpl implements EmployeeService {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Employé", id));
         employeeRepository.delete(employee);
+    }
+
+    /**
+     * {@inheritDoc}
+     * La photo est stockée sous {@code employees/photos} (validation d'extension
+     * image assurée par {@link FileStorageService}). L'éventuelle photo
+     * précédente est supprimée du disque.
+     */
+    @Override
+    @Transactional
+    public EmployeeResponseDto uploadPhoto(UUID id, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new InvalidOperationException("Aucun fichier fourni");
+        }
+        Employee employee = employeeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Employé", id));
+        String oldPhoto = employee.getPhotoUrl();
+        String path = fileStorageService.store(file, "employees/photos");
+        employee.setPhotoUrl(path);
+        EmployeeResponseDto dto = employeeMapper.toResponseDto(employeeRepository.save(employee));
+        if (oldPhoto != null && !oldPhoto.isBlank()) {
+            try {
+                fileStorageService.delete(oldPhoto);
+            } catch (RuntimeException ex) {
+                log.warn("Impossible de supprimer l'ancienne photo {} : {}", oldPhoto, ex.getMessage());
+            }
+        }
+        return dto;
     }
 }

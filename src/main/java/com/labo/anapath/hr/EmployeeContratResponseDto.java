@@ -12,5 +12,13 @@ public record EmployeeContratResponseDto(
         LocalDate startDate,
         LocalDate endDate,
         BigDecimal salary,
+        LocalDate probationEndDate,
+        Integer weeklyWorkHours,
+        Integer workingDaysPerWeek,
+        String terminationReason,
+        BigDecimal hourlyGrossRate,
+        BigDecimal transportAllowance,
+        String iban,
+        String bic,
         LocalDateTime createdAt
 ) {}

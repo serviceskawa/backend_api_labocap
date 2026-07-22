@@ -1,6 +1,5 @@
 package com.labo.anapath.finance;
 
-import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -12,7 +11,7 @@ import java.util.UUID;
 @NoArgsConstructor
 public class CashboxVoucherRequestDto {
 
-    @NotBlank
+    // Optionnel (Laravel ne collecte pas d'« objet » sur le bon de caisse).
     private String description;
 
     private UUID supplierId;

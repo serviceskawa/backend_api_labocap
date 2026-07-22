@@ -25,5 +25,6 @@ public record RoleResponseDto(
         String description,
         Boolean isAssignable,
         List<PermissionResponseDto> permissions,
+        String createdByName,
         LocalDateTime createdAt
 ) {}

@@ -87,6 +87,22 @@ public class UserPrincipal implements UserDetails {
         );
     }
 
+    /**
+     * Retourne une copie de ce principal en substituant la branche active.
+     * <p>
+     * Utilisé par {@link BranchContextFilter} pour remplacer la branche « d'attache »
+     * issue du JWT par la branche <b>sélectionnée</b> et validée (en-tête
+     * {@code X-Branch-Id}), de sorte que tous les {@code principal.getBranchId()} des
+     * contrôleurs/services isolent la donnée sur la branche choisie par l'utilisateur.
+     * </p>
+     *
+     * @param newBranchId UUID de la branche sélectionnée
+     * @return un nouveau {@link UserPrincipal} identique mais avec la branche substituée
+     */
+    public UserPrincipal withBranchId(UUID newBranchId) {
+        return new UserPrincipal(id, email, password, newBranchId, active, authorities);
+    }
+
     /** {@inheritDoc} */
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

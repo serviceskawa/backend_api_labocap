@@ -50,4 +50,30 @@ public class Employee extends AuditableEntity {
 
     @Column(name = "hire_date")
     private LocalDate hireDate;
+
+    // ── Identité étendue (calque du profil employé Laravel) ─────────────────
+
+    @Column(name = "address", length = 255)
+    private String address;
+
+    @Column(name = "date_of_birth")
+    private LocalDate dateOfBirth;
+
+    @Column(name = "place_of_birth", length = 200)
+    private String placeOfBirth;
+
+    @Column(name = "cnss_number", length = 100)
+    private String cnssNumber;
+
+    @Column(name = "photo_url", length = 500)
+    private String photoUrl;
+
+    @Column(name = "gender", length = 20)
+    private String gender;
+
+    @Column(name = "nationality", length = 100)
+    private String nationality;
+
+    @Column(name = "city", length = 100)
+    private String city;
 }

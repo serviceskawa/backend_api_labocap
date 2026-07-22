@@ -3,10 +3,14 @@ package com.labo.anapath.finance;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.security.UserPrincipal;
+import com.labo.anapath.common.storage.FileStorageService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -28,6 +32,7 @@ import java.util.UUID;
 public class CashboxVoucherController {
 
     private final CashboxVoucherService voucherService;
+    private final FileStorageService fileStorageService;
 
     @GetMapping
     @PreAuthorize("hasAuthority('view-cashbox-tickets')")
@@ -57,11 +62,20 @@ public class CashboxVoucherController {
                         voucherService.create(dto, principal.getBranchId())));
     }
 
-    @PutMapping("/{id}")
+    /**
+     * Édite l'en-tête d'un bon de caisse et, optionnellement, remplace la pièce
+     * jointe (partie multipart `file`). Un fichier absent conserve l'existant.
+     */
+    @PutMapping(value = "/{id}", consumes = {
+            MediaType.APPLICATION_JSON_VALUE, MediaType.MULTIPART_FORM_DATA_VALUE})
     @PreAuthorize("hasAuthority('edit-cashbox-tickets')")
     public ResponseEntity<ApiResponse<CashboxVoucherResponseDto>> update(
             @PathVariable UUID id,
-            @Valid @RequestBody CashboxVoucherRequestDto dto) {
+            @Valid @RequestPart("data") CashboxVoucherRequestDto dto,
+            @RequestPart(value = "file", required = false) MultipartFile file) {
+        if (file != null && !file.isEmpty()) {
+            dto.setTicketFile(fileStorageService.store(file, "bons"));
+        }
         return ResponseEntity.ok(ApiResponse.success(voucherService.update(id, dto)));
     }
 

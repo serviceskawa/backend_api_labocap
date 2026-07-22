@@ -18,6 +18,7 @@ public record InvoiceResponseDto(
         String contratName,
         String clientName,
         String clientAddress,
+        String clientContact,
         LocalDate date,
         Double subtotal,
         BigDecimal total,

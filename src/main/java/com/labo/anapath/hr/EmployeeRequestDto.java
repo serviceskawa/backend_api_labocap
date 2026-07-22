@@ -26,5 +26,17 @@ public class EmployeeRequestDto {
     private String position;
     private BigDecimal salary;
     private LocalDate hireDate;
+
+    // Identité étendue (profil employé Laravel). Tous optionnels : un champ
+    // null en update conserve la valeur existante (voir EmployeeServiceImpl).
+    private String address;
+    private LocalDate dateOfBirth;
+    private String placeOfBirth;
+    private String cnssNumber;
+    private String photoUrl;
+    private String gender;
+    private String nationality;
+    private String city;
+
     private UUID userId;
 }

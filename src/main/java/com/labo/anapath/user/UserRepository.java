@@ -85,6 +85,19 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("SELECT COUNT(u) > 0 FROM User u JOIN u.roles r WHERE r.id = :roleId")
     boolean existsByRoleId(@Param("roleId") UUID roleId);
 
+    /**
+     * Indique si l'utilisateur possède le rôle « Super Admin » (slug {@code super-admin}).
+     * <p>
+     * Utilisé par « Mon espace » pour élargir la vue d'un super-admin à l'ensemble
+     * des bons d'examen de la branche active, et non à ses seules assignations.
+     * </p>
+     *
+     * @param userId identifiant de l'utilisateur
+     * @return {@code true} si l'utilisateur est super-admin
+     */
+    @Query("SELECT COUNT(u) > 0 FROM User u JOIN u.roles r WHERE u.id = :userId AND r.slug = 'super-admin'")
+    boolean isSuperAdmin(@Param("userId") UUID userId);
+
     // Dashboard — utilisateurs connectés
     @Query(value = """
             SELECT u.id::text as id, u.lastname as lastname, u.firstname as firstname, u.email as email

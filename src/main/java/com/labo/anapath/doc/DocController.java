@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -49,6 +50,30 @@ public class DocController {
     @PreAuthorize("hasAuthority('view-documentation-categories')")
     public ResponseEntity<ApiResponse<DocResponseDto>> findById(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(docService.findById(id)));
+    }
+
+    /** Documents d'une catégorie (volet droit de l'explorateur). */
+    @GetMapping("/by-category/{categoryId}")
+    @PreAuthorize("hasAuthority('view-documentation-categories')")
+    public ResponseEntity<ApiResponse<List<DocResponseDto>>> byCategory(
+            @PathVariable UUID categoryId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                docService.findByCategory(categoryId, principal.getBranchId())));
+    }
+
+    /**
+     * Édite le titre d'un document (et remplace optionnellement le fichier, sans
+     * nouvelle version). Calque Laravel `doc.update`.
+     */
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('edit-documentation-categories')")
+    public ResponseEntity<ApiResponse<DocResponseDto>> updateTitle(
+            @PathVariable UUID id,
+            @RequestParam @NotBlank @Size(max = 255) String title,
+            @RequestParam(required = false) MultipartFile file) {
+        return ResponseEntity.ok(ApiResponse.success("Document mis à jour",
+                docService.updateTitle(id, title, file)));
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

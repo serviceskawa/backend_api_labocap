@@ -3,9 +3,11 @@ package com.labo.anapath.finance;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.security.UserPrincipal;
+import com.labo.anapath.common.storage.FileStorageService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -14,10 +16,13 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
@@ -27,6 +32,7 @@ import java.util.UUID;
 public class RefundRequestController {
 
     private final RefundService refundService;
+    private final FileStorageService fileStorageService;
 
     @PostMapping
     @PreAuthorize("hasAuthority('create-refund-requests')")
@@ -36,6 +42,26 @@ public class RefundRequestController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Demande créée",
                         refundService.create(dto, principal.getBranchId(), principal.getId())));
+    }
+
+    /**
+     * Édite une demande de remboursement (facture, motif, montant, note) et,
+     * optionnellement, remplace la pièce jointe PDF (partie multipart `file`).
+     * Calque Laravel `refund.request.update` (permission `edit-refund-requests`).
+     */
+    @PutMapping(value = "/{id}", consumes = {
+            MediaType.APPLICATION_JSON_VALUE, MediaType.MULTIPART_FORM_DATA_VALUE})
+    @PreAuthorize("hasAuthority('edit-refund-requests')")
+    public ResponseEntity<ApiResponse<RefundRequestResponseDto>> update(
+            @PathVariable UUID id,
+            @Valid @RequestPart("data") RefundRequestUpdateDto dto,
+            @RequestPart(value = "file", required = false) MultipartFile file,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        if (file != null && !file.isEmpty()) {
+            dto.setAttachment(fileStorageService.store(file, "remboursements"));
+        }
+        return ResponseEntity.ok(ApiResponse.success("Demande mise à jour",
+                refundService.update(id, dto, principal.getId())));
     }
 
     // Laravel réserve le changement de statut à `view-process-refund-request`.
