@@ -8,8 +8,18 @@ import java.util.UUID;
 
 public interface DocService {
     PageResponse<DocResponseDto> findAll(int page, int size, UUID branchId);
+
+    /** Documents d'une catégorie donnée (volet droit de l'explorateur). */
+    List<DocResponseDto> findByCategory(UUID categoryId, UUID branchId);
+
     DocResponseDto findById(UUID id);
     DocResponseDto create(String title, UUID documentationCategoryId, MultipartFile file, UUID userId, UUID branchId);
+
+    /**
+     * Édite le titre d'un document et, si un fichier est fourni, remplace la pièce
+     * jointe courante (sans créer de nouvelle version). Calque Laravel `doc.update`.
+     */
+    DocResponseDto updateTitle(UUID id, String title, MultipartFile file);
     DocVersionResponseDto addVersion(UUID docId, String title, MultipartFile file, UUID userId, UUID branchId);
     List<DocVersionResponseDto> getVersions(UUID docId);
     void delete(UUID id);

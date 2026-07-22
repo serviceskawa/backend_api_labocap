@@ -1,5 +1,7 @@
 package com.labo.anapath.user;
 
+import com.labo.anapath.branch.Branch;
+import com.labo.anapath.branch.BranchRepository;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.BusinessException;
 import com.labo.anapath.common.exception.DuplicateResourceException;
@@ -45,6 +47,7 @@ public class UserServiceImpl implements UserService {
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
     private final PermissionMapper permissionMapper;
+    private final BranchRepository branchRepository;
 
     /**
      * {@inheritDoc}
@@ -84,7 +87,6 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException("Le mot de passe est obligatoire pour la création d'un utilisateur.");
         }
         User user = userMapper.toEntity(dto);
-        user.setBranchId(branchId);
         // Statut actif par défaut si non précisé
         user.setActive(dto.getIsActive() != null ? dto.getIsActive() : true);
         user.setPassword(passwordEncoder.encode(dto.getPassword()));
@@ -92,6 +94,12 @@ public class UserServiceImpl implements UserService {
             List<Role> roles = roleRepository.findAllByIdInAndBranchId(dto.getRoleIds(), branchId);
             user.setRoles(roles);
         }
+        // Branches accessibles + branche d'attache (isolation). On privilégie la
+        // branche du créateur si elle fait partie de la sélection, pour qu'il
+        // conserve la visibilité sur le compte créé.
+        List<Branch> branches = resolveBranches(dto.getBranchIds());
+        user.setBranches(branches);
+        user.setBranchId(effectiveBranchId(branches, branchId));
         User saved = userRepository.save(user);
         log.info("Utilisateur créé: {}", saved.getId());
         return userMapper.toResponseDto(saved);
@@ -116,8 +124,34 @@ public class UserServiceImpl implements UserService {
             List<Role> roles = roleRepository.findAllByIdInAndBranchId(dto.getRoleIds(), branchId);
             user.setRoles(roles);
         }
+        // Remplacement des branches accessibles UNIQUEMENT si une liste non vide est
+        // fournie. Le formulaire utilisateur (calqué Laravel) ne gère pas les branches :
+        // une requête sans branchIds ne doit donc pas effacer les affectations existantes.
+        if (dto.getBranchIds() != null && !dto.getBranchIds().isEmpty()) {
+            user.setBranches(resolveBranches(dto.getBranchIds()));
+        }
         User updated = userRepository.save(user);
         return userMapper.toResponseDto(updated);
+    }
+
+    /** Résout des branches par identifiants (branches globales, sans filtre de branche). */
+    private List<Branch> resolveBranches(List<UUID> branchIds) {
+        if (branchIds == null || branchIds.isEmpty()) {
+            return new java.util.ArrayList<>();
+        }
+        return branchRepository.findAllById(branchIds);
+    }
+
+    /**
+     * Détermine la branche d'attache : celle du créateur si elle est dans la
+     * sélection (préserve sa visibilité), sinon la première sélectionnée, sinon
+     * la branche du créateur par défaut.
+     */
+    private UUID effectiveBranchId(List<Branch> branches, UUID creatorBranchId) {
+        if (branches.stream().anyMatch(b -> b.getId().equals(creatorBranchId))) {
+            return creatorBranchId;
+        }
+        return branches.isEmpty() ? creatorBranchId : branches.get(0).getId();
     }
 
     /** {@inheritDoc} */

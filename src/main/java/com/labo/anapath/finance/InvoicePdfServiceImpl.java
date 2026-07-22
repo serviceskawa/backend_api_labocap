@@ -148,7 +148,8 @@ public class InvoicePdfServiceImpl implements InvoicePdfService {
 
         ctx.setVariable("noteImportante", NOTE_IMPORTANTE);
         ctx.setVariable("reportFooter",
-                settingAppRepository.findByKey("report_footer").map(SettingApp::getValue).orElse(""));
+                settingAppRepository.findByKey("report_footer").map(SettingApp::getValue)
+                        .filter(v -> !v.isBlank()).orElse(SettingApp.DEFAULT_REPORT_FOOTER));
 
         // QR de l'en-tête, toujours présent sur la facture imprimée. Encode le même
         // contenu que le reçu à l'écran : le code normalisé, ou le nom du centre à défaut.

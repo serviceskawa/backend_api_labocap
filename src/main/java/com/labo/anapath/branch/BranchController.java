@@ -42,7 +42,7 @@ public class BranchController {
      * @return page de {@link BranchResponseDto} encapsulée dans une {@link ApiResponse}
      */
     @GetMapping
-    @PreAuthorize("hasAuthority('edit-roles')")
+    @PreAuthorize("hasAnyAuthority('edit-roles','edit-users')")
     public ResponseEntity<ApiResponse<PageResponse<BranchResponseDto>>> findAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {

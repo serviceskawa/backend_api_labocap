@@ -30,10 +30,7 @@ public class EmployeeContratServiceImpl implements EmployeeContratService {
                 .orElseThrow(() -> new ResourceNotFoundException("Employé", employeeId));
         EmployeeContrat contrat = new EmployeeContrat();
         contrat.setEmployee(employee);
-        contrat.setType(dto.getType());
-        contrat.setStartDate(dto.getStartDate());
-        contrat.setEndDate(dto.getEndDate());
-        contrat.setSalary(dto.getSalary());
+        apply(contrat, dto);
         return toDto(employeeContratRepository.save(contrat));
     }
 
@@ -42,11 +39,24 @@ public class EmployeeContratServiceImpl implements EmployeeContratService {
     public EmployeeContratResponseDto update(UUID id, EmployeeContratRequestDto dto) {
         EmployeeContrat contrat = employeeContratRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Contrat employé", id));
+        apply(contrat, dto);
+        return toDto(employeeContratRepository.save(contrat));
+    }
+
+    /** Recopie tous les champs du DTO (onglets Contrat + Paie) sur l'entité. */
+    private void apply(EmployeeContrat contrat, EmployeeContratRequestDto dto) {
         contrat.setType(dto.getType());
         contrat.setStartDate(dto.getStartDate());
         contrat.setEndDate(dto.getEndDate());
         contrat.setSalary(dto.getSalary());
-        return toDto(employeeContratRepository.save(contrat));
+        contrat.setProbationEndDate(dto.getProbationEndDate());
+        contrat.setWeeklyWorkHours(dto.getWeeklyWorkHours());
+        contrat.setWorkingDaysPerWeek(dto.getWorkingDaysPerWeek());
+        contrat.setTerminationReason(dto.getTerminationReason());
+        contrat.setHourlyGrossRate(dto.getHourlyGrossRate());
+        contrat.setTransportAllowance(dto.getTransportAllowance());
+        contrat.setIban(dto.getIban());
+        contrat.setBic(dto.getBic());
     }
 
     @Override
@@ -60,6 +70,9 @@ public class EmployeeContratServiceImpl implements EmployeeContratService {
     private EmployeeContratResponseDto toDto(EmployeeContrat c) {
         return new EmployeeContratResponseDto(
                 c.getId(), c.getEmployee().getId(), c.getType(),
-                c.getStartDate(), c.getEndDate(), c.getSalary(), c.getCreatedAt());
+                c.getStartDate(), c.getEndDate(), c.getSalary(),
+                c.getProbationEndDate(), c.getWeeklyWorkHours(), c.getWorkingDaysPerWeek(),
+                c.getTerminationReason(), c.getHourlyGrossRate(), c.getTransportAllowance(),
+                c.getIban(), c.getBic(), c.getCreatedAt());
     }
 }

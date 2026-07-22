@@ -18,6 +18,11 @@ public interface FinanceMapper {
     @Mapping(target = "contratName", source = "contrat.name")
     @Mapping(target = "clientName", source = "clientName")
     @Mapping(target = "clientAddress", source = "clientAddress")
+    // « Contact client » du reçu Laravel : à défaut de colonne telephone sur la
+    // facture (absente de la base migrée), on reprend le téléphone du patient lié.
+    @Mapping(target = "clientContact", expression = "java(invoice.getPatient() != null ? "
+            + "java.util.stream.Stream.of(invoice.getPatient().getTelephone1(), invoice.getPatient().getTelephone2())"
+            + ".filter(t -> t != null && !t.isBlank()).reduce((a, b) -> a + \" \" + b).orElse(null) : null)")
     @Mapping(target = "date", source = "date")
     @Mapping(target = "subtotal", source = "subtotal")
     @Mapping(target = "statusInvoice", source = "statusInvoice")
@@ -40,7 +45,7 @@ public interface FinanceMapper {
                 dto.id(), dto.code(), dto.testOrderId(), dto.testOrderCode(),
                 dto.patientId(), dto.patientName(), dto.patientCode(),
                 dto.contratId(), dto.contratName(),
-                dto.clientName(), dto.clientAddress(), dto.date(), dto.subtotal(),
+                dto.clientName(), dto.clientAddress(), dto.clientContact(), dto.date(), dto.subtotal(),
                 dto.total(), dto.paid(), dto.status(), dto.statusInvoice(), dto.payment(),
                 dto.codeMecef(), dto.codeNormalise(), dto.qrcode(), dto.referenceCode(),
                 refund,
@@ -57,7 +62,7 @@ public interface FinanceMapper {
                 dto.id(), dto.code(), dto.testOrderId(), dto.testOrderCode(),
                 dto.patientId(), dto.patientName(), dto.patientCode(),
                 dto.contratId(), dto.contratName(),
-                dto.clientName(), dto.clientAddress(), dto.date(), dto.subtotal(),
+                dto.clientName(), dto.clientAddress(), dto.clientContact(), dto.date(), dto.subtotal(),
                 dto.total(), dto.paid(), dto.status(), dto.statusInvoice(), dto.payment(),
                 dto.codeMecef(), dto.codeNormalise(), qrcode, dto.referenceCode(),
                 dto.refund(),

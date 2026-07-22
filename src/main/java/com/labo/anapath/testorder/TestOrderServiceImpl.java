@@ -264,7 +264,13 @@ public class TestOrderServiceImpl implements TestOrderService {
         if (dto.getIsUrgent() != null) order.setIsUrgent(dto.getIsUrgent());
         if (dto.getOption() != null) order.setOption(dto.getOption());
         if (dto.getTestAffiliate() != null) order.setTestAffiliate(dto.getTestAffiliate());
-        if (dto.getAssignedToUserId() != null) order.setAssignedToUserId(dto.getAssignedToUserId());
+        // « Affecter à » (Laravel : attribuate_doctor_id) = docteur signataire.
+        // On aligne attribuateDoctorId ET assignedToUserId sur le même utilisateur
+        // pour que « Mon espace » et les stats d'assignation restent cohérents.
+        if (dto.getAssignedToUserId() != null) {
+            order.setAssignedToUserId(dto.getAssignedToUserId());
+            order.setAttribuateDoctorId(dto.getAssignedToUserId());
+        }
 
         if (dto.getDoctorId() != null) {
             order.setDoctor(doctorRepository.findByIdAndBranchId(dto.getDoctorId(), branchId)
@@ -451,7 +457,8 @@ public class TestOrderServiceImpl implements TestOrderService {
                 report != null && report.isDelivered(),
                 invoice != null ? invoice.getId() : null,
                 dto.archive(),
-                dto.testAffiliate()
+                dto.testAffiliate(),
+                dto.option()
         );
     }
 
@@ -798,19 +805,22 @@ public class TestOrderServiceImpl implements TestOrderService {
     @Override
     @Transactional(readOnly = true)
     public MyspaceStatsDto getMyspaceStats(UUID userId, UUID branchId) {
+        // Un super-admin voit TOUTE la donnée de la branche active (et non ses
+        // seules assignations) : « Mon espace » lui sert de vue d'ensemble du labo.
+        boolean seeAll = userRepository.isSuperAdmin(userId);
         // En attente / terminé sont déterminés par le statut du RAPPORT (comme Laravel),
         // car tous les bons assignés sont déjà au statut VALIDATED côté bon d'examen.
-        long totalAssigned  = testOrderRepository.countByAssignedToUserIdAndBranchId(userId, branchId);
-        long totalPending   = testOrderRepository.countAssignedReportPending(userId, branchId);
-        long totalValidated = testOrderRepository.countAssignedReportDone(userId, branchId);
-        long totalUrgent    = testOrderRepository.countUrgentByAssignedToUserIdAndBranchId(userId, branchId);
+        long totalAssigned  = testOrderRepository.countByAssignedToUserIdAndBranchId(userId, branchId, seeAll);
+        long totalPending   = testOrderRepository.countAssignedReportPending(userId, branchId, seeAll);
+        long totalValidated = testOrderRepository.countAssignedReportDone(userId, branchId, seeAll);
+        long totalUrgent    = testOrderRepository.countUrgentByAssignedToUserIdAndBranchId(userId, branchId, seeAll);
         LocalDateTime cutoff = LocalDateTime.now().minusDays(21);
-        long totalLate      = testOrderRepository.countLateByAssignedToUserIdAndBranchId(userId, branchId, cutoff);
+        long totalLate      = testOrderRepository.countLateByAssignedToUserIdAndBranchId(userId, branchId, cutoff, seeAll);
 
         List<UUID> immunoTypeIds = typeOrderRepository.findImmunoTypeIds(branchId);
         long totalImmunoPending = immunoTypeIds.isEmpty() ? 0L
                 : testOrderRepository.countImmunoPendingByAssignedToUserId(
-                        userId, branchId, immunoTypeIds);
+                        userId, branchId, immunoTypeIds, seeAll);
 
         return new MyspaceStatsDto(totalAssigned, totalPending, totalValidated,
                 totalImmunoPending, totalUrgent, totalLate);
@@ -842,10 +852,26 @@ public class TestOrderServiceImpl implements TestOrderService {
         String priorityParam = (priority != null && !priority.isBlank()) ? priority : null;
         String fromParam = (from != null && !from.isBlank()) ? from : null;
         String toParam = (to != null && !to.isBlank()) ? to : null;
-        Page<TestOrderResponseDto> result = testOrderRepository
+        // Un super-admin voit tous les bons de la branche, pas seulement les siens.
+        boolean seeAll = userRepository.isSuperAdmin(userId);
+        Page<TestOrder> orderPage = testOrderRepository
                 .findMyspaceOrders(userId, branchId, statusParam, typeOrderParam, priorityParam,
-                        fromParam, toParam, searchParam, pageRequest)
-                .map(testOrderMapper::toResponseDto);
+                        fromParam, toParam, searchParam, seeAll, pageRequest);
+
+        // Enrichissement report + facture (batch, anti N+1) pour que la colonne
+        // « Compte rendu » reflète le vrai statut (Valider / En attente / Non enregistré)
+        // au lieu de rester « Non renseigné » partout.
+        List<UUID> ids = orderPage.getContent().stream().map(TestOrder::getId).toList();
+        Map<UUID, Report> reportMap = reportRepository.findByTestOrder_IdIn(ids)
+                .stream().collect(Collectors.toMap(
+                        r -> r.getTestOrder().getId(), r -> r, (a, b) -> a));
+        Map<UUID, Invoice> invoiceMap = invoiceRepository.findByTestOrder_IdIn(ids)
+                .stream().collect(Collectors.toMap(
+                        i -> i.getTestOrder().getId(), i -> i, (a, b) -> a));
+
+        Page<TestOrderResponseDto> result = orderPage.map(order -> enrichDto(
+                testOrderMapper.toResponseDto(order),
+                reportMap.get(order.getId()), invoiceMap.get(order.getId())));
         return PageResponse.of(result);
     }
 

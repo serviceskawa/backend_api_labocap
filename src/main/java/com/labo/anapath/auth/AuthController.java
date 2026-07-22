@@ -3,6 +3,7 @@ package com.labo.anapath.auth;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.security.JwtProperties;
 import com.labo.anapath.common.security.UserPrincipal;
+import com.labo.anapath.branch.UserBranchResponseDto;
 import com.labo.anapath.user.UserResponseDto;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -218,6 +220,24 @@ public class AuthController {
             @AuthenticationPrincipal UserPrincipal principal) {
         UserResponseDto userDto = authService.me(principal.getId(), principal.getBranchId());
         return ResponseEntity.ok(ApiResponse.success("Profil utilisateur", userDto));
+    }
+
+    /**
+     * Liste les branches (agences/sites) accessibles par l'utilisateur connecté.
+     * <p>
+     * Alimente l'écran de sélection de branche du front (analogue de la page
+     * {@code select-branch} de Laravel). Endpoint authentifié mais exempté de
+     * l'exigence de branche active — il sert précisément à la choisir.
+     * </p>
+     *
+     * @param principal utilisateur authentifié extrait du JWT
+     * @return liste des branches accessibles, branche(s) par défaut en tête
+     */
+    @GetMapping("/branches")
+    public ResponseEntity<ApiResponse<List<UserBranchResponseDto>>> branches(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        List<UserBranchResponseDto> userBranches = authService.getUserBranches(principal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Branches accessibles", userBranches));
     }
 
     /**

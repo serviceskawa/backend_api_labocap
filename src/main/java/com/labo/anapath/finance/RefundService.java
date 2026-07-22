@@ -8,6 +8,8 @@ public interface RefundService {
 
     RefundRequestResponseDto create(RefundRequestCreateDto dto, UUID branchId, UUID userId);
 
+    RefundRequestResponseDto update(UUID id, RefundRequestUpdateDto dto, UUID userId);
+
     RefundRequestStatusResult updateStatus(UUID id, RefundRequestStatusUpdateDto dto, UUID userId);
 
     PageResponse<RefundRequestResponseDto> findAll(int page, int size, UUID branchId);

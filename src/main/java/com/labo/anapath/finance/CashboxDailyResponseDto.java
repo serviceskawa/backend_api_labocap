@@ -31,5 +31,6 @@ public record CashboxDailyResponseDto(
         UUID branchId,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
-        String userName
+        String userName,
+        String description
 ) {}

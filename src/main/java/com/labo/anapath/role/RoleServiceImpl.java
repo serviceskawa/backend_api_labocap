@@ -46,7 +46,7 @@ public class RoleServiceImpl implements RoleService {
     public PageResponse<RoleResponseDto> findAll(int page, int size, UUID branchId) {
         PageRequest pageRequest = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<RoleResponseDto> result = roleRepository.findByBranchId(branchId, pageRequest)
-                .map(roleMapper::toResponseDto);
+                .map(this::toDto);
         return PageResponse.of(result);
     }
 
@@ -56,7 +56,7 @@ public class RoleServiceImpl implements RoleService {
     public RoleResponseDto findById(UUID id, UUID branchId) {
         Role role = roleRepository.findByIdAndBranchId(id, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Rôle", id));
-        return roleMapper.toResponseDto(role);
+        return toDto(role);
     }
 
     /**
@@ -81,7 +81,7 @@ public class RoleServiceImpl implements RoleService {
         }
         Role saved = roleRepository.save(role);
         log.info("Rôle créé: {}", saved.getId());
-        return roleMapper.toResponseDto(saved);
+        return toDto(saved);
     }
 
     /**
@@ -107,7 +107,7 @@ public class RoleServiceImpl implements RoleService {
             role.setPermissions(permissions);
         }
         Role updated = roleRepository.save(role);
-        return roleMapper.toResponseDto(updated);
+        return toDto(updated);
     }
 
     /** {@inheritDoc} */
@@ -135,7 +135,7 @@ public class RoleServiceImpl implements RoleService {
         role.setPermissions(permissions);
         Role saved = roleRepository.save(role);
         log.info("Permissions assignées au rôle {}: {}", roleId, permissionIds);
-        return roleMapper.toResponseDto(saved);
+        return toDto(saved);
     }
 
     /**
@@ -157,5 +157,26 @@ public class RoleServiceImpl implements RoleService {
                    .replaceAll("[ùûü]", "u")
                    .replaceAll("[^a-z0-9]+", "-")
                    .replaceAll("^-|-$", "");
+    }
+
+    /**
+     * Mappe un rôle vers son DTO en y ajoutant le nom du créateur (colonne
+     * « Créé par » de la liste des rôles Laravel), résolu depuis {@code createdBy}.
+     */
+    private RoleResponseDto toDto(Role role) {
+        RoleResponseDto base = roleMapper.toResponseDto(role);
+        String creator = resolveCreatorName(role.getCreatedBy());
+        return new RoleResponseDto(
+                base.id(), base.name(), base.slug(), base.description(),
+                base.isAssignable(), base.permissions(), creator, base.createdAt());
+    }
+
+    private String resolveCreatorName(UUID createdBy) {
+        if (createdBy == null) {
+            return null;
+        }
+        return userRepository.findById(createdBy)
+                .map(u -> (u.getFirstname() + " " + u.getLastname()).trim())
+                .orElse(null);
     }
 }

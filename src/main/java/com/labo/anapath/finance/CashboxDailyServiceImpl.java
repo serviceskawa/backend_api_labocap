@@ -107,6 +107,7 @@ public class CashboxDailyServiceImpl implements CashboxDailyService {
         daily.setTotalCalculated(dto.getTotalCalculated());
         daily.setTotalConfirmation(dto.getTotalConfirmation());
         daily.setTotalEcart(dto.getTotalEcart());
+        daily.setDescription(dto.getDescription());
 
         // Recalculer le solde de la caisse
         Cashbox cashbox = daily.getCashbox();
@@ -199,7 +200,8 @@ public class CashboxDailyServiceImpl implements CashboxDailyService {
                 // updatedAt fait office de date de fermeture (statut 0 = clôturée) ;
                 // userName = agent ayant ouvert/fermé la session (colonnes vue Laravel).
                 d.getUpdatedAt(),
-                resolveUserName(d.getCreatedBy())
+                resolveUserName(d.getCreatedBy()),
+                d.getDescription()
         );
     }
 

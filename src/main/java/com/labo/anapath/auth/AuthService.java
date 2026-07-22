@@ -1,7 +1,9 @@
 package com.labo.anapath.auth;
 
+import com.labo.anapath.branch.UserBranchResponseDto;
 import com.labo.anapath.user.UserResponseDto;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -91,4 +93,18 @@ public interface AuthService {
      * @param request requête contenant l'adresse e-mail du compte
      */
     void resend2FA(Resend2FARequest request);
+
+    /**
+     * Liste les branches (agences/sites) accessibles par l'utilisateur connecté, pour
+     * alimenter l'écran de sélection de branche — analogue du chargement des branches
+     * depuis {@code branch_user} dans {@code TFAuthController::selectBranch} de Laravel.
+     * <p>
+     * Les branches marquées par défaut apparaissent en tête ; les affectations et
+     * branches supprimées ({@code deleted_at}) sont exclues.
+     * </p>
+     *
+     * @param userId UUID de l'utilisateur connecté
+     * @return liste des branches accessibles, branche(s) par défaut d'abord
+     */
+    List<UserBranchResponseDto> getUserBranches(UUID userId);
 }

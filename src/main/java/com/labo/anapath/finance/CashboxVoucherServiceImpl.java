@@ -70,7 +70,10 @@ public class CashboxVoucherServiceImpl implements CashboxVoucherService {
         voucher.setDescription(dto.getDescription());
         voucher.setSupplierId(dto.getSupplierId());
         voucher.setExpenseCategoryId(dto.getExpenseCategoryId());
-        voucher.setTicketFile(dto.getTicketFile());
+        // Fichier absent → conserver la pièce jointe existante (ne pas écraser avec null).
+        if (dto.getTicketFile() != null && !dto.getTicketFile().isBlank()) {
+            voucher.setTicketFile(dto.getTicketFile());
+        }
         return toDto(voucherRepository.save(voucher));
     }
 

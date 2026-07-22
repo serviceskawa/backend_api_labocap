@@ -74,5 +74,7 @@ public record TestOrderResponseDto(
         /** Chemin du fichier joint (pièce jointe du bon). */
         String archive,
         /** Référence de l'examen (examen de référence Immuno : code ou texte libre). */
-        String testAffiliate
+        String testAffiliate,
+        /** Option d'envoi des résultats : false = Appel, true = SMS (colonne `option`). */
+        Boolean option
 ) {}

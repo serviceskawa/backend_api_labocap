@@ -1,5 +1,6 @@
 package com.labo.anapath.user;
 
+import com.labo.anapath.branch.Branch;
 import com.labo.anapath.common.audit.AuditableEntity;
 import com.labo.anapath.role.Permission;
 import com.labo.anapath.role.Role;
@@ -52,9 +53,17 @@ public class User extends AuditableEntity {
     @Column(name = "password", nullable = false, length = 255)
     private String password;
 
-    /** Numéro de téléphone (optionnel). */
+    /** Numéro de téléphone (optionnel). Correspond au champ « Telephone » Laravel. */
     @Column(name = "phone", length = 20)
     private String phone;
+
+    /** Numéro WhatsApp (optionnel). */
+    @Column(name = "whatsapp", length = 255)
+    private String whatsapp;
+
+    /** Taux de commission en pourcentage (0–100). */
+    @Column(name = "commission", precision = 10, scale = 2)
+    private java.math.BigDecimal commission;
 
     /** Indique si le compte est actif. Un compte désactivé ne peut pas se connecter. */
     @Column(name = "is_active", nullable = false)
@@ -119,4 +128,17 @@ public class User extends AuditableEntity {
             inverseJoinColumns = @JoinColumn(name = "permission_id")
     )
     private List<Permission> directPermissions = new ArrayList<>();
+
+    /**
+     * Branches accessibles à l'utilisateur (calque du pivot {@code branch_user}
+     * de Laravel). La branche d'attache ({@code branchId}) reste la branche
+     * effective utilisée pour l'isolation des données.
+     */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "branch_user",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "branch_id")
+    )
+    private List<Branch> branches = new ArrayList<>();
 }

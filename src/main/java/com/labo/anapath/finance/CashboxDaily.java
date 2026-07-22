@@ -94,4 +94,8 @@ public class CashboxDaily extends AuditableEntity {
 
     @Column(name = "total_ecart", precision = 12, scale = 2)
     private BigDecimal totalEcart;
+
+    // Commentaire de clôture (calque Laravel « Commentaire » du récapitulatif).
+    @Column(name = "description", columnDefinition = "text")
+    private String description;
 }

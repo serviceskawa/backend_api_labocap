@@ -32,4 +32,7 @@ public class CashboxDailyCloseDto {
     private BigDecimal totalCalculated;
     private BigDecimal totalConfirmation;
     private BigDecimal totalEcart;
+
+    /** Commentaire de clôture (obligatoire côté front en cas d'écart). */
+    private String description;
 }

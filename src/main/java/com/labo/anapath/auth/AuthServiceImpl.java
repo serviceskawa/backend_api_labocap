@@ -1,5 +1,7 @@
 package com.labo.anapath.auth;
 
+import com.labo.anapath.branch.BranchRepository;
+import com.labo.anapath.branch.UserBranchResponseDto;
 import com.labo.anapath.common.exception.BusinessException;
 import com.labo.anapath.common.exception.InvalidCodeException;
 import com.labo.anapath.common.exception.UnauthorizedException;
@@ -34,6 +36,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -66,6 +69,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final TwoFaRepository twoFaRepository;
     private final com.labo.anapath.common.email.EmailService emailService;
+    private final BranchRepository branchRepository;
 
     /**
      * Affiche le code OTP 2FA en clair dans les logs applicatifs.
@@ -216,6 +220,27 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByIdAndBranchId(userId, branchId)
                 .orElseThrow(() -> new UnauthorizedException("Utilisateur non trouvé"));
         return userMapper.toResponseDto(user);
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Délègue à la requête native {@link BranchRepository#findAccessibleBranches} (jointure
+     * {@code branch_user}/{@code branches}) et mappe chaque ligne brute en
+     * {@link UserBranchResponseDto}. Chaque ligne : {@code [id, name, code, location, is_default]}.
+     * </p>
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserBranchResponseDto> getUserBranches(UUID userId) {
+        return branchRepository.findAccessibleBranches(userId).stream()
+                .map(row -> new UserBranchResponseDto(
+                        (UUID) row[0],
+                        (String) row[1],
+                        (String) row[2],
+                        (String) row[3],
+                        Boolean.TRUE.equals(row[4])))
+                .toList();
     }
 
     /**

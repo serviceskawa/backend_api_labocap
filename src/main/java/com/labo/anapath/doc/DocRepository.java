@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -15,6 +16,10 @@ import java.util.UUID;
 public interface DocRepository extends JpaRepository<Doc, UUID> {
 
     Page<Doc> findByBranchId(UUID branchId, Pageable pageable);
+
+    /** Documents d'une catégorie (volet droit de l'explorateur), du plus récent au plus ancien. */
+    List<Doc> findByBranchIdAndDocumentationCategoryIdOrderByCreatedAtDesc(
+            UUID branchId, UUID documentationCategoryId);
 
     /**
      * Documents partagés avec l'utilisateur : ceux dont le rôle de partage

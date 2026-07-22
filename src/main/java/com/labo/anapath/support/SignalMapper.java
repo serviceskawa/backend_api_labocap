@@ -8,6 +8,9 @@ import org.mapstruct.ReportingPolicy;
 public interface SignalMapper {
 
     @Mapping(target = "testOrderId", source = "testOrder.id")
+    @Mapping(target = "testOrderCode", source = "testOrder.code")
     @Mapping(target = "userId", source = "user.id")
+    @Mapping(target = "userName", expression = "java(signal.getUser() != null ? "
+            + "(signal.getUser().getLastname() + \" \" + signal.getUser().getFirstname()).trim() : null)")
     SignalResponseDto toResponseDto(Signal signal);
 }

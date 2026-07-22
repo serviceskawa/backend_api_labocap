@@ -53,6 +53,37 @@ public class RefundServiceImpl implements RefundService {
         return toResponseDto(saved);
     }
 
+    /**
+     * Édite une demande de remboursement (facture, motif, montant, note, pièce jointe).
+     *
+     * <p>Calque Laravel `refund.request.update` : un fichier absent conserve la
+     * pièce jointe existante ; le montant ne peut dépasser le total de la facture.</p>
+     */
+    @Override
+    @Transactional
+    public RefundRequestResponseDto update(UUID id, RefundRequestUpdateDto dto, UUID userId) {
+        RefundRequest refund = refundRequestRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Demande de remboursement", id));
+
+        Invoice invoice = invoiceRepository.findById(dto.getInvoiceId())
+                .orElseThrow(() -> new ResourceNotFoundException("Facture", dto.getInvoiceId()));
+
+        if (dto.getMontant().compareTo(invoice.getTotal()) > 0) {
+            throw new InvalidOperationException("REFUND_AMOUNT_EXCEEDS_INVOICE");
+        }
+
+        refund.setInvoice(invoice);
+        refund.setRefundReasonId(dto.getRefundReasonId());
+        refund.setMontant(dto.getMontant());
+        refund.setNote(dto.getNote());
+        // Fichier absent → on conserve la pièce jointe existante.
+        if (dto.getAttachment() != null && !dto.getAttachment().isBlank()) {
+            refund.setAttachment(dto.getAttachment());
+        }
+
+        return toResponseDto(refundRequestRepository.save(refund));
+    }
+
     @Override
     @Transactional
     public RefundRequestStatusResult updateStatus(UUID id, RefundRequestStatusUpdateDto dto, UUID userId) {

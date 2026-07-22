@@ -16,4 +16,16 @@ public class EmployeeContratRequestDto {
     private String type;
     @NotNull(message = "Le salaire est obligatoire")
     private BigDecimal salary;
+
+    // Onglet « Contrat »
+    private LocalDate probationEndDate;
+    private Integer weeklyWorkHours;
+    private Integer workingDaysPerWeek;
+    private String terminationReason;
+
+    // Onglet « Paie »
+    private BigDecimal hourlyGrossRate;
+    private BigDecimal transportAllowance;
+    private String iban;
+    private String bic;
 }
