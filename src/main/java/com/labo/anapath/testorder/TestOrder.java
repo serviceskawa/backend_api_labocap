@@ -19,6 +19,8 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.NotFound;
+import org.hibernate.annotations.NotFoundAction;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
@@ -118,18 +120,31 @@ public class TestOrder extends AuditableEntity {
     @Column(name = "assignment_date")
     private LocalDateTime assignmentDate;
 
-    /** Patient concerné par cet examen anatomopathologique. */
+    /**
+     * Patient concerné par cet examen anatomopathologique.
+     *
+     * <p>{@link NotFound} : les entités référencées ici sont en soft delete
+     * ({@code @SQLRestriction("deleted_at IS NULL")}). Une fois la cible supprimée,
+     * la clé étrangère du bon continue de pointer dessus alors que la ligne est
+     * devenue invisible : sans {@code IGNORE}, l'initialisation du proxy lève une
+     * {@code EntityNotFoundException} et fait échouer toute la liste des bons.
+     * On résout donc l'association à {@code null}, ce qui reproduit le comportement
+     * d'Eloquent côté Laravel (relation soft-deletée = null).
+     */
     @ManyToOne(fetch = FetchType.LAZY)
+    @NotFound(action = NotFoundAction.IGNORE)
     @JoinColumn(name = "patient_id", nullable = false)
     private Patient patient;
 
     /** Médecin prescripteur (peut être null si la demande est directe). */
     @ManyToOne(fetch = FetchType.LAZY)
+    @NotFound(action = NotFoundAction.IGNORE)
     @JoinColumn(name = "doctor_id")
     private Doctor doctor;
 
     /** Hôpital d'origine du prélèvement (peut être null pour les patients externes). */
     @ManyToOne(fetch = FetchType.LAZY)
+    @NotFound(action = NotFoundAction.IGNORE)
     @JoinColumn(name = "hospital_id")
     private Hospital hospital;
 
@@ -138,11 +153,13 @@ public class TestOrder extends AuditableEntity {
      * Détermine le mode de facturation (individuelle ou groupée).
      */
     @ManyToOne(fetch = FetchType.LAZY)
+    @NotFound(action = NotFoundAction.IGNORE)
     @JoinColumn(name = "contrat_id")
     private Contrat contrat;
 
     /** Type de bon d'examen (biopsie, cytologie, etc.). */
     @ManyToOne(fetch = FetchType.LAZY)
+    @NotFound(action = NotFoundAction.IGNORE)
     @JoinColumn(name = "type_order_id")
     private TypeOrder typeOrder;
 
