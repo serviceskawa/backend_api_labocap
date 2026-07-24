@@ -14,6 +14,8 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.NotFound;
+import org.hibernate.annotations.NotFoundAction;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -47,8 +49,16 @@ public class DetailTestOrder {
     @JoinColumn(name = "test_order_id", nullable = false)
     private TestOrder testOrder;
 
-    /** Analyse de laboratoire commandée. */
+    /**
+     * Analyse de laboratoire commandée.
+     *
+     * <p>{@link NotFound} : {@link LabTest} est en soft delete. Sans {@code IGNORE},
+     * la suppression d'une analyse encore référencée par un détail ferait échouer
+     * le mapping du bon (voir la note sur les associations de {@link TestOrder}).
+     * Le libellé reste disponible via le snapshot {@code testName}.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
+    @NotFound(action = NotFoundAction.IGNORE)
     @JoinColumn(name = "lab_test_id", nullable = false)
     private LabTest labTest;
 
