@@ -57,6 +57,22 @@ public class TicketController {
     }
 
     /**
+     * Retourne le nombre de tickets encore ouverts, pour le badge « Signaler un
+     * problème » du menu (helper Laravel {@code getnbrTicketPending()}) : tous les
+     * tickets pour un super-admin, seulement les siens pour les autres.
+     *
+     * @param principal utilisateur authentifié
+     * @return objet JSON {@code { "count": N }}
+     */
+    @GetMapping("/count-open")
+    @PreAuthorize("hasAuthority('view-tickets')")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> countOpen(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        long count = ticketService.countOpen(principal.getId(), principal.getBranchId());
+        return ResponseEntity.ok(ApiResponse.success(java.util.Map.of("count", count)));
+    }
+
+    /**
      * Retourne le détail d'un ticket par son identifiant.
      *
      * @param id identifiant UUID du ticket

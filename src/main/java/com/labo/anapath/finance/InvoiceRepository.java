@@ -260,6 +260,17 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
             @Param("year") int year);
 
     // Liste — compteur par type (vente / avoir)
+    /**
+     * Compte les factures non réglées de la branche, pour le badge « Factures » du menu
+     * — équivalent du helper Laravel {@code getnbrInvoicepending()}
+     * ({@code Invoice::where('paid', 0)->count()}).
+     *
+     * @param branchId identifiant de la branche
+     * @return nombre de factures impayées
+     */
+    @Query("SELECT COUNT(i) FROM Invoice i WHERE i.branchId = :branchId AND i.paid = FALSE")
+    long countUnpaidByBranchId(@Param("branchId") UUID branchId);
+
     @Query("""
             SELECT COUNT(i) FROM Invoice i
             WHERE i.branchId = :branchId AND i.statusInvoice = :statusInvoice

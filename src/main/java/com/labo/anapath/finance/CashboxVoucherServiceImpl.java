@@ -21,6 +21,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CashboxVoucherServiceImpl implements CashboxVoucherService {
 
+    /** Statut initial d'un bon de caisse (valeur Laravel, stockée telle quelle). */
+    private static final String STATUS_PENDING = "en attente";
+
     private final CashboxVoucherRepository voucherRepository;
     private final CashboxVoucherDetailRepository detailRepository;
     private final ExpenseRepository expenseRepository;
@@ -34,6 +37,12 @@ public class CashboxVoucherServiceImpl implements CashboxVoucherService {
         return PageResponse.of(voucherRepository.findByBranchId(branchId,
                 PageRequest.of(page, size, Sort.by("createdAt").descending()))
                 .map(this::toDto));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countPending(UUID branchId) {
+        return voucherRepository.countByBranchIdAndStatus(branchId, STATUS_PENDING);
     }
 
     @Override
@@ -56,7 +65,7 @@ public class CashboxVoucherServiceImpl implements CashboxVoucherService {
         voucher.setExpenseCategoryId(dto.getExpenseCategoryId());
         voucher.setTicketFile(dto.getTicketFile());
         voucher.setAmount(BigDecimal.ZERO);
-        voucher.setStatus("en attente");
+        voucher.setStatus(STATUS_PENDING);
 
         CashboxVoucher saved = voucherRepository.save(voucher);
         saved.setCode(generateCode(branchId, saved));

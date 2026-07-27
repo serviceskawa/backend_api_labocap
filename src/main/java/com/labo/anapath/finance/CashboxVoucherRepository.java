@@ -14,6 +14,16 @@ public interface CashboxVoucherRepository extends JpaRepository<CashboxVoucher, 
 
     Page<CashboxVoucher> findByBranchIdAndStatus(UUID branchId, String status, Pageable pageable);
 
+    /**
+     * Compte les bons de caisse encore en attente de traitement, pour le badge
+     * « Caisses » du menu — équivalent du helper Laravel
+     * {@code getnbrBonCaissePending()} (bon non encore payé).
+     *
+     * @param branchId identifiant de la branche
+     * @return nombre de bons au statut « en attente »
+     */
+    long countByBranchIdAndStatus(UUID branchId, String status);
+
     @org.springframework.data.jpa.repository.Query("SELECT COUNT(v) FROM CashboxVoucher v WHERE v.branchId = :branchId AND v.createdAt >= :startOfDay AND v.createdAt < :endOfDay")
     long countByBranchIdBetween(
             @org.springframework.data.repository.query.Param("branchId") UUID branchId,

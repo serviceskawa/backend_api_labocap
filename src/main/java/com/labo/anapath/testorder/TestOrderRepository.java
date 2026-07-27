@@ -530,4 +530,29 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             """)
     long countImmunoPending(@Param("branchId") UUID branchId,
                             @Param("typeIds") List<UUID> typeIds);
+
+    /**
+     * Compte les bons d'examen de la branche, restreints aux types donnés, dont le
+     * compte rendu associé <b>existe</b> et est en statut {@code DRAFT} ou
+     * {@code PENDING_REVIEW}.
+     *
+     * <p>Reprise exacte des helpers Laravel {@code getnbrTestOrderpending()} et
+     * {@code getnbrTestOrderImmunopending()}, qui utilisent {@code whereHas('report')}
+     * (le compte rendu doit donc exister) avec {@code whereIn('status', ['DRAFT',
+     * 'PENDING_REVIEW'])}.</p>
+     *
+     * @param branchId identifiant de la branche
+     * @param typeIds  liste des UUID des types de bons à compter
+     * @return nombre de bons en attente de compte rendu
+     */
+    @Query("""
+            SELECT COUNT(t) FROM TestOrder t
+            JOIN com.labo.anapath.report.Report r ON r.testOrder.id = t.id
+            WHERE t.branchId = :branchId
+              AND t.typeOrder.id IN :typeIds
+              AND r.status IN (com.labo.anapath.report.ReportStatus.DRAFT,
+                               com.labo.anapath.report.ReportStatus.PENDING_REVIEW)
+            """)
+    long countPendingReportByTypeIds(@Param("branchId") UUID branchId,
+                                     @Param("typeIds") List<UUID> typeIds);
 }

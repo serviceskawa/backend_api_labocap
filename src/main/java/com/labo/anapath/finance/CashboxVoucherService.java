@@ -10,6 +10,15 @@ public interface CashboxVoucherService {
 
     CashboxVoucherResponseDto findById(UUID id, UUID branchId);
 
+    /**
+     * Compte les bons de caisse en attente de traitement (badge « Caisses » du menu,
+     * équivalent du helper Laravel {@code getnbrBonCaissePending()}).
+     *
+     * @param branchId identifiant de la branche active
+     * @return nombre de bons au statut « en attente »
+     */
+    long countPending(UUID branchId);
+
     CashboxVoucherResponseDto create(CashboxVoucherRequestDto dto, UUID branchId);
 
     CashboxVoucherResponseDto update(UUID id, CashboxVoucherRequestDto dto);

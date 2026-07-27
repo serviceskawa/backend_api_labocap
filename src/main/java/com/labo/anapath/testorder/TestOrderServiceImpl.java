@@ -152,14 +152,29 @@ public class TestOrderServiceImpl implements TestOrderService {
     }
 
     /**
-     * Compte les bons immuno dont le rapport est en statut DRAFT ou inexistant.
+     * Compte les bons immuno en attente de compte rendu — reprise du helper Laravel
+     * {@code getnbrTestOrderImmunopending()} (compte rendu existant, en statut
+     * {@code DRAFT} ou {@code PENDING_REVIEW}).
      */
     @Override
     @Transactional(readOnly = true)
     public long countImmunoPending(UUID branchId) {
         List<UUID> immunoTypeIds = typeOrderRepository.findImmunoTypeIds(branchId);
         if (immunoTypeIds.isEmpty()) return 0L;
-        return testOrderRepository.countImmunoPending(branchId, immunoTypeIds);
+        return testOrderRepository.countPendingReportByTypeIds(branchId, immunoTypeIds);
+    }
+
+    /**
+     * Compte les bons de cytologie/histologie en attente de compte rendu — reprise du
+     * helper Laravel {@code getnbrTestOrderpending()} qui alimente le badge du menu
+     * « Demandes d'examen ».
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public long countPending(UUID branchId) {
+        List<UUID> typeIds = typeOrderRepository.findCytoHistoTypeIds(branchId);
+        if (typeIds.isEmpty()) return 0L;
+        return testOrderRepository.countPendingReportByTypeIds(branchId, typeIds);
     }
 
     @Override

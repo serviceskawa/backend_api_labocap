@@ -52,6 +52,13 @@ public class TicketServiceImpl implements TicketService {
     /** {@inheritDoc} */
     @Override
     @Transactional(readOnly = true)
+    public long countOpen(UUID userId, UUID branchId) {
+        return ticketRepository.countOpen(branchId, userId, userRepository.isSuperAdmin(userId));
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional(readOnly = true)
     public TicketResponseDto findById(UUID id) {
         return ticketMapper.toResponseDto(ticketRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Ticket", id)));

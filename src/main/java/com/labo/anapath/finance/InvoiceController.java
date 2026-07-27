@@ -80,6 +80,21 @@ public class InvoiceController {
         return ResponseEntity.ok(ApiResponse.success(Map.of("sales", sales, "credits", credits)));
     }
 
+    /**
+     * Nombre de factures impayées, pour le badge « Factures » du menu
+     * (helper Laravel {@code getnbrInvoicepending()}).
+     *
+     * @param principal utilisateur authentifié (branche active)
+     * @return objet JSON {@code { "count": N }}
+     */
+    @GetMapping("/count-unpaid")
+    @PreAuthorize("hasAuthority('view-invoices')")
+    public ResponseEntity<ApiResponse<Map<String, Long>>> countUnpaid(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                Map.of("count", invoiceRepository.countUnpaidByBranchId(principal.getBranchId()))));
+    }
+
     @GetMapping("/business")
     @PreAuthorize("hasAuthority('view-invoices')")
     public ResponseEntity<ApiResponse<BusinessDashboardDto>> getBusiness(
