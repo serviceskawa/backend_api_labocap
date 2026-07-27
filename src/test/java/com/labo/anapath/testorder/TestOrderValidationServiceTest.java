@@ -63,6 +63,7 @@ class TestOrderValidationServiceTest {
     @Mock private InvoiceDetailRepository invoiceDetailRepository;
     @Mock private UserRepository userRepository;
     @Mock private SettingRepository settingRepository;
+    @Mock private com.labo.anapath.setting.SettingAppRepository settingAppRepository;
 
     @InjectMocks
     private TestOrderServiceImpl testOrderService;
@@ -152,7 +153,8 @@ class TestOrderValidationServiceTest {
         when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
         when(testOrderRepository.findByBranchIdAndCodeNotNullAndYear(eq(BRANCH_ID), anyInt(), any()))
                 .thenReturn(Collections.emptyList());
-        when(settingRepository.findByKeyAndBranchId(anyString(), eq(BRANCH_ID)))
+        // Aucun préfixe configuré dans setting_apps → code « aa-0001 » (format Laravel)
+        when(settingAppRepository.findByKeyAndBranchId(anyString(), eq(BRANCH_ID)))
                 .thenReturn(Optional.empty());
         when(testOrderRepository.saveAndFlush(any()))
                 .thenThrow(new DataIntegrityViolationException("duplicate key"));
