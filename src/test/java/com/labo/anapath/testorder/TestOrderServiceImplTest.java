@@ -63,6 +63,7 @@ class TestOrderServiceImplTest {
     @Mock private com.labo.anapath.finance.InvoiceDetailRepository invoiceDetailRepository;
     @Mock private com.labo.anapath.user.UserRepository userRepository;
     @Mock private com.labo.anapath.setting.SettingRepository settingRepository;
+    @Mock private com.labo.anapath.setting.SettingAppRepository settingAppRepository;
     @Mock private FileStorageService fileStorageService;
     @Mock private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 

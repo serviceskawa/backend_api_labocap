@@ -39,6 +39,16 @@ public class JwtTokenProvider {
     private final JwtProperties jwtProperties;
 
     /**
+     * Durée de validité du token temporaire de challenge 2FA (5 minutes).
+     * <p>
+     * Exposée pour que le client puisse afficher un décompte et verrouiller l'écran
+     * de connexion tant que le challenge en cours n'a pas expiré (analogue de la
+     * session {@code user_2fa} de Laravel).
+     * </p>
+     */
+    public static final long TEMP_TOKEN_VALIDITY_MS = 300_000L;
+
+    /**
      * Construit la clé HMAC-SHA à partir du secret configuré.
      *
      * @return clé de signature prête à l'emploi pour JJWT
@@ -89,7 +99,7 @@ public class JwtTokenProvider {
      */
     public String generateTempToken(UUID userId) {
         Date now = new Date();
-        Date expiry = new Date(now.getTime() + 300_000L); // 5 minutes
+        Date expiry = new Date(now.getTime() + TEMP_TOKEN_VALIDITY_MS); // 5 minutes
 
         return Jwts.builder()
                 .id(UUID.randomUUID().toString())

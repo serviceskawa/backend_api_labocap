@@ -112,7 +112,8 @@ public class AuthServiceImpl implements AuthService {
                 // Générer et envoyer l'OTP par email
                 sendAndStoreOtp(user);
                 log.info("2FA challenge requis pour: {}", maskEmail(request.getEmail()));
-                return LoginResponse.requires2fa(tempToken);
+                return LoginResponse.requires2fa(
+                        tempToken, JwtTokenProvider.TEMP_TOKEN_VALIDITY_MS / 1000);
             }
 
             String accessToken = jwtTokenProvider.generateToken(userPrincipal);

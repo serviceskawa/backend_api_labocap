@@ -17,7 +17,8 @@ import com.labo.anapath.user.UserResponseDto;
  *
  * @param accessToken  token d'accès JWT — non sérialisé en JSON, transmis via cookie HttpOnly
  * @param refreshToken token de rafraîchissement JWT — non sérialisé en JSON, transmis via cookie HttpOnly
- * @param expiresIn    durée de validité du token d'accès en secondes (null si challenge 2FA)
+ * @param expiresIn    durée de validité en secondes — du token d'accès en connexion directe,
+ *                     du token temporaire de challenge lorsque {@code requires2fa = true}
  * @param user         informations de l'utilisateur connecté (null si challenge 2FA)
  * @param requires2fa  {@code true} si un challenge TOTP est requis pour finaliser la connexion
  * @param tempToken    token temporaire de challenge 2FA valide 5 min (null si pas de 2FA)
@@ -56,9 +57,12 @@ public record LoginResponse(
      * Fabrique une réponse indiquant qu'un challenge 2FA est requis.
      *
      * @param tempToken token temporaire à présenter sur {@code /api/v1/auth/2fa/challenge}
-     * @return réponse avec {@code requires2fa = true} et uniquement le token temporaire
+     * @param expiresIn durée de validité restante du challenge, en secondes — permet au
+     *                  client d'afficher un décompte et de verrouiller l'écran de connexion
+     *                  tant que le code n'a pas expiré
+     * @return réponse avec {@code requires2fa = true}, le token temporaire et sa durée de vie
      */
-    public static LoginResponse requires2fa(String tempToken) {
-        return new LoginResponse(null, null, null, null, true, tempToken);
+    public static LoginResponse requires2fa(String tempToken, long expiresIn) {
+        return new LoginResponse(null, null, expiresIn, null, true, tempToken);
     }
 }

@@ -2,6 +2,7 @@ package com.labo.anapath.auth;
 
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.security.JwtProperties;
+import com.labo.anapath.common.security.JwtTokenProvider;
 import com.labo.anapath.common.security.UserPrincipal;
 import com.labo.anapath.branch.UserBranchResponseDto;
 import com.labo.anapath.user.UserResponseDto;
@@ -50,6 +51,18 @@ public class AuthController {
     private static final String API_PATH        = "/";
     private static final String REFRESH_PATH    = "/api/v1/auth/refresh";
 
+    /**
+     * Cookie HttpOnly portant le token temporaire d'un challenge 2FA en cours.
+     * <p>
+     * Équivalent stateless de la session Laravel « authentifié mais {@code user_2fa}
+     * absent » : sa présence signifie qu'un utilisateur a validé ses identifiants et
+     * doit saisir le code reçu par e-mail. Le front (proxy Next) s'en sert pour
+     * interdire le retour à l'écran de connexion et pour n'autoriser l'écran de
+     * saisie du code que dans ce contexte. Il expire de lui-même avec le token (5 min).
+     * </p>
+     */
+    private static final String PENDING_2FA_COOKIE = "pending_2fa";
+
     private final AuthService authService;
     private final TwoFaService twoFaService;
     private final JwtProperties jwtProperties;
@@ -84,7 +97,13 @@ public class AuthController {
             @Valid @RequestBody LoginRequest request,
             HttpServletResponse response) {
         LoginResponse loginResponse = authService.login(request);
-        if (!Boolean.TRUE.equals(loginResponse.requires2fa())) {
+        if (Boolean.TRUE.equals(loginResponse.requires2fa())) {
+            // Challenge en cours : le token temporaire est aussi posé en cookie HttpOnly
+            // pour que la validation du code ne dépende pas d'un stockage navigateur
+            // (onglet fermé, autre onglet…) et pour que le front puisse verrouiller
+            // l'écran de connexion tant que le challenge n'a pas expiré.
+            writePending2faCookie(response, loginResponse.tempToken());
+        } else {
             writeTokenCookies(response, loginResponse);
         }
         return ResponseEntity.ok(ApiResponse.success("Connexion réussie", loginResponse));
@@ -134,6 +153,7 @@ public class AuthController {
         }
         authService.logout(token);
         clearTokenCookies(response);
+        clearPending2faCookie(response);
         return ResponseEntity.ok(ApiResponse.success("Déconnexion réussie", null));
     }
 
@@ -190,17 +210,29 @@ public class AuthController {
     }
 
     /**
-     * Valide le code TOTP dans le cadre du flux de challenge 2FA et pose les cookies définitifs.
+     * Valide le code reçu par e-mail dans le cadre du flux de challenge 2FA et pose les
+     * cookies définitifs.
+     * <p>
+     * Le token temporaire est lu depuis le corps de la requête ou, à défaut, depuis le
+     * cookie HttpOnly {@code pending_2fa} posé au login : le client n'a donc jamais besoin
+     * de le conserver lui-même. Le cookie de challenge est effacé en cas de succès.
+     * </p>
      *
-     * @param request  corps contenant le token temporaire et le code TOTP
-     * @param response réponse HTTP pour poser les cookies access + refresh
+     * @param request     corps contenant le code reçu par e-mail (et éventuellement le token temporaire)
+     * @param httpRequest requête HTTP pour lire le cookie de challenge
+     * @param response    réponse HTTP pour poser les cookies access + refresh
      * @return métadonnées de l'utilisateur connecté
      */
     @PostMapping("/2fa/challenge")
     public ResponseEntity<ApiResponse<LoginResponse>> challenge2fa(
             @Valid @RequestBody TwoFactorVerifyRequest request,
+            HttpServletRequest httpRequest,
             HttpServletResponse response) {
+        if (!StringUtils.hasText(request.getTempToken())) {
+            request.setTempToken(extractCookieValue(httpRequest, PENDING_2FA_COOKIE));
+        }
         LoginResponse loginResponse = authService.challenge(request);
+        clearPending2faCookie(response);
         writeTokenCookies(response, loginResponse);
         return ResponseEntity.ok(ApiResponse.success("Authentification 2FA réussie", loginResponse));
     }
@@ -309,6 +341,37 @@ public class AuthController {
 
         response.addHeader(HttpHeaders.SET_COOKIE, accessCookie.toString());
         response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString());
+    }
+
+    /**
+     * Pose le cookie HttpOnly {@code pending_2fa} portant le token temporaire de challenge.
+     * <p>
+     * Sa durée de vie est exactement celle du token ({@link JwtTokenProvider#TEMP_TOKEN_VALIDITY_MS}) :
+     * le verrouillage de l'écran de connexion côté front se lève donc tout seul à l'expiration
+     * du code, sans action de l'utilisateur.
+     * </p>
+     */
+    private void writePending2faCookie(HttpServletResponse response, String tempToken) {
+        ResponseCookie pendingCookie = ResponseCookie.from(PENDING_2FA_COOKIE, tempToken)
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .sameSite("Strict")
+                .path(API_PATH)
+                .maxAge(Duration.ofMillis(JwtTokenProvider.TEMP_TOKEN_VALIDITY_MS))
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, pendingCookie.toString());
+    }
+
+    /** Efface le cookie de challenge 2FA (challenge abouti ou déconnexion). */
+    private void clearPending2faCookie(HttpServletResponse response) {
+        ResponseCookie clearPending = ResponseCookie.from(PENDING_2FA_COOKIE, "")
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .sameSite("Strict")
+                .path(API_PATH)
+                .maxAge(0)
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, clearPending.toString());
     }
 
     /**

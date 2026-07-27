@@ -20,6 +20,8 @@ import com.labo.anapath.report.LogReportRepository;
 import com.labo.anapath.report.Report;
 import com.labo.anapath.report.ReportRepository;
 import com.labo.anapath.report.ReportStatus;
+import com.labo.anapath.setting.SettingApp;
+import com.labo.anapath.setting.SettingAppRepository;
 import com.labo.anapath.setting.SettingRepository;
 import com.labo.anapath.test.LabTest;
 import com.labo.anapath.test.LabTestRepository;
@@ -75,8 +77,12 @@ public class TestOrderServiceImpl implements TestOrderService {
     private final InvoiceDetailRepository invoiceDetailRepository;
     private final UserRepository userRepository;
     private final SettingRepository settingRepository;
+    private final SettingAppRepository settingAppRepository;
     private final FileStorageService fileStorageService;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
+    /** Clé du préfixe de code de bon d'examen, dans {@code setting_apps} (comme Laravel). */
+    private static final String PREFIXE_CODE_EXAMEN_KEY = "prefixe_code_demande_examen";
 
     @Override
     @Transactional(readOnly = true)
@@ -571,16 +577,18 @@ public class TestOrderServiceImpl implements TestOrderService {
     /**
      * Génère le prochain code unique de bon d'examen pour la branche et l'année en cours.
      *
-     * <p>Format : {@code {préfixe}{aa}-{séq4}} — ex. {@code EX26-0001}.
-     * Le préfixe est configurable via le paramètre {@code prefixe_code_demande_examen}
-     * dans les réglages de la branche (valeur par défaut : {@code EX}).
+     * <p>Format Laravel de référence : {@code {préfixe}{aa}-{séq4}} — soit {@code 26-0001}
+     * avec le préfixe par défaut, qui est <b>vide</b> (cf. {@code SettingAppMissingKeysSeeder}
+     * et les codes historiques « 25-3091 »). Le préfixe est le réglage
+     * {@code prefixe_code_demande_examen} de la table {@code setting_apps} — la même que
+     * lit le helper {@code generateCodeExamen()} de Laravel.
      * La séquence repart à {@code 0001} chaque début d'année civile.
      *
      * @param branchId identifiant de la branche pour la numérotation isolée
      * @return le code généré, non encore persisté (peut échouer sur contrainte d'unicité)
      */
     // Algorithme generateCodeExamen — équivalent Java de la fonction PHP Laravel
-    // Format : {prefix}{yy2digit}-{seq4}  ex: EX26-0001
+    // Format : {prefix}{yy2digit}-{seq4}  ex: 26-0001
     //
     // Robustesse (cas des données migrées Laravel) :
     //  - la séquence max est calculée NUMÉRIQUEMENT (pas en tri texte) et filtrée
@@ -592,10 +600,13 @@ public class TestOrderServiceImpl implements TestOrderService {
         int year = LocalDate.now().getYear();
         String yearToken = String.valueOf(year % 100);
 
-        // Préfixe historique Laravel (vide par défaut → « 26-0003 », pas « EX26-0003 »).
-        String prefix = settingRepository
-                .findByKeyAndBranchId("prefixe_code_demande_examen", branchId)
-                .map(s -> s.getValue() != null ? s.getValue() : "")
+        // Préfixe historique Laravel, lu dans `setting_apps` comme le helper PHP
+        // (SettingApp::where('key','prefixe_code_demande_examen')). Vide par défaut
+        // → « 26-0003 », et non « EX26-0003 » ni « ABCD26-0003 ».
+        String prefix = settingAppRepository
+                .findByKeyAndBranchId(PREFIXE_CODE_EXAMEN_KEY, branchId)
+                .map(SettingApp::getValue)
+                .map(String::trim)
                 .orElse("");
 
         int next = testOrderRepository.findMaxSequenceForYear(branchId, yearToken) + 1;
