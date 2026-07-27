@@ -39,13 +39,24 @@ public interface TestOrderService {
     PageResponse<TestOrderResponseDto> findAllImmuno(int page, int size, TestOrderFilterDto filter, UUID branchId);
 
     /**
-     * Retourne le nombre de bons immuno dont le rapport est en statut DRAFT
-     * (ou inexistant), pour alimenter le badge sidebar.
+     * Retourne le nombre de bons immuno en attente de compte rendu (compte rendu
+     * existant, en statut {@code DRAFT} ou {@code PENDING_REVIEW}), pour alimenter le
+     * badge sidebar — équivalent du helper Laravel {@code getnbrTestOrderImmunopending()}.
      *
      * @param branchId identifiant de la branche (isolation multi-tenant)
      * @return nombre de bons immuno en attente
      */
     long countImmunoPending(UUID branchId);
+
+    /**
+     * Retourne le nombre de bons de cytologie/histologie en attente de compte rendu,
+     * pour le badge « Demandes d'examen » du menu — équivalent du helper Laravel
+     * {@code getnbrTestOrderpending()}.
+     *
+     * @param branchId identifiant de la branche (isolation multi-tenant)
+     * @return nombre de bons en attente
+     */
+    long countPending(UUID branchId);
 
     /**
      * Retourne un bon d'examen par son identifiant, filtré par branche (isolation multi-tenant).

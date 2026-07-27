@@ -44,6 +44,21 @@ public class CashboxVoucherController {
                 voucherService.findAll(page, size, principal.getBranchId())));
     }
 
+    /**
+     * Nombre de bons de caisse en attente de traitement, pour le badge « Caisses » du
+     * menu (helper Laravel {@code getnbrBonCaissePending()}).
+     *
+     * @param principal utilisateur authentifié (branche active)
+     * @return objet JSON {@code { "count": N }}
+     */
+    @GetMapping("/count-pending")
+    @PreAuthorize("hasAuthority('view-cashbox-tickets')")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> countPending(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                java.util.Map.of("count", voucherService.countPending(principal.getBranchId()))));
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('view-cashbox-tickets')")
     public ResponseEntity<ApiResponse<CashboxVoucherResponseDto>> findById(

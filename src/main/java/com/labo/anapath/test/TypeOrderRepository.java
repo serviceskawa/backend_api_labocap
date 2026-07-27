@@ -83,4 +83,18 @@ public interface TypeOrderRepository extends JpaRepository<TypeOrder, UUID> {
     @Query("SELECT t.id FROM TypeOrder t WHERE t.branchId = :branchId " +
             "AND LOWER(t.slug) IN ('immuno-interne', 'immuno-exterme')")
     List<UUID> findImmunoTypeIds(@Param("branchId") UUID branchId);
+
+    /**
+     * Retourne les identifiants des types de bons d'anatomo-cytopathologie
+     * (slugs {@code cytologie} et {@code histologie}) pour une branche.
+     *
+     * <p>Utilisé par le compteur du badge « Demandes d'examen » du menu, qui reprend
+     * le helper Laravel {@code getnbrTestOrderpending()}.</p>
+     *
+     * @param branchId identifiant de la succursale
+     * @return liste d'UUID des types cytologie/histologie (vide si aucun)
+     */
+    @Query("SELECT t.id FROM TypeOrder t WHERE t.branchId = :branchId " +
+            "AND LOWER(t.slug) IN ('cytologie', 'histologie')")
+    List<UUID> findCytoHistoTypeIds(@Param("branchId") UUID branchId);
 }

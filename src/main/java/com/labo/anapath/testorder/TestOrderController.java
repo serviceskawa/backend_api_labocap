@@ -163,6 +163,22 @@ public class TestOrderController {
         return ResponseEntity.ok(ApiResponse.success(java.util.Map.of("count", count)));
     }
 
+    /**
+     * Retourne le nombre de bons de cytologie/histologie en attente de compte rendu,
+     * pour le badge « Demandes d'examen » du menu (helper Laravel
+     * {@code getnbrTestOrderpending()}).
+     *
+     * @param principal principal Spring Security contenant le branchId
+     * @return objet JSON {@code { "count": N }}
+     */
+    @GetMapping("/count-pending")
+    @PreAuthorize("hasAuthority('view-test-orders')")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> countPending(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        long count = testOrderService.countPending(principal.getBranchId());
+        return ResponseEntity.ok(ApiResponse.success(java.util.Map.of("count", count)));
+    }
+
     // -------------------------------------------------------------------------
     // Myspace
     // -------------------------------------------------------------------------

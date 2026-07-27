@@ -20,6 +20,17 @@ public interface TicketService {
     PageResponse<TicketResponseDto> findAll(int page, int size, UUID branchId);
 
     /**
+     * Compte les tickets encore ouverts pour le badge du menu — tous les tickets de la
+     * filiale si l'utilisateur est super-admin, seulement les siens sinon (reprise du
+     * helper Laravel {@code getnbrTicketPending()}).
+     *
+     * @param userId   identifiant de l'utilisateur connecté
+     * @param branchId identifiant de la filiale
+     * @return nombre de tickets ouverts
+     */
+    long countOpen(UUID userId, UUID branchId);
+
+    /**
      * Retourne un ticket par son identifiant.
      *
      * @param id identifiant UUID du ticket
