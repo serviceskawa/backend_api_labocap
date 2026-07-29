@@ -301,16 +301,31 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
             @Param("year") int year);
 
     // Rapports — agrégats mensuels (Facturés / Avoirs / CA) pour une année
+    /**
+     * Récapitulatif mensuel des factures — alimente le tableau « Liste des Factures »
+     * de l'écran Rapports.
+     *
+     * <p>Formules reprises telles quelles de {@code InvoiceController::getInvoiceforDatatable}
+     * de Laravel, qui regroupe sur <b>updated_at</b> (date de dernier mouvement, donc
+     * d'encaissement) et non sur la date de création :</p>
+     * <ul>
+     *   <li>{@code facturated} : {@code sum(total)} de toutes les factures du mois,
+     *       ventes comme avoirs, payées ou non ;</li>
+     *   <li>{@code credits} : avoirs payés ({@code status_invoice = 1 AND paid}) ;</li>
+     *   <li>{@code turnover} : ventes payées ({@code status_invoice = 0 AND paid}).</li>
+     * </ul>
+     * Les encaissements sont ensuite calculés par le service ({@code turnover - credits}).
+     */
     @Query(value = """
             SELECT
-                EXTRACT(MONTH FROM created_at)::int as month,
-                COALESCE(SUM(CASE WHEN status_invoice = 0 THEN total ELSE 0 END), 0) as facturated,
+                EXTRACT(MONTH FROM updated_at)::int as month,
+                COALESCE(SUM(total), 0) as facturated,
                 COALESCE(SUM(CASE WHEN status_invoice = 1 AND paid = true THEN total ELSE 0 END), 0) as credits,
                 COALESCE(SUM(CASE WHEN status_invoice = 0 AND paid = true THEN total ELSE 0 END), 0) as turnover
             FROM invoices
             WHERE branch_id = :branchId AND deleted_at IS NULL
-              AND EXTRACT(YEAR FROM created_at) = :year
-            GROUP BY EXTRACT(MONTH FROM created_at)
+              AND EXTRACT(YEAR FROM updated_at) = :year
+            GROUP BY EXTRACT(MONTH FROM updated_at)
             ORDER BY month
             """, nativeQuery = true)
     List<Object[]> findMonthlyStatsRaw(

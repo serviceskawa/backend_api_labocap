@@ -6,11 +6,19 @@ import java.util.List;
 public class DashboardDto {
 
     // KPIs admin
+    /**
+     * Cartes et donut du tableau de bord admin.
+     *
+     * <p>{@code finishTest} / {@code noFinishTest} alimentent le graphique
+     * « STATUT D'EXAMENS » et reprennent le {@code $totalByStatus} de Laravel
+     * (bons d'examen joints à leur compte rendu, regroupés par statut).</p>
+     */
     public record AdminStats(
         long valeurPatient, double crPatient,
         long valeurClient, double crClient,
         long valeurTestOrder, double crTestOrder,
-        BigDecimal valeurInvoice, double crInvoice
+        BigDecimal valeurInvoice, double crInvoice,
+        long finishTest, long noFinishTest
     ) {}
 
     // Stats secrétariat
