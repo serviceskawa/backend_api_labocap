@@ -416,6 +416,30 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
     // Dashboard — comptages par statut de livraison
     long countByBranchIdAndIsDelivered(UUID branchId, boolean isDelivered);
 
+    /**
+     * Compte les comptes rendus de la branche dont le statut fait partie de la liste,
+     * en ne retenant que ceux rattachés à un bon d'examen.
+     *
+     * <p>Reprend le {@code $totalByStatus} de Laravel
+     * ({@code TestOrder::join('reports')->groupBy('reports.status')}) : le donut
+     * « STATUT D'EXAMENS » oppose les comptes rendus terminés (VALIDATED, DELIVERED)
+     * à ceux encore en attente (DRAFT, PENDING_REVIEW).</p>
+     *
+     * @param branchId identifiant de la branche
+     * @param statuses statuts à compter
+     * @return nombre de comptes rendus correspondants
+     */
+    @org.springframework.data.jpa.repository.Query("""
+            SELECT COUNT(r) FROM Report r
+            WHERE r.branchId = :branchId
+              AND r.testOrder IS NOT NULL
+              AND r.status IN :statuses
+            """)
+    long countByBranchIdAndStatusIn(
+            @org.springframework.data.repository.query.Param("branchId") UUID branchId,
+            @org.springframework.data.repository.query.Param("statuses")
+            java.util.List<com.labo.anapath.report.ReportStatus> statuses);
+
     // Dashboard — rapports du jour
     @Query(value = """
             SELECT r.id::text as id, r.test_order_id::text as testOrderId, t.code as code,

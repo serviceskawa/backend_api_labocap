@@ -6,6 +6,7 @@ import com.labo.anapath.contract.ContratRepository;
 import com.labo.anapath.finance.InvoiceRepository;
 import com.labo.anapath.patient.PatientRepository;
 import com.labo.anapath.report.ReportRepository;
+import com.labo.anapath.report.ReportStatus;
 import com.labo.anapath.test.LabTestRepository;
 import com.labo.anapath.testorder.TestOrderRepository;
 import com.labo.anapath.testorder.TestOrderStatus;
@@ -89,8 +90,15 @@ public class DashboardServiceImpl implements DashboardService {
                         .divide(prevInv, 2, RoundingMode.HALF_UP).doubleValue()
                 : 0.0;
 
+        // Donut « STATUT D'EXAMENS » — équivalent du $totalByStatus de Laravel :
+        // terminé = compte rendu validé ou remis, en attente = brouillon ou en relecture.
+        long finishTest = reportRepository.countByBranchIdAndStatusIn(branchId,
+                List.of(ReportStatus.VALIDATED, ReportStatus.DELIVERED));
+        long noFinishTest = reportRepository.countByBranchIdAndStatusIn(branchId,
+                List.of(ReportStatus.DRAFT, ReportStatus.PENDING_REVIEW));
+
         return new DashboardDto.AdminStats(valPatient, crPatient, valClient, crClient,
-                valTO, crTO, valInvoice, crInvoice);
+                valTO, crTO, valInvoice, crInvoice, finishTest, noFinishTest);
     }
 
     // -----------------------------------------------------------------------
@@ -213,13 +221,39 @@ public class DashboardServiceImpl implements DashboardService {
         BigDecimal totalToday = invoiceRepository.sumPaidByBranchIdAndDate(branchId, today);
         if (totalToday == null) totalToday = BigDecimal.ZERO;
 
-        List<DashboardDto.DayRevenue> currentWeekByDay = invoiceRepository.sumPaidByDayInRange(branchId, startCurrentWeek, endCurrentWeek)
-                .stream().map(p -> new DashboardDto.DayRevenue(p.getDate(), nullSafe(p.getTotal()))).toList();
-        List<DashboardDto.DayRevenue> lastWeekByDay = invoiceRepository.sumPaidByDayInRange(branchId, startLastWeek, endLastWeek)
-                .stream().map(p -> new DashboardDto.DayRevenue(p.getDate(), nullSafe(p.getTotal()))).toList();
+        // La requête ne renvoie que les jours ayant au moins une facture encaissée :
+        // on complète la semaine pour toujours livrer 7 points, du lundi au dimanche.
+        // Sans cela, le graphe du chiffre d'affaires n'a aucun point à tracer les
+        // semaines creuses, et les deux séries ne s'alignent pas jour par jour.
+        List<DashboardDto.DayRevenue> currentWeekByDay =
+                fillWeek(startCurrentWeek, invoiceRepository.sumPaidByDayInRange(branchId, startCurrentWeek, endCurrentWeek));
+        List<DashboardDto.DayRevenue> lastWeekByDay =
+                fillWeek(startLastWeek, invoiceRepository.sumPaidByDayInRange(branchId, startLastWeek, endLastWeek));
 
         return new DashboardDto.RevenueData(totalCurrentWeek, totalLastWeek, totalToday,
                 currentWeekByDay, lastWeekByDay);
+    }
+
+    /**
+     * Complète une série journalière sur les 7 jours de la semaine commençant à
+     * {@code weekStart} : chaque jour sans facture encaissée reçoit un total de zéro.
+     *
+     * @param weekStart lundi de la semaine concernée
+     * @param rows      lignes renvoyées par la base (uniquement les jours non vides)
+     * @return 7 points ordonnés du lundi au dimanche
+     */
+    private List<DashboardDto.DayRevenue> fillWeek(
+            LocalDate weekStart, List<DashboardProjection.DayRevenue> rows) {
+        java.util.Map<String, BigDecimal> byDate = new java.util.HashMap<>();
+        for (DashboardProjection.DayRevenue row : rows) {
+            byDate.put(row.getDate(), nullSafe(row.getTotal()));
+        }
+        List<DashboardDto.DayRevenue> week = new java.util.ArrayList<>(7);
+        for (int i = 0; i < 7; i++) {
+            String date = weekStart.plusDays(i).toString();
+            week.add(new DashboardDto.DayRevenue(date, byDate.getOrDefault(date, BigDecimal.ZERO)));
+        }
+        return week;
     }
 
     // -----------------------------------------------------------------------
