@@ -51,6 +51,20 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
 
     Optional<Invoice> findFirstByContratIdOrderByCreatedAtDesc(UUID contratId);
 
+    /**
+     * Retourne la facture la plus ancienne d'un contrat.
+     *
+     * <p>C'est la facture groupée d'un contrat {@code invoice_unique = true} : celle sur
+     * laquelle Laravel cumule les montants, via
+     * {@code Invoice::where('contrat_id', $id)->first()} — un {@code LIMIT 1} sans
+     * {@code ORDER BY}, donc la première ligne du tas, c'est-à-dire la plus ancienne.
+     * Le tri explicite rend le choix déterministe.
+     *
+     * @param contratId identifiant du contrat
+     * @return la facture la plus ancienne du contrat, si elle existe
+     */
+    Optional<Invoice> findFirstByContratIdOrderByCreatedAtAsc(UUID contratId);
+
     @Query(value = """
             SELECT i.* FROM invoices i
             WHERE i.deleted_at IS NULL AND i.branch_id = :branchId

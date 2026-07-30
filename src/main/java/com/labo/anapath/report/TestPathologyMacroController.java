@@ -126,7 +126,14 @@ public class TestPathologyMacroController {
             String patientName,
             Boolean isUrgent,
             LocalDateTime createdAt,
-            String typeOrderTitle
+            String typeOrderTitle,
+            /**
+             * Slug du type de bon. C'est sur lui que Laravel répartit les onglets
+             * (Histologie-Biopsie / Pièce opératoire / Cytologie) via
+             * {@code whereIn('slug', …)} ; le titre seul ne suffit pas, l'onglet
+             * « Histologie-Biopsie » couvrant deux slugs distincts.
+             */
+            String typeOrderSlug
     ) {}
 
     /** DTO de requête pour l'assignation d'un laborantin à un bon d'examen. */
@@ -435,13 +442,15 @@ public class TestPathologyMacroController {
                             ? o.getPatient().getFirstname() + " " + o.getPatient().getLastname()
                             : "";
                     String typeTitle = o.getTypeOrder() != null ? o.getTypeOrder().getTitle() : null;
+                    String typeSlug = o.getTypeOrder() != null ? o.getTypeOrder().getSlug() : null;
                     return new PendingMacroDto(
                             o.getId(),
                             o.getCode(),
                             patientName,
                             o.getIsUrgent(),
                             o.getCreatedAt(),
-                            typeTitle
+                            typeTitle,
+                            typeSlug
                     );
                 })
                 .toList();

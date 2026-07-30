@@ -5,6 +5,8 @@ import com.labo.anapath.common.exception.BusinessException;
 import com.labo.anapath.common.exception.DuplicateResourceException;
 import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
+import com.labo.anapath.client.Client;
+import com.labo.anapath.client.ClientRepository;
 import com.labo.anapath.contract.ContratRepository;
 import com.labo.anapath.contract.DetailsContrat;
 import com.labo.anapath.contract.DetailsContratRepository;
@@ -41,8 +43,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -67,6 +71,7 @@ public class TestOrderServiceImpl implements TestOrderService {
     private final DoctorRepository doctorRepository;
     private final HospitalRepository hospitalRepository;
     private final ContratRepository contratRepository;
+    private final ClientRepository clientRepository;
     private final DetailsContratRepository detailsContratRepository;
     private final TypeOrderRepository typeOrderRepository;
     private final LabTestRepository labTestRepository;
@@ -201,6 +206,9 @@ public class TestOrderServiceImpl implements TestOrderService {
     @Override
     @Transactional
     public TestOrderResponseDto create(TestOrderRequestDto dto, UUID branchId) {
+        assertNoDuplicateTests(dto.getDetails());
+        assertContractQuotaAvailable(dto.getContratId(), branchId);
+
         TestOrder order = new TestOrder();
         order.setBranchId(branchId);
         order.setCode(null);
@@ -280,6 +288,7 @@ public class TestOrderServiceImpl implements TestOrderService {
         if (order.getStatus() == TestOrderStatus.VALIDATED) {
             throw new InvalidOperationException("Impossible de modifier un bon d'examen déjà validé.");
         }
+        assertNoDuplicateTests(dto.getDetails());
         order.setPrelevementDate(dto.getPrelevementDate());
         order.setReferenceHopital(dto.getReferenceHopital());
         if (dto.getIsUrgent() != null) order.setIsUrgent(dto.getIsUrgent());
@@ -423,8 +432,12 @@ public class TestOrderServiceImpl implements TestOrderService {
             report.setBranchId(branchId);
             report.setTestOrder(order);
             report.setStatus(ReportStatus.DRAFT);
+            // Texte par défaut du compte rendu : Laravel lit `Setting::first()->placeholder`,
+            // le singleton de la table `settings`. L'ancienne lecture cherchait la clé
+            // `prefixe_code_demande_examen`, qui appartient à `setting_apps` et n'existe pas
+            // dans `settings` : le placeholder était donc toujours vide.
             String placeholder = settingRepository
-                    .findByKeyAndBranchId("prefixe_code_demande_examen", branchId)
+                    .findFirstByBranchIdOrderByCreatedAtAscIdAsc(branchId)
                     .map(s -> s.getPlaceholder() != null ? s.getPlaceholder() : "")
                     .orElse("");
             report.setDescription(placeholder);
@@ -505,6 +518,7 @@ public class TestOrderServiceImpl implements TestOrderService {
             invoice.setContrat(order.getContrat());
             invoice.setClientName(
                     order.getPatient().getFirstname() + " " + order.getPatient().getLastname());
+            invoice.setClientAddress(order.getPatient().getAdresse());
             invoice.setSubtotal(order.getSubtotal());
             invoice.setDiscount(order.getDiscount());
             invoice.setTotal(order.getTotal() != null
@@ -512,6 +526,11 @@ public class TestOrderServiceImpl implements TestOrderService {
             invoice.setCode(generateCodeFacture(branchId));
             invoice = invoiceRepository.save(invoice);
         } else {
+            // Laravel réécrit aussi l'identité du patient sur la facture existante.
+            invoice.setPatient(order.getPatient());
+            invoice.setClientName(
+                    order.getPatient().getFirstname() + " " + order.getPatient().getLastname());
+            invoice.setClientAddress(order.getPatient().getAdresse());
             invoice.setSubtotal(order.getSubtotal());
             invoice.setDiscount(order.getDiscount());
             invoice.setTotal(order.getTotal() != null
@@ -533,14 +552,26 @@ public class TestOrderServiceImpl implements TestOrderService {
      */
     // AC8: contrat groupé (invoice_unique=true) — équivalent de ->where('contrat_id', id)->first() Laravel
     private void processGroupedInvoice(TestOrder order) {
+        // Laravel cible `->where('contrat_id', $id)->first()`, soit la facture la PLUS
+        // ANCIENNE du contrat. Cibler la plus récente bloquait la validation dès qu'une
+        // facture postérieure était payée, alors que la facture groupée du contrat était
+        // encore ouverte.
         Invoice invoice = invoiceRepository
-                .findFirstByContratIdOrderByCreatedAtDesc(order.getContrat().getId())
+                .findFirstByContratIdOrderByCreatedAtAsc(order.getContrat().getId())
                 .orElse(null);
         if (invoice == null) {
             throw new BusinessException("CONTRACT_NO_INVOICE");
         }
         if (Boolean.TRUE.equals(invoice.getPaid())) {
             throw new BusinessException("CONTRACT_INVOICE_ALREADY_PAID");
+        }
+        // Laravel réécrit l'identité du client à chaque cumul, depuis le client du contrat.
+        Client client = order.getContrat().getClientId() != null
+                ? clientRepository.findById(order.getContrat().getClientId()).orElse(null)
+                : null;
+        if (client != null) {
+            invoice.setClientName(client.getName());
+            invoice.setClientAddress(client.getAdress());
         }
         double newSubtotal = (invoice.getSubtotal() != null ? invoice.getSubtotal() : 0.0)
                 + (order.getSubtotal() != null ? order.getSubtotal() : 0.0);
@@ -567,6 +598,110 @@ public class TestOrderServiceImpl implements TestOrderService {
      * @param details la liste des détails du bon d'examen
      */
     // Crée les InvoiceDetail pour les détails non encore facturés (status != false)
+    /**
+     * Refuse une liste d'analyses contenant deux fois la même analyse.
+     *
+     * <p>Calque du garde-fou Laravel {@code TestOrderController::details_store()}, qui teste
+     * {@code $test_order->details()->whereTestId($id)->exists()} avant d'insérer et renvoie
+     * « Examin deja ajouté ». Côté Next le front renvoie la liste complète des analyses à
+     * chaque ajout via {@code PUT /test-orders/{id}} : sans ce contrôle la même analyse peut
+     * être ajoutée deux fois, puis facturée deux fois à la validation du bon.
+     *
+     * @param details analyses demandées (peut être null ou vide)
+     * @throws BusinessException si un {@code labTestId} apparaît plus d'une fois
+     */
+    /**
+     * N'autorise que des images JPEG ou PNG parmi les fichiers téléversés.
+     *
+     * <p>Calque de la seule règle de validation de fichier de Laravel, dans
+     * {@code TestOrderController::createimagegallerie()} :
+     * {@code 'files_name.*' => 'file|mimes:jpg,png'}. La règle {@code mimes} de Laravel
+     * fusionne explicitement {@code jpg} et {@code jpeg}, et surtout elle contrôle le
+     * <em>contenu réel</em> du fichier ({@code guessExtension()} s'appuie sur les octets,
+     * pas sur le nom) : renommer un exécutable en {@code .png} ne passe pas.
+     *
+     * <p>On reproduit ce contrôle en lisant la signature du fichier plutôt que son
+     * extension ou son {@code Content-Type}, tous deux fournis par le client donc
+     * falsifiables.
+     *
+     * <p>Portée volontairement limitée à cet endpoint : Laravel ne valide aucun autre
+     * upload (pièce jointe de demande, documents, photos d'employé, justificatifs…).
+     *
+     * @param files fichiers reçus
+     * @throws BusinessException si l'un des fichiers n'est ni JPEG ni PNG
+     */
+    private void assertJpegOrPng(List<org.springframework.web.multipart.MultipartFile> files) {
+        if (files == null || files.isEmpty()) {
+            throw new BusinessException("Aucun fichier reçu.");
+        }
+        for (org.springframework.web.multipart.MultipartFile file : files) {
+            if (file.isEmpty() || !isJpegOrPng(file)) {
+                String name = file.getOriginalFilename() != null
+                        ? file.getOriginalFilename() : "fichier";
+                throw new BusinessException(
+                        "« " + name + " » n'est pas une image JPG ou PNG. "
+                                + "Seuls ces deux formats sont acceptés.");
+            }
+        }
+    }
+
+    /** Signature JPEG ({@code FF D8 FF}) ou PNG ({@code 89 50 4E 47 0D 0A 1A 0A}). */
+    private boolean isJpegOrPng(org.springframework.web.multipart.MultipartFile file) {
+        byte[] head = new byte[8];
+        try (java.io.InputStream in = file.getInputStream()) {
+            int read = in.readNBytes(head, 0, 8);
+            if (read < 3) return false;
+            boolean jpeg = (head[0] & 0xFF) == 0xFF && (head[1] & 0xFF) == 0xD8
+                    && (head[2] & 0xFF) == 0xFF;
+            boolean png = read >= 8
+                    && (head[0] & 0xFF) == 0x89 && head[1] == 'P' && head[2] == 'N' && head[3] == 'G'
+                    && (head[4] & 0xFF) == 0x0D && (head[5] & 0xFF) == 0x0A
+                    && (head[6] & 0xFF) == 0x1A && (head[7] & 0xFF) == 0x0A;
+            return jpeg || png;
+        } catch (java.io.IOException e) {
+            return false;
+        }
+    }
+
+    private void assertNoDuplicateTests(List<DetailTestOrderRequestDto> details) {
+        if (details == null || details.isEmpty()) {
+            return;
+        }
+        Set<UUID> seen = new HashSet<>();
+        for (DetailTestOrderRequestDto detail : details) {
+            UUID labTestId = detail.getLabTestId();
+            if (labTestId != null && !seen.add(labTestId)) {
+                throw new BusinessException("Cet examen est déjà ajouté à la demande.");
+            }
+        }
+    }
+
+    /**
+     * Vérifie que le contrat n'a pas atteint son plafond d'examens.
+     *
+     * <p>Calque de {@code TestOrderController::store()} en Laravel :
+     * {@code if ($contrat->nbr_tests != -1 && $contrat->orders->count() >= $contrat->nbr_tests)}.
+     * La valeur {@code -1} signifie « nombre d'examens illimité ».
+     *
+     * @param contratId identifiant du contrat de facturation (null = aucun contrat, rien à vérifier)
+     * @param branchId  identifiant de la branche (isolation multi-tenant)
+     * @throws BusinessException si le plafond du contrat est atteint
+     */
+    private void assertContractQuotaAvailable(UUID contratId, UUID branchId) {
+        if (contratId == null) {
+            return;
+        }
+        var contrat = contratRepository.findByIdAndBranchId(contratId, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Contrat", contratId));
+        if (contrat.getNbrTests() == -1) {
+            return; // illimité
+        }
+        if (testOrderRepository.countByContratId(contratId) >= contrat.getNbrTests()) {
+            throw new BusinessException(
+                    "Échec de l'enregistrement. Le nombre d'examen de ce contrat est atteint.");
+        }
+    }
+
     private void addInvoiceDetails(Invoice invoice, List<DetailTestOrder> details) {
         for (DetailTestOrder detail : details) {
             if (!Boolean.FALSE.equals(detail.getStatus())) { // null ou true = non facturé
@@ -737,6 +872,11 @@ public class TestOrderServiceImpl implements TestOrderService {
     public java.util.List<String> uploadImages(UUID id, UUID branchId, java.util.List<org.springframework.web.multipart.MultipartFile> files) {
         TestOrder order = testOrderRepository.findByIdAndBranchId(id, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", id));
+        // Laravel valide TOUTE la requête avant d'écrire quoi que ce soit
+        // (`$request->validate(...)` en tête de createimagegallerie) : si un seul
+        // fichier est refusé, aucun n'est enregistré. On garde ce comportement,
+        // sinon un lot mixte laisserait des images à moitié rangées.
+        assertJpegOrPng(files);
         java.util.List<String> existing = parseFilesName(order.getFilesName());
         for (org.springframework.web.multipart.MultipartFile file : files) {
             try {

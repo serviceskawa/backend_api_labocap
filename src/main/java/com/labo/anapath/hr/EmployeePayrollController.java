@@ -9,9 +9,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -43,6 +45,25 @@ public class EmployeePayrollController {
             @Valid @RequestBody EmployeePayrollRequestDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Fiche de paie créée", employeePayrollService.create(dto, employeeId)));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('edit-employees')")
+    public ResponseEntity<ApiResponse<EmployeePayrollResponseDto>> update(
+            @PathVariable UUID employeeId,
+            @PathVariable UUID id,
+            @Valid @RequestBody EmployeePayrollRequestDto dto) {
+        return ResponseEntity.ok(ApiResponse.success("Fiche de paie mise à jour",
+                employeePayrollService.update(id, dto, employeeId)));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('edit-employees')")
+    public ResponseEntity<ApiResponse<Void>> delete(
+            @PathVariable UUID employeeId,
+            @PathVariable UUID id) {
+        employeePayrollService.delete(id, employeeId);
+        return ResponseEntity.ok(ApiResponse.success("Fiche de paie supprimée", null));
     }
 
     @GetMapping("/{id}/pdf")
