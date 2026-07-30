@@ -8,6 +8,7 @@ public interface EmployeeTimeoffService {
     PageResponse<EmployeeTimeoffResponseDto> findAll(int page, int size, UUID employeeId);
     EmployeeTimeoffResponseDto findById(UUID id);
     EmployeeTimeoffResponseDto create(EmployeeTimeoffRequestDto dto, UUID employeeId);
+    EmployeeTimeoffResponseDto update(UUID id, EmployeeTimeoffRequestDto dto, UUID employeeId);
     EmployeeTimeoffResponseDto updateStatus(UUID id, TimeoffStatusUpdateDto dto);
     void delete(UUID id);
 }

@@ -278,8 +278,11 @@ public class ContratServiceImpl implements ContratService {
 
         ContratInvoiceDto invoiceDto = null;
         if (Boolean.TRUE.equals(contrat.getInvoiceUnique())) {
+            // Même facture que celle sur laquelle la validation d'un bon cumule les
+            // montants (TestOrderServiceImpl.processGroupedInvoice) : la plus ancienne.
+            // Sinon l'écran affiche une facture différente de celle réellement débitée.
             Invoice invoice = invoiceRepository
-                    .findFirstByContratIdOrderByCreatedAtDesc(contrat.getId())
+                    .findFirstByContratIdOrderByCreatedAtAsc(contrat.getId())
                     .orElse(null);
             if (invoice != null) {
                 boolean paid = Boolean.TRUE.equals(invoice.getPaid());

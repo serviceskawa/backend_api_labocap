@@ -25,7 +25,12 @@ public class FileStorageServiceImpl implements FileStorageService {
 
     private final Path basePath;
 
-    public FileStorageServiceImpl(@Value("${app.storage.path:./storage}") String basePath) {
+    // Même valeur par défaut que les deux autres services de stockage
+    // (testorder.FileStorageService et hr.FileStorageServiceImpl) : avec « ./storage »
+    // ce service écrivait et relisait ailleurs que les autres si `app.storage.path`
+    // venait à manquer — un fichier téléversé d'un côté aurait été introuvable de
+    // l'autre, et c'est ce service qui sert /api/v1/files/**.
+    public FileStorageServiceImpl(@Value("${app.storage.path:/tmp/labo/storage}") String basePath) {
         this.basePath = Paths.get(basePath).toAbsolutePath().normalize();
     }
 

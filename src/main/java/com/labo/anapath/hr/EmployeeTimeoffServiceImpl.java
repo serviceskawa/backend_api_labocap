@@ -75,6 +75,35 @@ public class EmployeeTimeoffServiceImpl implements EmployeeTimeoffService {
         }
     }
 
+    /**
+     * Modifie une demande de congé — dates et motif.
+     *
+     * <p>Équivalent de {@code EmployeeTimeoffController::update()} en Laravel
+     * (route {@code employee-timeoff-update}), qui manquait : seul le statut était
+     * modifiable, on pouvait donc approuver ou refuser une demande mais pas en
+     * corriger les dates.
+     *
+     * @param id         identifiant de la demande
+     * @param dto        nouvelles dates et motif
+     * @param employeeId employé propriétaire (contrôle de cohérence)
+     * @return la demande mise à jour
+     */
+    @Override
+    @Transactional
+    public EmployeeTimeoffResponseDto update(UUID id, EmployeeTimeoffRequestDto dto, UUID employeeId) {
+        EmployeeTimeoff timeoff = employeeTimeoffRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Congé", id));
+        // Sans ce contrôle, l'identifiant d'une demande suffirait à modifier le congé
+        // d'un autre employé que celui de l'URL.
+        if (!timeoff.getEmployee().getId().equals(employeeId)) {
+            throw new ResourceNotFoundException("Congé", id);
+        }
+        timeoff.setStartDate(dto.getStartDate());
+        timeoff.setEndDate(dto.getEndDate());
+        timeoff.setReason(dto.getReason());
+        return toDto(employeeTimeoffRepository.save(timeoff));
+    }
+
     @Override
     @Transactional
     public EmployeeTimeoffResponseDto updateStatus(UUID id, TimeoffStatusUpdateDto dto) {

@@ -52,6 +52,17 @@ public class EmployeeTimeoffController {
                 .body(ApiResponse.success("Congé créé", employeeTimeoffService.create(dto, employeeId)));
     }
 
+    /** Modifie dates et motif d'une demande — route Laravel {@code employee-timeoff-update}. */
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('edit-employees')")
+    public ResponseEntity<ApiResponse<EmployeeTimeoffResponseDto>> update(
+            @PathVariable UUID employeeId,
+            @PathVariable UUID id,
+            @Valid @RequestBody EmployeeTimeoffRequestDto dto) {
+        return ResponseEntity.ok(ApiResponse.success("Demande de congé mise à jour",
+                employeeTimeoffService.update(id, dto, employeeId)));
+    }
+
     @PutMapping("/{id}/status")
     @PreAuthorize("hasAuthority('edit-employees')")
     public ResponseEntity<ApiResponse<EmployeeTimeoffResponseDto>> updateStatus(

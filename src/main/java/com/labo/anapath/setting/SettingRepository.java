@@ -32,4 +32,22 @@ public interface SettingRepository extends JpaRepository<Setting, UUID> {
      * @return paramètre correspondant si présent
      */
     Optional<Setting> findByKeyAndBranchId(String key, UUID branchId);
+
+    /**
+     * Retourne la ligne de réglages la plus ancienne d'une filiale.
+     *
+     * <p>Équivalent du singleton {@code Setting::first()} de Laravel, dont
+     * {@code SettingController::report_store_placeholder()} et
+     * {@code TestOrderController::updateStatus()} lisent et écrivent la colonne
+     * {@code placeholder}. Le tri explicite rend le choix déterministe là où le
+     * {@code LIMIT 1} sans {@code ORDER BY} de Laravel dépend de l'ordre physique.
+     *
+     * <p>Le départage par {@code id} est indispensable : la base migrée contient deux
+     * lignes de réglages portant exactement le même {@code created_at}, un tri sur la
+     * seule date renverrait donc l'une ou l'autre au hasard.</p>
+     *
+     * @param branchId identifiant de la filiale
+     * @return la ligne de réglages la plus ancienne, si elle existe
+     */
+    Optional<Setting> findFirstByBranchIdOrderByCreatedAtAscIdAsc(UUID branchId);
 }

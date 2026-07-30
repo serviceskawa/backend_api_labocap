@@ -10,13 +10,19 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalTime;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class NotificationServiceImpl implements NotificationService {
 
-    private static final String AUDIO_FON = "https://caap.bj/wp-content/uploads/2023/06/RESULTAT-DISPONIBLE-FON-VF.mp3";
+    /** Début de la plage où un appel vocal automatique est permis (Laravel : 8h). */
+    private static final int CALL_WINDOW_START_HOUR = 8;
+    /** Fin de la plage où un appel vocal automatique est permis (Laravel : 18h). */
+    private static final int CALL_WINDOW_END_HOUR = 18;
+
+    private static final String AUDIO_FON ="https://caap.bj/wp-content/uploads/2023/06/RESULTAT-DISPONIBLE-FON-VF.mp3";
     private static final String AUDIO_EN  = "https://caap.bj/wp-content/uploads/2023/06/RESULTAT-DISPONIBLE-ANGLAIS-VF.mp3";
     private static final String AUDIO_FR  = "https://caap.bj/wp-content/uploads/2023/06/RESULTAT-DISPONIBLE-FRANCAIS-VF.mp3";
 
@@ -101,6 +107,45 @@ public class NotificationServiceImpl implements NotificationService {
         logAction(reportId, "SMS envoyé", userId, report.getBranchId());
 
         return new SmsResponseDto("sent");
+    }
+
+    /**
+     * Notifie le patient en arbitrant seul entre SMS et appel vocal.
+     *
+     * <p>Règle reprise de {@code ReportController::callOrSendSms()} :
+     * <ol>
+     *   <li>si le bon d'examen porte {@code option}, on envoie un SMS ;</li>
+     *   <li>sinon on lance un appel vocal, mais seulement entre
+     *       {@value #CALL_WINDOW_START_HOUR}h et {@value #CALL_WINDOW_END_HOUR}h ;</li>
+     *   <li>hors de cette plage, rien n'est envoyé.</li>
+     * </ol>
+     * Sans cet arbitrage, un appel automatique pouvait partir en pleine nuit.
+     */
+    @Override
+    @Transactional
+    public NotifyResponseDto notifyPatient(UUID reportId, UUID userId) {
+        Report report = reportRepository.findById(reportId)
+                .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", reportId));
+
+        boolean smsOption = report.getTestOrder() != null
+                && Boolean.TRUE.equals(report.getTestOrder().getOption());
+
+        if (smsOption) {
+            sendSms(reportId, userId);
+            return new NotifyResponseDto("SMS", reportId, null, "SMS envoyé au patient");
+        }
+
+        LocalTime now = LocalTime.now();
+        boolean withinCallWindow = !now.isBefore(LocalTime.of(CALL_WINDOW_START_HOUR, 0))
+                && !now.isAfter(LocalTime.of(CALL_WINDOW_END_HOUR, 0));
+        if (!withinCallWindow) {
+            return new NotifyResponseDto("NONE", reportId, null,
+                    "Aucun appel : hors de la plage autorisée ("
+                            + CALL_WINDOW_START_HOUR + "h–" + CALL_WINDOW_END_HOUR + "h)");
+        }
+
+        CallResponseDto call = callPatient(reportId, userId);
+        return new NotifyResponseDto("CALL", reportId, call.appelId(), "Appel vocal lancé");
     }
 
     @Override

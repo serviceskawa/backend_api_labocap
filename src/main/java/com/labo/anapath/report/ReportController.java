@@ -280,6 +280,20 @@ public class ReportController {
                 notificationService.sendSms(id, principal.getId())));
     }
 
+    /**
+     * Notifie le patient en laissant le serveur choisir le canal — équivalent de la
+     * route Laravel {@code report.callOrSendSms}. SMS si le bon porte l'option, sinon
+     * appel vocal et seulement entre 8h et 18h.
+     */
+    @PostMapping("/{id}/notify")
+    @PreAuthorize("hasAuthority('edit-reports')")
+    public ResponseEntity<ApiResponse<NotifyResponseDto>> notifyPatient(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        NotifyResponseDto result = notificationService.notifyPatient(id, principal.getId());
+        return ResponseEntity.ok(ApiResponse.success(result.message(), result));
+    }
+
     @GetMapping("/{id}/appel")
     @PreAuthorize("hasAuthority('view-reports')")
     public ResponseEntity<ApiResponse<AppelResponseDto>> getAppelStatus(@PathVariable UUID id) {

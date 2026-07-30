@@ -172,7 +172,7 @@ class TestOrderValidationServiceTest {
         when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
         when(testOrderRepository.findByBranchIdAndCodeNotNullAndYear(eq(BRANCH_ID), anyInt(), any()))
                 .thenReturn(Collections.emptyList());
-        when(settingRepository.findByKeyAndBranchId(anyString(), eq(BRANCH_ID)))
+        when(settingRepository.findFirstByBranchIdOrderByCreatedAtAscIdAsc(eq(BRANCH_ID)))
                 .thenReturn(Optional.empty());
         when(testOrderRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
         when(reportRepository.findByTestOrderId(any())).thenReturn(Optional.empty());
@@ -203,7 +203,7 @@ class TestOrderValidationServiceTest {
         order.setStatus(TestOrderStatus.VALIDATED);
 
         when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
-        when(settingRepository.findByKeyAndBranchId(anyString(), eq(BRANCH_ID)))
+        when(settingRepository.findFirstByBranchIdOrderByCreatedAtAscIdAsc(eq(BRANCH_ID)))
                 .thenReturn(Optional.empty());
         when(reportRepository.findByTestOrderId(any())).thenReturn(Optional.empty());
         when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -228,7 +228,7 @@ class TestOrderValidationServiceTest {
         when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
         when(testOrderRepository.findByBranchIdAndCodeNotNullAndYear(any(), anyInt(), any()))
                 .thenReturn(Collections.emptyList());
-        when(settingRepository.findByKeyAndBranchId(anyString(), eq(BRANCH_ID)))
+        when(settingRepository.findFirstByBranchIdOrderByCreatedAtAscIdAsc(eq(BRANCH_ID)))
                 .thenReturn(Optional.empty());
         when(testOrderRepository.saveAndFlush(any())).thenAnswer(inv -> {
             order.setCode("EX26-0001");
@@ -290,7 +290,7 @@ class TestOrderValidationServiceTest {
         when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
         when(testOrderRepository.findByBranchIdAndCodeNotNullAndYear(any(), anyInt(), any()))
                 .thenReturn(Collections.emptyList());
-        when(settingRepository.findByKeyAndBranchId(anyString(), eq(BRANCH_ID)))
+        when(settingRepository.findFirstByBranchIdOrderByCreatedAtAscIdAsc(eq(BRANCH_ID)))
                 .thenReturn(Optional.empty());
         when(testOrderRepository.saveAndFlush(any())).thenAnswer(inv -> {
             order.setCode("EX26-0001");
@@ -328,13 +328,13 @@ class TestOrderValidationServiceTest {
         paidInvoice.setTotal(BigDecimal.valueOf(500));
 
         when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
-        when(settingRepository.findByKeyAndBranchId(anyString(), eq(BRANCH_ID)))
+        when(settingRepository.findFirstByBranchIdOrderByCreatedAtAscIdAsc(eq(BRANCH_ID)))
                 .thenReturn(Optional.empty());
         when(reportRepository.findByTestOrderId(any())).thenReturn(Optional.empty());
         when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         when(logReportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(invoiceRepository.findFirstByContratIdOrderByCreatedAtDesc(any()))
+        when(invoiceRepository.findFirstByContratIdOrderByCreatedAtAsc(any()))
                 .thenReturn(Optional.of(paidInvoice));
 
         assertThatThrownBy(() -> testOrderService.updateStatus(ORDER_ID, "VALIDATED", USER_ID, BRANCH_ID))
@@ -352,13 +352,13 @@ class TestOrderValidationServiceTest {
         order.setStatus(TestOrderStatus.VALIDATED);
 
         when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
-        when(settingRepository.findByKeyAndBranchId(anyString(), eq(BRANCH_ID)))
+        when(settingRepository.findFirstByBranchIdOrderByCreatedAtAscIdAsc(eq(BRANCH_ID)))
                 .thenReturn(Optional.empty());
         when(reportRepository.findByTestOrderId(any())).thenReturn(Optional.empty());
         when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         when(logReportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(invoiceRepository.findFirstByContratIdOrderByCreatedAtDesc(any()))
+        when(invoiceRepository.findFirstByContratIdOrderByCreatedAtAsc(any()))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> testOrderService.updateStatus(ORDER_ID, "VALIDATED", USER_ID, BRANCH_ID))
