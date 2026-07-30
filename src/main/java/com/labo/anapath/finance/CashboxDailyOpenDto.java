@@ -14,8 +14,8 @@ import java.util.UUID;
 @NoArgsConstructor
 public class CashboxDailyOpenDto {
 
-    @NotNull
-    @DecimalMin("0")
+    @NotNull(message = "Le solde d'ouverture est requis")
+    @DecimalMin(value = "0", message = "Le solde d'ouverture ne peut pas être négatif")
     private BigDecimal soldeOuverture;
 
     private UUID cashboxId;

@@ -2,6 +2,7 @@ package com.labo.anapath.contract;
 
 import com.labo.anapath.client.ClientRepository;
 import com.labo.anapath.common.dto.PageResponse;
+import com.labo.anapath.common.exception.BusinessException;
 import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.doctor.HospitalRepository;
@@ -78,6 +79,7 @@ public class ContratServiceImpl implements ContratService {
         contrat.setDescription(dto.getDescription());
         contrat.setStartDate(dto.getStartDate());
         contrat.setEndDate(dto.getEndDate());
+        assertNbrTestsValide(dto.getNbrTests());
         contrat.setNbrTests(dto.getNbrTests());
         contrat.setStatus("INACTIF");
         contrat.setInvoiceUnique(dto.getInvoiceUnique() != null ? dto.getInvoiceUnique() : true);
@@ -113,6 +115,7 @@ public class ContratServiceImpl implements ContratService {
         contrat.setDescription(dto.getDescription());
         contrat.setStartDate(dto.getStartDate());
         contrat.setEndDate(dto.getEndDate());
+        assertNbrTestsValide(dto.getNbrTests());
         contrat.setNbrTests(dto.getNbrTests());
         // Le statut était ignoré à la mise à jour : impossible de repasser un
         // contrat CLOTURE à ACTIF/INACTIF via le formulaire de modification.
@@ -304,5 +307,23 @@ public class ContratServiceImpl implements ContratService {
                 dto.status(), dto.invoiceUnique(), dto.isClose(),
                 dto.details(), dto.branchId(), dto.createdAt(), dto.updatedAt(),
                 usedTestsCount, invoiceDto);
+    }
+
+    /**
+     * Refuse un nombre d'examens dépourvu de sens métier.
+     *
+     * <p>{@code -1} vaut « illimité » (convention Laravel, utilisée par la très
+     * grande majorité des contrats existants) ; sinon la valeur doit être d'au
+     * moins 1. Le {@code @Min(-1)} du DTO borne le bas mais laisserait passer 0,
+     * d'où ce contrôle.
+     *
+     * @param nbrTests valeur soumise
+     * @throws BusinessException si la valeur est 0 ou un négatif autre que -1
+     */
+    private void assertNbrTestsValide(int nbrTests) {
+        if (nbrTests != -1 && nbrTests < 1) {
+            throw new BusinessException(
+                    "Le nombre d'examens doit être supérieur ou égal à 1, ou -1 pour illimité.");
+        }
     }
 }

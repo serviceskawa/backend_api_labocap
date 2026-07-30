@@ -22,7 +22,7 @@ import java.util.UUID;
 @NoArgsConstructor
 public class ExpenseCreateRequestDto {
 
-    @NotNull
+    @NotNull(message = "La catégorie de dépense est requise")
     private UUID expenseCategorieId;
 
     private String description;

@@ -26,6 +26,8 @@ public class LabTestRequestDto {
     /** Prix de facturation en FCFA (obligatoire, doit être positif ou nul). */
     @NotNull(message = "Le prix est obligatoire")
     @DecimalMin(value = "0.0", message = "Le prix doit être positif")
+    @DecimalMin(value = "0", inclusive = false,
+                message = "Veuillez renseigner un prix supérieur à zéro")
     private BigDecimal price;
 
     /** Valeurs normales de référence en texte libre (ex. : "4,5–5,5 T/L"). */

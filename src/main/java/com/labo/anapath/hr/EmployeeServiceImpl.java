@@ -59,6 +59,14 @@ public class EmployeeServiceImpl implements EmployeeService {
     public EmployeeResponseDto create(EmployeeRequestDto dto, UUID branchId) {
         Employee employee = employeeMapper.toEntity(dto);
         employee.setBranchId(branchId);
+        // La colonne employees.salary est NOT NULL alors que le formulaire ne la
+        // demande pas : le salaire réel vit dans les fiches de paie
+        // (employee_payrolls.monthly_gross_salary), comme en Laravel. Sans ce
+        // défaut, toute création échouait sur une violation de contrainte
+        // remontée à l'utilisateur en « Une erreur interne est survenue ».
+        if (employee.getSalary() == null) {
+            employee.setSalary(java.math.BigDecimal.ZERO);
+        }
         if (dto.getUserId() != null) {
             employee.setUser(userRepository.findById(dto.getUserId())
                     .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", dto.getUserId())));

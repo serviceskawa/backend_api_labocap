@@ -14,14 +14,14 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 public class CashboxVoucherDetailRequestDto {
 
-    @NotBlank
+    @NotBlank(message = "La désignation de l'article est requise")
     private String itemName;
 
-    @NotNull
-    @DecimalMin("1")
+    @NotNull(message = "La quantité est requise")
+    @DecimalMin(value = "1", message = "La quantité doit être supérieure ou égale à 1")
     private BigDecimal quantity;
 
-    @NotNull
-    @DecimalMin("0.01")
+    @NotNull(message = "Le prix unitaire est requis")
+    @DecimalMin(value = "0.01", message = "Le prix unitaire doit être supérieur à 0")
     private BigDecimal unitPrice;
 }

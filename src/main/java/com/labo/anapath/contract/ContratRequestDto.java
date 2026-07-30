@@ -1,6 +1,7 @@
 package com.labo.anapath.contract;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Min;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -29,6 +30,13 @@ public class ContratRequestDto {
 
     private LocalDate endDate;
 
+    /**
+     * Nombre d'examens couverts par le contrat. La valeur {@code -1} signifie
+     * « illimité » (convention Laravel, reprise par l'écran de saisie) ; toute
+     * autre valeur doit être supérieure ou égale à 1. Le zéro et les négatifs
+     * autres que -1 n'ont pas de sens métier.
+     */
+    @Min(value = -1, message = "Le nombre d'examens doit être supérieur ou égal à 1, ou -1 pour illimité")
     private int nbrTests;
 
     private String status = "INACTIF";

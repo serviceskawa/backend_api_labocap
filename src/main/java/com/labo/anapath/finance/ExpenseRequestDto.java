@@ -15,11 +15,11 @@ import java.util.UUID;
 @NoArgsConstructor
 public class ExpenseRequestDto {
 
-    @NotNull
-    @DecimalMin("0.01")
+    @NotNull(message = "Le montant est requis")
+    @DecimalMin(value = "0.01", message = "Le montant doit être supérieur à 0")
     private BigDecimal amount;
 
-    @NotNull
+    @NotNull(message = "La catégorie de dépense est requise")
     private UUID expenseCategorieId;
 
     private String description;

@@ -2,6 +2,7 @@ package com.labo.anapath.inventory;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.DecimalMax;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -21,6 +22,8 @@ public class MovementRequestDto {
 
     @NotNull(message = "La quantité est obligatoire")
     @DecimalMin(value = "0.01", message = "La quantité doit être positive")
+    @DecimalMin(value = "1", message = "La quantité doit être supérieure ou égale à 1")
+    @DecimalMax(value = "1000000", message = "La quantité ne peut pas dépasser 1 000 000")
     private BigDecimal quantity;
 
     private String notes;

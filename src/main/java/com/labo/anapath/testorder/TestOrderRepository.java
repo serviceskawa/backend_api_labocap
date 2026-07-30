@@ -72,6 +72,13 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
     /** Nombre de bons d'examen consommés par un contrat (équivalent Laravel {@code $contrat->orders->count()}). */
     long countByContratId(UUID contratId);
 
+    /**
+     * Recherche un bon d'examen par son code affiché, dans la branche courante.
+     * Utilisé par le signalement, où l'utilisateur saisit le code (« 26-0008 »)
+     * et où c'est le serveur qui le résout, comme en Laravel.
+     */
+    java.util.Optional<TestOrder> findByCodeAndBranchId(String code, UUID branchId);
+
     @Query("SELECT COUNT(t) FROM TestOrder t WHERE t.branchId = :branchId AND t.createdAt >= :start AND t.createdAt <= :end")
     long countByBranchIdAndCreatedAtBetween(@Param("branchId") UUID branchId,
                                              @Param("start") LocalDateTime start,

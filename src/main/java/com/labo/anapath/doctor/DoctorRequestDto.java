@@ -2,6 +2,7 @@ package com.labo.anapath.doctor;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -31,5 +32,6 @@ public class DoctorRequestDto {
     private String role;
 
     /** Taux de commission accordé au médecin prescripteur (optionnel, en pourcentage). */
+    @PositiveOrZero(message = "La commission ne peut pas être négative")
     private Double commission;
 }

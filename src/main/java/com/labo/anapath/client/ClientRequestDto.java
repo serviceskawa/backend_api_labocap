@@ -3,6 +3,7 @@ package com.labo.anapath.client;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
+import jakarta.validation.constraints.Pattern;
 
 /**
  * DTO de requête pour la création ou la mise à jour d'un client institutionnel.
@@ -26,5 +27,7 @@ public class ClientRequestDto {
     private String adress;
 
     /** Coordonnées de contact : téléphone ou email (optionnel). */
+    @Pattern(regexp = "^$|^\\+?[0-9][0-9 .-]{6,18}[0-9]$",
+             message = "Numéro invalide : 8 à 15 chiffres, indicatif + facultatif (ex. 97000000)")
     private String contact;
 }
