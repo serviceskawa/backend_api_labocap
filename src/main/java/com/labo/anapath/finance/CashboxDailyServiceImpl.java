@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 @Service
@@ -49,7 +48,7 @@ public class CashboxDailyServiceImpl implements CashboxDailyService {
 
         CashboxDaily savedDaily = cashboxDailyRepository.save(daily);
         if (savedDaily.getCode() == null) {
-            savedDaily.setCode(generateCode(savedDaily.getId()));
+            savedDaily.setCode(generateCode());
             cashboxDailyRepository.save(savedDaily);
         }
 
@@ -162,9 +161,17 @@ public class CashboxDailyServiceImpl implements CashboxDailyService {
                 .orElseThrow(() -> new ResourceNotFoundException("CashboxDaily", id));
     }
 
-    private String generateCode(UUID id) {
-        String datePart = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        return String.format("OUV-%s-%s", datePart, id.toString().substring(0, 8).toUpperCase());
+    /**
+     * Code d'une ouverture de caisse, au format Laravel
+     * {@code generateCodeOpeningCashbox()} : {@code OC} + les deux derniers
+     * chiffres de l'année + un compteur sur 4 chiffres remis à {@code 0001}
+     * chaque année — p. ex. {@code OC260001}.
+     */
+    private String generateCode() {
+        String yearPrefix = String.format("OC%02d", LocalDate.now().getYear() % 100);
+        Integer maxSequence = cashboxDailyRepository.findMaxSequenceForYear(yearPrefix);
+        int next = (maxSequence == null ? 0 : maxSequence) + 1;
+        return yearPrefix + String.format("%04d", next);
     }
 
     private BigDecimal orZero(BigDecimal value) {

@@ -15,7 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 /**
@@ -120,10 +119,21 @@ public class TicketServiceImpl implements TicketService {
         return ticketMapper.toResponseDto(ticketRepository.save(ticket));
     }
 
+    /**
+     * Code d'un ticket, au format Laravel {@code generateCodeTicket()} :
+     * {@code TI-} + les deux derniers chiffres de l'année + un compteur sur
+     * 4 chiffres, remis à {@code 0001} à chaque nouvelle année — p. ex.
+     * {@code TI-250004}.
+     *
+     * <p>Le compteur est lu sur les tickets de l'année, y compris ceux
+     * supprimés (suppression logique) : réattribuer leur numéro violerait la
+     * contrainte d'unicité sur {@code ticket_code}.</p>
+     */
     private String generateTicketCode() {
-        String month = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMM"));
-        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase();
-        return "TKT-" + month + "-" + suffix;
+        String yearPrefix = "TI-" + (LocalDate.now().getYear() % 100);
+        Integer maxSequence = ticketRepository.findMaxSequenceForYear(yearPrefix);
+        int next = (maxSequence == null ? 0 : maxSequence) + 1;
+        return yearPrefix + String.format("%04d", next);
     }
 
     /** {@inheritDoc} */

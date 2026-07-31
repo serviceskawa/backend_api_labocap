@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
 
@@ -177,15 +176,20 @@ public class CashboxVoucherServiceImpl implements CashboxVoucherService {
         }
     }
 
+    /**
+     * Code d'un bon de caisse, au format Laravel {@code generateCodeTicket()} :
+     * {@code BC} + les deux derniers chiffres de l'année + {@code -} + un
+     * compteur sur 4 chiffres remis à {@code 0001} chaque année — p. ex.
+     * {@code BC26-0001}.
+     */
     private String generateCode(UUID branchId, CashboxVoucher voucher) {
         LocalDate today = voucher.getCreatedAt() != null
                 ? voucher.getCreatedAt().toLocalDate()
                 : LocalDate.now();
-        String datePart = today.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        java.time.LocalDateTime startOfDay = today.atStartOfDay();
-        java.time.LocalDateTime endOfDay = today.plusDays(1).atStartOfDay();
-        long seq = voucherRepository.countByBranchIdBetween(branchId, startOfDay, endOfDay);
-        return String.format("BON-%s-%04d", datePart, seq);
+        String yearPrefix = String.format("BC%02d-", today.getYear() % 100);
+        Integer maxSequence = voucherRepository.findMaxSequenceForYear(yearPrefix);
+        int next = (maxSequence == null ? 0 : maxSequence) + 1;
+        return yearPrefix + String.format("%04d", next);
     }
 
     private CashboxVoucher findVoucher(UUID id) {

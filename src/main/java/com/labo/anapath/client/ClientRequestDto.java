@@ -31,9 +31,9 @@ public class ClientRequestDto {
     /** Adresse physique du client (optionnel). */
     private String adress;
 
-    /** Téléphone de contact — obligatoire, exactement 8 chiffres (ex. 97000000). */
+    /** Téléphone de contact — obligatoire, 8 à 15 chiffres (ex. 0197000000). */
     @NotBlank(message = "Le contact est obligatoire")
-    @Pattern(regexp = "^[0-9]{8}$",
-             message = "Le contact doit contenir exactement 8 chiffres (ex. 97000000)")
+    @Pattern(regexp = "^[0-9]{8,15}$",
+             message = "Le contact doit contenir entre 8 et 15 chiffres (ex. 0197000000)")
     private String contact;
 }
