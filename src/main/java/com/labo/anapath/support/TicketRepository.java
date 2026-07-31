@@ -44,4 +44,27 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
             @org.springframework.data.repository.query.Param("branchId") UUID branchId,
             @org.springframework.data.repository.query.Param("userId") UUID userId,
             @org.springframework.data.repository.query.Param("seeAll") boolean seeAll);
+
+    /**
+     * Plus grand numéro d'ordre attribué à un ticket de l'année en cours.
+     *
+     * <p>Reprend {@code generateCodeTicket()} de Laravel : le code vaut
+     * {@code TI-} + les deux derniers chiffres de l'année + un compteur sur
+     * 4 chiffres, remis à 0001 à chaque nouvelle année. Le compteur est donc lu
+     * sur les 4 derniers caractères du code, parmi les seuls tickets de l'année.</p>
+     *
+     * @param yearPrefix préfixe de l'année, p. ex. {@code TI-25}
+     * @return le plus grand numéro d'ordre, ou {@code null} si aucun ticket cette année
+     */
+    // `LIKE prefixe || '____'` borne le code à exactement 4 caractères après le
+    // préfixe ; le regex (sans accolades, qui seraient prises pour une séquence
+    // d'échappement JDBC) garantit qu'ils sont numériques avant la conversion.
+    @org.springframework.data.jpa.repository.Query(value = """
+            SELECT MAX(CAST(RIGHT(ticket_code, 4) AS INTEGER))
+            FROM tickets
+            WHERE ticket_code LIKE :yearPrefix || '____'
+              AND RIGHT(ticket_code, 4) ~ '^[0-9][0-9][0-9][0-9]$'
+            """, nativeQuery = true)
+    Integer findMaxSequenceForYear(
+            @org.springframework.data.repository.query.Param("yearPrefix") String yearPrefix);
 }
