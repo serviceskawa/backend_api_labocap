@@ -91,7 +91,9 @@ public class ExpenseServiceImpl implements ExpenseService {
     @Transactional
     public ExpenseResponseDto update(UUID id, ExpenseRequestDto dto) {
         Expense expense = findExpense(id);
-        expense.setAmount(dto.getAmount());
+        // Montant absent = montant dérivé des lignes d'articles : on ne l'écrase
+        // pas avec un null, sinon enregistrer la fiche remettrait la dépense à zéro.
+        if (dto.getAmount() != null) expense.setAmount(dto.getAmount());
         expense.setExpenseCategorieId(dto.getExpenseCategorieId());
         expense.setDescription(dto.getDescription());
         expense.setSupplierId(dto.getSupplierId());

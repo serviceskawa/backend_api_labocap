@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
@@ -63,6 +64,24 @@ public class ExpenseController {
             @PathVariable UUID id,
             @Valid @RequestBody ExpenseRequestDto dto) {
         return ResponseEntity.ok(ApiResponse.success(expenseService.update(id, dto)));
+    }
+
+    /**
+     * Téléverse la preuve d'achat d'une dépense — champ {@code receipt} du
+     * formulaire Laravel {@code expenses/show.blade.php}. Le fichier est stocké
+     * puis son chemin est enregistré sur la dépense.
+     *
+     * @param id   identifiant UUID de la dépense
+     * @param file fichier envoyé (multipart, paramètre {@code receipt})
+     * @return la dépense mise à jour, avec le chemin de la pièce jointe
+     */
+    @PostMapping("/{id}/receipt")
+    @PreAuthorize("hasAuthority('create-expenses')")
+    public ResponseEntity<ApiResponse<ExpenseResponseDto>> uploadReceipt(
+            @PathVariable UUID id,
+            @RequestParam("receipt") MultipartFile file) {
+        return ResponseEntity.ok(ApiResponse.success("Pièce jointe enregistrée",
+                expenseService.uploadReceipt(id, file)));
     }
 
     @DeleteMapping("/{id}")
