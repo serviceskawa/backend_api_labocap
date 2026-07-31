@@ -15,7 +15,12 @@ import java.util.UUID;
 @NoArgsConstructor
 public class ExpenseRequestDto {
 
-    @NotNull(message = "Le montant est requis")
+    /**
+     * Montant de la dépense. Facultatif : il est normalement dérivé de la somme
+     * des lignes d'articles (voir {@code addDetail}/{@code removeDetail}), et
+     * l'écran de détail ne le transmet plus. S'il est fourni, il écrase la
+     * valeur calculée.
+     */
     @DecimalMin(value = "0.01", message = "Le montant doit être supérieur à 0")
     private BigDecimal amount;
 

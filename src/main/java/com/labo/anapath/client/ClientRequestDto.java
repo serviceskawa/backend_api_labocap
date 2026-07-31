@@ -20,14 +20,20 @@ public class ClientRequestDto {
     @NotBlank(message = "Le nom du client est obligatoire")
     private String name;
 
-    /** Numéro IFU (Identifiant Fiscal Unique) du client — optionnel, mais unique globalement. */
+    /**
+     * Numéro IFU (Identifiant Fiscal Unique) du client — optionnel, mais unique
+     * globalement. Format imposé : exactement 13 chiffres.
+     */
+    @Pattern(regexp = "^$|^[0-9]{13}$",
+             message = "Le numéro IFU doit contenir exactement 13 chiffres (ex. 1234567890123)")
     private String ifu;
 
     /** Adresse physique du client (optionnel). */
     private String adress;
 
-    /** Coordonnées de contact : téléphone ou email (optionnel). */
-    @Pattern(regexp = "^$|^\\+?[0-9][0-9 .-]{6,18}[0-9]$",
-             message = "Numéro invalide : 8 à 15 chiffres, indicatif + facultatif (ex. 97000000)")
+    /** Téléphone de contact — obligatoire, exactement 8 chiffres (ex. 97000000). */
+    @NotBlank(message = "Le contact est obligatoire")
+    @Pattern(regexp = "^[0-9]{8}$",
+             message = "Le contact doit contenir exactement 8 chiffres (ex. 97000000)")
     private String contact;
 }
