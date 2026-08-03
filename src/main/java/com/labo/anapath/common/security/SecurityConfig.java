@@ -91,6 +91,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/forgot-password").permitAll()
                         .requestMatchers("/api/v1/auth/reset-password").permitAll()
                         .requestMatchers("/api/v1/auth/resend-2fa").permitAll()
+                        // Habillage (logo, nom du labo, favicon) : lu par les écrans
+                        // d'authentification, avant qu'un JWT n'existe. Liste blanche de
+                        // clés côté contrôleur — voir PublicBrandingController.
+                        .requestMatchers("/api/v1/public/branding").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/v3/api-docs/**").permitAll()
                         .requestMatchers("/swagger-ui/**").permitAll()
