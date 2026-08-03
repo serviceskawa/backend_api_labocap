@@ -130,6 +130,11 @@ public class BranchContextFilter extends OncePerRequestFilter {
                 // directe (nouvel onglet PDF) qui ne peut pas porter l'en-tête
                 // X-Branch-Id. L'authentification JWT reste exigée (SecurityConfig).
                 || path.startsWith("/api/v1/files/")
+                // Habillage public : appelé aussi bien par un visiteur non authentifié
+                // (écran de login) que par un utilisateur connecté n'ayant pas encore
+                // choisi sa branche. Exiger X-Branch-Id ici renverrait un 428 sur une
+                // route par définition ouverte.
+                || path.startsWith("/api/v1/public/")
                 || path.startsWith("/v3/api-docs")
                 || path.startsWith("/swagger-ui")
                 || path.startsWith("/actuator/health");
