@@ -171,19 +171,20 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     public DashboardDto.MonthlyStats getMonthlyStats(UUID branchId) {
+        // Mois seul, sans l'année : voir le commentaire de parité Laravel dans
+        // TestOrderRepository (section « Dashboard — stats mensuelles »).
         int month = LocalDate.now().getMonthValue();
-        int year = LocalDate.now().getYear();
 
-        long nombreTests = testOrderRepository.countByBranchIdAndMonth(branchId, month, year);
-        BigDecimal caTests = testOrderRepository.sumPriceByBranchIdAndMonth(branchId, month, year);
+        long nombreTests = testOrderRepository.countByBranchIdAndMonth(branchId, month);
+        BigDecimal caTests = testOrderRepository.sumPriceByBranchIdAndMonth(branchId, month);
         if (caTests == null) caTests = BigDecimal.ZERO;
-        long totalPatientTest = testOrderRepository.countPatientsByBranchIdAndMonth(branchId, month, year);
+        long totalPatientTest = testOrderRepository.countPatientsByBranchIdAndMonth(branchId, month);
 
-        List<DashboardDto.ByItem> byHopital = testOrderRepository.countByHospitalAndMonth(branchId, month, year)
+        List<DashboardDto.ByItem> byHopital = testOrderRepository.countByHospitalAndMonth(branchId, month)
                 .stream().map(p -> new DashboardDto.ByItem(p.getNom(), p.getTotalPatients() != null ? p.getTotalPatients() : 0L)).toList();
-        List<DashboardDto.ByItem> byMedecin = testOrderRepository.countByDoctorAndMonth(branchId, month, year)
+        List<DashboardDto.ByItem> byMedecin = testOrderRepository.countByDoctorAndMonth(branchId, month)
                 .stream().map(p -> new DashboardDto.ByItem(p.getNom(), p.getTotalPatients() != null ? p.getTotalPatients() : 0L)).toList();
-        List<DashboardDto.ByItem> byType = testOrderRepository.countByTypeOrderAndMonth(branchId, month, year)
+        List<DashboardDto.ByItem> byType = testOrderRepository.countByTypeOrderAndMonth(branchId, month)
                 .stream().map(p -> new DashboardDto.ByItem(p.getNom(), p.getTotalPatients() != null ? p.getTotalPatients() : 0L)).toList();
 
         return new DashboardDto.MonthlyStats(nombreTests, caTests, totalPatientTest,
@@ -196,7 +197,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     public List<DashboardDto.ConnectedUser> getConnectedUsers(UUID branchId) {
-        return userRepository.findConnectedUsersByBranchId(branchId).stream()
+        return userRepository.findConnectedUsersByBranchId(branchId, LocalDate.now()).stream()
                 .map(p -> new DashboardDto.ConnectedUser(p.getId(), p.getLastname(),
                         p.getFirstname(), p.getEmail()))
                 .toList();
