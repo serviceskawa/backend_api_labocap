@@ -81,6 +81,50 @@ public class AuthController {
     private boolean cookieSecure;
 
     /**
+     * Domaine des cookies d'authentification. Vide par défaut.
+     * <p>
+     * Sans cet attribut, un cookie est <em>host-only</em> : posé par
+     * {@code api.exemple.fr}, il n'est renvoyé qu'à {@code api.exemple.fr}. Le
+     * front servi depuis {@code app.exemple.fr} ne le reçoit donc jamais, et sa
+     * garde de routes — qui teste la seule présence du cookie — renvoie
+     * indéfiniment sur /login alors que l'authentification a réussi.
+     * </p><p>
+     * Renseigner {@code .exemple.fr} (avec le point initial) pour partager les
+     * cookies entre sous-domaines. Laisser vide quand front et API partagent
+     * l'hôte — c'est le cas en développement, où {@code localhost:3001} et
+     * {@code localhost:8080} se partagent déjà les cookies, les ports n'entrant
+     * pas dans leur portée. D'où un défaut invisible hors production.
+     * </p><p>
+     * ⚠ Jamais un suffixe public seul ({@code .fr}, {@code .bj}) : le
+     * navigateur rejetterait le cookie sans le moindre message.
+     * </p>
+     */
+    @Value("${app.cookie.domain:}")
+    private String cookieDomain;
+
+    /**
+     * Socle commun des six cookies d'authentification — les trois posés
+     * ({@code access_token}, {@code refresh_token}, {@code pending_2fa}) et les
+     * trois effacés.
+     * <p>
+     * Le domaine doit figurer <em>aussi</em> sur les cookies d'effacement : un
+     * cookie n'est supprimé que si domaine et chemin correspondent exactement à
+     * ceux de la pose. Sans quoi la déconnexion laisserait le jeton en place.
+     * </p>
+     */
+    private ResponseCookie.ResponseCookieBuilder cookieBuilder(String name, String value, String path) {
+        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(name, value)
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .sameSite("Strict")
+                .path(path);
+        if (StringUtils.hasText(cookieDomain)) {
+            builder.domain(cookieDomain);
+        }
+        return builder;
+    }
+
+    /**
      * Authentifie un utilisateur avec son email et son mot de passe.
      * <p>
      * Si la 2FA est désactivée, pose les cookies {@code access_token} et {@code refresh_token}
@@ -323,19 +367,11 @@ public class AuthController {
      * Pose les cookies {@code access_token} et {@code refresh_token} HttpOnly sur la réponse.
      */
     private void writeTokenCookies(HttpServletResponse response, LoginResponse loginResponse) {
-        ResponseCookie accessCookie = ResponseCookie.from(ACCESS_COOKIE, loginResponse.accessToken())
-                .httpOnly(true)
-                .secure(cookieSecure)
-                .sameSite("Strict")
-                .path(API_PATH)
+        ResponseCookie accessCookie = cookieBuilder(ACCESS_COOKIE, loginResponse.accessToken(), API_PATH)
                 .maxAge(Duration.ofMillis(jwtProperties.getExpirationMs()))
                 .build();
 
-        ResponseCookie refreshCookie = ResponseCookie.from(REFRESH_COOKIE, loginResponse.refreshToken())
-                .httpOnly(true)
-                .secure(cookieSecure)
-                .sameSite("Strict")
-                .path(REFRESH_PATH)
+        ResponseCookie refreshCookie = cookieBuilder(REFRESH_COOKIE, loginResponse.refreshToken(), REFRESH_PATH)
                 .maxAge(Duration.ofMillis(jwtProperties.getRefreshExpirationMs()))
                 .build();
 
@@ -352,11 +388,7 @@ public class AuthController {
      * </p>
      */
     private void writePending2faCookie(HttpServletResponse response, String tempToken) {
-        ResponseCookie pendingCookie = ResponseCookie.from(PENDING_2FA_COOKIE, tempToken)
-                .httpOnly(true)
-                .secure(cookieSecure)
-                .sameSite("Strict")
-                .path(API_PATH)
+        ResponseCookie pendingCookie = cookieBuilder(PENDING_2FA_COOKIE, tempToken, API_PATH)
                 .maxAge(Duration.ofMillis(JwtTokenProvider.TEMP_TOKEN_VALIDITY_MS))
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, pendingCookie.toString());
@@ -364,11 +396,7 @@ public class AuthController {
 
     /** Efface le cookie de challenge 2FA (challenge abouti ou déconnexion). */
     private void clearPending2faCookie(HttpServletResponse response) {
-        ResponseCookie clearPending = ResponseCookie.from(PENDING_2FA_COOKIE, "")
-                .httpOnly(true)
-                .secure(cookieSecure)
-                .sameSite("Strict")
-                .path(API_PATH)
+        ResponseCookie clearPending = cookieBuilder(PENDING_2FA_COOKIE, "", API_PATH)
                 .maxAge(0)
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, clearPending.toString());
@@ -378,19 +406,11 @@ public class AuthController {
      * Efface les cookies d'authentification en posant des cookies expirés (maxAge=0).
      */
     private void clearTokenCookies(HttpServletResponse response) {
-        ResponseCookie clearAccess = ResponseCookie.from(ACCESS_COOKIE, "")
-                .httpOnly(true)
-                .secure(cookieSecure)
-                .sameSite("Strict")
-                .path(API_PATH)
+        ResponseCookie clearAccess = cookieBuilder(ACCESS_COOKIE, "", API_PATH)
                 .maxAge(0)
                 .build();
 
-        ResponseCookie clearRefresh = ResponseCookie.from(REFRESH_COOKIE, "")
-                .httpOnly(true)
-                .secure(cookieSecure)
-                .sameSite("Strict")
-                .path(REFRESH_PATH)
+        ResponseCookie clearRefresh = cookieBuilder(REFRESH_COOKIE, "", REFRESH_PATH)
                 .maxAge(0)
                 .build();
 
