@@ -25,7 +25,7 @@ RUN chown appuser:appgroup app.jar
 
 USER appuser
 
-EXPOSE 8080
+EXPOSE 8086
 
 # Variables d'environnement attendues (à fournir au runtime)
 ENV DB_URL="" \
