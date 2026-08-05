@@ -36,7 +36,9 @@ RUN mkdir -p "$STORAGE_PATH" && chown -R appuser:appgroup /var/lib/labo
 
 USER appuser
 
-EXPOSE 8086
+# Port d'écoute de l'application dans le conteneur (server.port=${PORT:8080}).
+# Le port publié sur l'hôte se règle via API_PORT dans docker-compose.yml.
+EXPOSE 8080
 
 # Variables d'environnement attendues (à fournir au runtime)
 ENV DB_URL="" \
