@@ -75,6 +75,13 @@ management:
   endpoint:
     health:
       show-details: never
+  health:
+    mail:
+      # L'indicateur mail ouvre une connexion SMTP réelle à chaque sonde : sans
+      # identifiants valides il met tout /actuator/health à DOWN et le
+      # healthcheck Docker déclare le conteneur unhealthy alors que l'API sert.
+      # L'échec d'envoi d'un e-mail reste géré côté applicatif.
+      enabled: false
 
 springdoc:
   api-docs:
