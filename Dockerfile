@@ -25,15 +25,17 @@ RUN chown appuser:appgroup app.jar
 
 USER appuser
 
-# Port d'écoute de l'application dans le conteneur (server.port=${PORT:8080}).
-# Le port publié sur l'hôte se règle via API_PORT dans docker-compose.yml.
-EXPOSE 8080
+# Port d'écoute dans le conteneur. Doit rester identique à PORT ci-dessous :
+# l'application lit server.port=${PORT}, et actuator n'a pas de port distinct,
+# donc le healthcheck du compose interroge ce même port.
+EXPOSE 7001
 
 # Variables d'environnement attendues (à fournir au runtime)
 ENV DB_URL="" \
     DB_USERNAME="" \
     DB_PASSWORD="" \
     JWT_SECRET="" \
+    PORT="7001" \
     SPRING_PROFILES_ACTIVE="prod"
 
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
