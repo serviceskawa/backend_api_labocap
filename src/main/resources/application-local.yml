@@ -1,0 +1,36 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Profil `local` — base de développement reconstruite depuis zéro.
+#
+#   SPRING_PROFILES_ACTIVE=local
+#
+# Permet de démarrer sur une base VIERGE, sans dump de production. Le profil
+# `prod` n'est en rien modifié : il conserve db/migration et son
+# baseline-version 50.
+#
+# POURQUOI UN EMPLACEMENT FLYWAY DISTINCT
+# La chaîne V1→V61 de db/migration n'est pas rejouable sur une base vide — 27
+# des 61 migrations échouent, ces scripts étant un journal de correctifs
+# appliqué à une base préexistante (issue de l'ancienne application Laravel), et
+# non un script de création. `locations` ci-dessous REMPLACE donc db/migration :
+# en local, Flyway n'applique que db/local (baseline générée depuis les entités,
+# puis jeux de données).
+# ─────────────────────────────────────────────────────────────────────────────
+
+spring:
+  flyway:
+    # Remplace classpath:db/migration — les V1→V61 ne sont PAS appliquées ici.
+    locations: classpath:db/local
+    # Base vierge attendue : rien à baseliner.
+    baseline-on-migrate: false
+  jpa:
+    hibernate:
+      # `validate` reste volontairement actif : si la baseline diverge des
+      # entités, le démarrage échoue immédiatement plutôt que de laisser passer
+      # une incohérence silencieuse.
+      ddl-auto: validate
+    show-sql: false
+
+logging:
+  level:
+    com.labo.anapath: DEBUG
+    org.flywaydb: INFO
