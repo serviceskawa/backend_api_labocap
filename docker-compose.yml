@@ -58,6 +58,19 @@ services:
       # à false UNIQUEMENT sur un serveur servi en HTTP clair (sinon le navigateur
       # rejette le cookie et l'utilisateur est renvoyé sur /login).
       APP_COOKIE_SECURE: ${APP_COOKIE_SECURE:-true}
+      # Domaine des cookies d'authentification. Vide par défaut : le cookie est
+      # alors host-only, donc réservé au domaine de l'API.
+      #
+      # ⚠ À renseigner dès que le front n'est PAS sur le même hôte que l'API.
+      # Avec l'API sur api.exemple.fr et le front sur app.exemple.fr, le cookie
+      # posé par l'API n'atteint jamais le front : sa garde de routes ne voit
+      # aucun jeton et renvoie sur /login en boucle, alors que la connexion a
+      # réussi. Poser « .exemple.fr », avec le point initial.
+      #
+      # Inutile en développement : localhost:3001 et localhost:8080 partagent
+      # déjà leurs cookies, les ports n'entrant pas dans leur portée — ce qui
+      # rend le défaut invisible hors production.
+      APP_COOKIE_DOMAIN: ${APP_COOKIE_DOMAIN:-}
       # DEV UNIQUEMENT : affiche le code OTP 2FA en clair dans les logs quand
       # l'envoi d'e-mails est indisponible. NE JAMAIS activer en production.
       APP_OTP_LOG_PLAINTEXT: ${APP_OTP_LOG_PLAINTEXT:-false}
