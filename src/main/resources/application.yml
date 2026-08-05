@@ -49,6 +49,10 @@ spring:
 
 server:
   port: ${PORT:8080}
+  # Derrière le reverse proxy nginx (api.caap.bj) : reconstruire le schéma et
+  # l'IP d'origine depuis X-Forwarded-* — indispensable pour les cookies Secure
+  # et les redirections en https.
+  forward-headers-strategy: framework
 
 app:
   jwt:
