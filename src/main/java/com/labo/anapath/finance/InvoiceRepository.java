@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -255,6 +256,81 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
             @Param("branchId") UUID branchId,
             @Param("month") int month,
             @Param("year") int year);
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Rapports sur une PÉRIODE — ventilation par mois
+    //
+    // Les bornes sont des instants et non des dates, et la borne haute est
+    // EXCLUE : `created_at` est un timestamp, si bien qu'un `<= :fin` posé sur
+    // une date perdrait toutes les factures du dernier jour émises après minuit.
+    // La couche service passe donc `finExclusive = lendemain à 00:00`.
+    //
+    // Le regroupement ne rend que les mois présents dans les données ; c'est le
+    // service qui comble les trous. Un rapport où juillet manquerait se lirait
+    // comme un oubli, pas comme un mois sans activité.
+    // ─────────────────────────────────────────────────────────────────────
+
+    /** Ventes ou avoirs, agrégés par mois de création. */
+    @Query(value = """
+            SELECT EXTRACT(YEAR FROM created_at)::int  AS annee,
+                   EXTRACT(MONTH FROM created_at)::int AS mois,
+                   COALESCE(SUM(total), 0)             AS total
+            FROM invoices
+            WHERE branch_id = :branchId AND deleted_at IS NULL
+              AND status_invoice = :statusInvoice
+              AND created_at >= :debut AND created_at < :finExclusive
+            GROUP BY 1, 2
+            ORDER BY 1, 2
+            """, nativeQuery = true)
+    List<Object[]> sumMonthlyByStatusInPeriod(
+            @Param("branchId") UUID branchId,
+            @Param("debut") LocalDateTime debut,
+            @Param("finExclusive") LocalDateTime finExclusive,
+            @Param("statusInvoice") int statusInvoice);
+
+    /**
+     * Encaissements agrégés par mois.
+     * <p>
+     * Filtre sur {@code updated_at}, faute de mieux : la table ne porte aucune
+     * date de règlement, {@code paid} n'est qu'un booléen. Une facture réglée en
+     * mars puis modifiée en août compte donc dans les encaissements d'août. Le
+     * rapport mensuel existant souffre déjà de ce biais — l'étendre à une
+     * période le rend seulement plus visible. Le corriger demanderait une
+     * colonne {@code paid_at} et une migration.
+     * </p>
+     */
+    @Query(value = """
+            SELECT EXTRACT(YEAR FROM updated_at)::int  AS annee,
+                   EXTRACT(MONTH FROM updated_at)::int AS mois,
+                   COALESCE(SUM(total), 0)             AS total
+            FROM invoices
+            WHERE branch_id = :branchId AND deleted_at IS NULL
+              AND paid = true AND status_invoice = 0
+              AND updated_at >= :debut AND updated_at < :finExclusive
+            GROUP BY 1, 2
+            ORDER BY 1, 2
+            """, nativeQuery = true)
+    List<Object[]> sumMonthlyPaidInPeriod(
+            @Param("branchId") UUID branchId,
+            @Param("debut") LocalDateTime debut,
+            @Param("finExclusive") LocalDateTime finExclusive);
+
+    /** Ventes par contrat sur la période entière — sert la ligne de total. */
+    @Query(value = """
+            SELECT COALESCE(c.name, 'Sans contrat') AS contractName,
+                   COALESCE(SUM(i.total), 0)        AS total
+            FROM invoices i
+            LEFT JOIN contrats c ON c.id = i.contrat_id
+            WHERE i.branch_id = :branchId AND i.deleted_at IS NULL
+              AND i.status_invoice = 0
+              AND i.created_at >= :debut AND i.created_at < :finExclusive
+            GROUP BY c.name
+            ORDER BY total DESC
+            """, nativeQuery = true)
+    List<Object[]> sumByContractInPeriod(
+            @Param("branchId") UUID branchId,
+            @Param("debut") LocalDateTime debut,
+            @Param("finExclusive") LocalDateTime finExclusive);
 
     // Rapports — totaux par contrat (ventes du mois)
     @Query(value = """

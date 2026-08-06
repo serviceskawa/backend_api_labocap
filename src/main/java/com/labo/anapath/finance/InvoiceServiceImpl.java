@@ -18,7 +18,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -340,11 +347,114 @@ public class InvoiceServiceImpl implements InvoiceService {
                         row[1] != null ? new BigDecimal(row[1].toString()) : BigDecimal.ZERO))
                 .toList();
 
-        String[] monthNames = {"", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-                "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"};
-        String period = monthNames[m] + " " + y;
+        String period = MOIS_FR[m] + " " + y;
 
         return new InvoiceReportDto(period, sales, credits, turnover, collections, byContracts);
+    }
+
+    /** Libellés de mois, indexés de 1 à 12 — la case 0 est un bouchon. */
+    private static final String[] MOIS_FR = {"", "Janvier", "Février", "Mars", "Avril",
+            "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"};
+
+    @Override
+    @Transactional(readOnly = true)
+    public InvoiceReportDto getReportsForPeriod(UUID branchId, LocalDate debut, LocalDate fin) {
+        if (debut == null || fin == null) {
+            throw new InvalidOperationException("Les deux bornes de la période sont requises");
+        }
+        if (fin.isBefore(debut)) {
+            throw new InvalidOperationException(
+                    "La date de fin ne peut pas précéder la date de début");
+        }
+
+        // Borne haute EXCLUSIVE, au lendemain à 00:00. Les colonnes comparées
+        // sont des timestamps : un `<=` posé sur la date de fin perdrait toutes
+        // les factures du dernier jour créées après minuit — soit, en pratique,
+        // toutes celles du dernier jour de la période.
+        LocalDateTime debutInstant = debut.atStartOfDay();
+        LocalDateTime finExclusive = fin.plusDays(1).atStartOfDay();
+
+        Map<YearMonth, BigDecimal> ventes = agregerParMois(
+                invoiceRepository.sumMonthlyByStatusInPeriod(branchId, debutInstant, finExclusive, 0));
+        Map<YearMonth, BigDecimal> avoirs = agregerParMois(
+                invoiceRepository.sumMonthlyByStatusInPeriod(branchId, debutInstant, finExclusive, 1));
+        Map<YearMonth, BigDecimal> encaisses = agregerParMois(
+                invoiceRepository.sumMonthlyPaidInPeriod(branchId, debutInstant, finExclusive));
+
+        // On parcourt les mois civils de la période plutôt que les clés rendues
+        // par la base : un mois sans aucune facture doit apparaître à zéro, sans
+        // quoi le trou dans la suite se lit comme une donnée manquante.
+        List<InvoiceReportDto.MonthlyRow> lignes = new ArrayList<>();
+        BigDecimal totalVentes = BigDecimal.ZERO;
+        BigDecimal totalAvoirs = BigDecimal.ZERO;
+        BigDecimal totalEncaisses = BigDecimal.ZERO;
+
+        YearMonth dernier = YearMonth.from(fin);
+        for (YearMonth ym = YearMonth.from(debut); !ym.isAfter(dernier); ym = ym.plusMonths(1)) {
+            BigDecimal v = ventes.getOrDefault(ym, BigDecimal.ZERO);
+            BigDecimal a = avoirs.getOrDefault(ym, BigDecimal.ZERO);
+            BigDecimal e = encaisses.getOrDefault(ym, BigDecimal.ZERO);
+
+            lignes.add(new InvoiceReportDto.MonthlyRow(
+                    ym.getYear(), ym.getMonthValue(),
+                    MOIS_FR[ym.getMonthValue()] + " " + ym.getYear(),
+                    v, a, v.subtract(a), e));
+
+            totalVentes = totalVentes.add(v);
+            totalAvoirs = totalAvoirs.add(a);
+            totalEncaisses = totalEncaisses.add(e);
+        }
+
+        List<InvoiceReportDto.ContractTotal> parContrat = invoiceRepository
+                .sumByContractInPeriod(branchId, debutInstant, finExclusive)
+                .stream()
+                .map(row -> new InvoiceReportDto.ContractTotal(
+                        (String) row[0],
+                        row[1] != null ? new BigDecimal(row[1].toString()) : BigDecimal.ZERO))
+                .toList();
+
+        return new InvoiceReportDto(
+                libellePeriode(debut, fin),
+                totalVentes,
+                totalAvoirs,
+                totalVentes.subtract(totalAvoirs),
+                totalEncaisses,
+                parContrat,
+                lignes);
+    }
+
+    /** Indexe par mois les lignes {@code [année, mois, total]} rendues par la base. */
+    private static Map<YearMonth, BigDecimal> agregerParMois(List<Object[]> lignes) {
+        Map<YearMonth, BigDecimal> parMois = new HashMap<>();
+        for (Object[] row : lignes) {
+            YearMonth ym = YearMonth.of(((Number) row[0]).intValue(), ((Number) row[1]).intValue());
+            BigDecimal total = row[2] != null ? new BigDecimal(row[2].toString()) : BigDecimal.ZERO;
+            // `merge` et non `put` : la requête groupe déjà par mois, mais un
+            // changement de regroupement ne doit pas écraser une valeur en silence.
+            parMois.merge(ym, total, BigDecimal::add);
+        }
+        return parMois;
+    }
+
+    /**
+     * Libellé lisible d'une période. Une période qui recouvre exactement un mois
+     * civil s'annonce par ce mois — « Août 2026 » plutôt que
+     * « 1 août – 31 août 2026 », qui dit la même chose en deux fois plus long.
+     */
+    private static String libellePeriode(LocalDate debut, LocalDate fin) {
+        YearMonth ym = YearMonth.from(debut);
+        if (YearMonth.from(fin).equals(ym)
+                && debut.getDayOfMonth() == 1
+                && fin.equals(ym.atEndOfMonth())) {
+            return MOIS_FR[ym.getMonthValue()] + " " + ym.getYear();
+        }
+        DateTimeFormatter jourMois = DateTimeFormatter.ofPattern("d MMM", Locale.FRENCH);
+        String gauche = debut.format(jourMois);
+        // L'année n'est répétée à gauche que si la période enjambe deux années.
+        if (debut.getYear() != fin.getYear()) {
+            gauche += " " + debut.getYear();
+        }
+        return gauche + " – " + fin.format(jourMois) + " " + fin.getYear();
     }
 
     @Override

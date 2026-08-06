@@ -61,6 +61,23 @@ public interface InvoiceService {
     InvoiceReportDto getReports(UUID branchId, Integer year, Integer month);
 
     /**
+     * Calcule le rapport sur une période libre, ventilé par mois.
+     * <p>
+     * Une ligne par mois civil couvert, y compris les mois sans aucune facture :
+     * un trou dans la suite des mois se lirait comme une donnée manquante, pas
+     * comme un mois sans activité. Les totaux de tête récapitulent la période.
+     * </p>
+     *
+     * @param branchId identifiant de la branche
+     * @param debut    premier jour, inclus
+     * @param fin      dernier jour, <b>inclus</b> — la conversion en borne haute
+     *                 exclusive revient à l'implémentation, les colonnes
+     *                 comparées étant des timestamps et non des dates
+     * @return rapport agrégé et ventilé
+     */
+    InvoiceReportDto getReportsForPeriod(UUID branchId, LocalDate debut, LocalDate fin);
+
+    /**
      * Statistiques mensuelles (Facturés / Avoirs / CA / Encaissements) pour
      * l'année demandée. Si {@code year} est {@code null}, l'année courante est
      * utilisée. Retourne une ligne par mois jusqu'au mois courant pour l'année
