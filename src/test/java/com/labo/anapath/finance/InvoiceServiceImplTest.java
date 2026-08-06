@@ -18,12 +18,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -180,5 +185,113 @@ class InvoiceServiceImplTest {
         assertThat(result.totalToday()).isEqualByComparingTo(new BigDecimal("2000.00"));
         assertThat(result.totalMonth()).isEqualByComparingTo(new BigDecimal("50000.00"));
         assertThat(result.totalLastMonth()).isEqualByComparingTo(new BigDecimal("45000.00"));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Rapport sur une période
+    // ─────────────────────────────────────────────────────────────────────
+
+    /** Ligne telle que la rend une requête native : {année, mois, total}. */
+    private static Object[] ligneMois(int annee, int mois, String total) {
+        return new Object[]{annee, mois, new BigDecimal(total)};
+    }
+
+    @Test
+    @DisplayName("Période : un mois sans facture apparaît à zéro plutôt que de manquer")
+    void periodeCombleLesMoisVides() {
+        // Ventes en janvier et mars seulement — février est muet côté base.
+        when(invoiceRepository.sumMonthlyByStatusInPeriod(eq(BRANCH_ID), any(), any(), eq(0)))
+                .thenReturn(List.<Object[]>of(ligneMois(2026, 1, "10000"), ligneMois(2026, 3, "30000")));
+        when(invoiceRepository.sumMonthlyByStatusInPeriod(eq(BRANCH_ID), any(), any(), eq(1)))
+                .thenReturn(List.of());
+        when(invoiceRepository.sumMonthlyPaidInPeriod(eq(BRANCH_ID), any(), any()))
+                .thenReturn(List.of());
+        when(invoiceRepository.sumByContractInPeriod(eq(BRANCH_ID), any(), any()))
+                .thenReturn(List.of());
+
+        InvoiceReportDto rapport = service.getReportsForPeriod(
+                BRANCH_ID, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 3, 31));
+
+        assertThat(rapport.months()).hasSize(3);
+        assertThat(rapport.months()).extracting(InvoiceReportDto.MonthlyRow::label)
+                .containsExactly("Janvier 2026", "Février 2026", "Mars 2026");
+        assertThat(rapport.months().get(1).sales()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(rapport.totalSales()).isEqualByComparingTo(new BigDecimal("40000"));
+    }
+
+    @Test
+    @DisplayName("Période : le chiffre d'affaires retranche les avoirs, mois par mois et au total")
+    void periodeCalculeLeChiffreDAffaires() {
+        when(invoiceRepository.sumMonthlyByStatusInPeriod(eq(BRANCH_ID), any(), any(), eq(0)))
+                .thenReturn(List.<Object[]>of(ligneMois(2026, 5, "50000")));
+        when(invoiceRepository.sumMonthlyByStatusInPeriod(eq(BRANCH_ID), any(), any(), eq(1)))
+                .thenReturn(List.<Object[]>of(ligneMois(2026, 5, "8000")));
+        when(invoiceRepository.sumMonthlyPaidInPeriod(eq(BRANCH_ID), any(), any()))
+                .thenReturn(List.<Object[]>of(ligneMois(2026, 6, "12000")));
+        when(invoiceRepository.sumByContractInPeriod(eq(BRANCH_ID), any(), any()))
+                .thenReturn(List.of());
+
+        InvoiceReportDto rapport = service.getReportsForPeriod(
+                BRANCH_ID, LocalDate.of(2026, 5, 1), LocalDate.of(2026, 6, 30));
+
+        assertThat(rapport.months().get(0).turnover()).isEqualByComparingTo(new BigDecimal("42000"));
+        assertThat(rapport.turnover()).isEqualByComparingTo(new BigDecimal("42000"));
+        // L'encaissement tombe en juin alors que la vente est de mai : c'est le
+        // décalage d'`updated_at`, faute de date de règlement dans la table.
+        assertThat(rapport.months().get(1).collections()).isEqualByComparingTo(new BigDecimal("12000"));
+        assertThat(rapport.collections()).isEqualByComparingTo(new BigDecimal("12000"));
+    }
+
+    @Test
+    @DisplayName("Période : la borne haute passée au dépôt est exclusive, au lendemain à 00:00")
+    void periodeBorneHauteExclusive() {
+        when(invoiceRepository.sumMonthlyByStatusInPeriod(eq(BRANCH_ID), any(), any(), anyInt()))
+                .thenReturn(List.of());
+        when(invoiceRepository.sumMonthlyPaidInPeriod(eq(BRANCH_ID), any(), any()))
+                .thenReturn(List.of());
+        when(invoiceRepository.sumByContractInPeriod(eq(BRANCH_ID), any(), any()))
+                .thenReturn(List.of());
+
+        service.getReportsForPeriod(BRANCH_ID, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 31));
+
+        ArgumentCaptor<LocalDateTime> debut = ArgumentCaptor.forClass(LocalDateTime.class);
+        ArgumentCaptor<LocalDateTime> fin = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(invoiceRepository, atLeastOnce()).sumMonthlyByStatusInPeriod(
+                eq(BRANCH_ID), debut.capture(), fin.capture(), anyInt());
+
+        assertThat(debut.getValue()).isEqualTo(LocalDateTime.of(2026, 8, 1, 0, 0));
+        // 1er septembre et non 31 août : une facture créée le 31 à 14h serait
+        // sinon exclue du mois auquel elle appartient.
+        assertThat(fin.getValue()).isEqualTo(LocalDateTime.of(2026, 9, 1, 0, 0));
+    }
+
+    @Test
+    @DisplayName("Période : un mois civil entier s'annonce par son nom, pas par ses bornes")
+    void periodeMoisEntierPrendLeLibelleDuMois() {
+        when(invoiceRepository.sumMonthlyByStatusInPeriod(eq(BRANCH_ID), any(), any(), anyInt()))
+                .thenReturn(List.of());
+        when(invoiceRepository.sumMonthlyPaidInPeriod(eq(BRANCH_ID), any(), any()))
+                .thenReturn(List.of());
+        when(invoiceRepository.sumByContractInPeriod(eq(BRANCH_ID), any(), any()))
+                .thenReturn(List.of());
+
+        assertThat(service.getReportsForPeriod(
+                BRANCH_ID, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 31)).period())
+                .isEqualTo("Août 2026");
+
+        assertThat(service.getReportsForPeriod(
+                BRANCH_ID, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 15)).period())
+                .doesNotContain("Août 2026");
+    }
+
+    @Test
+    @DisplayName("Période : des bornes inversées sont refusées, pas silencieusement vidées")
+    void periodeRefuseLesBornesInversees() {
+        assertThatThrownBy(() -> service.getReportsForPeriod(
+                BRANCH_ID, LocalDate.of(2026, 8, 31), LocalDate.of(2026, 8, 1)))
+                .isInstanceOf(InvalidOperationException.class);
+
+        assertThatThrownBy(() -> service.getReportsForPeriod(BRANCH_ID, null, LocalDate.of(2026, 8, 1)))
+                .isInstanceOf(InvalidOperationException.class);
     }
 }
