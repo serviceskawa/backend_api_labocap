@@ -66,7 +66,8 @@ class ContratServiceImplTest {
         ContratResponseDto mockDto = new ContratResponseDto(
                 CONTRACT_ID, null, null, null, null, null, null, null,
                 10, LocalDate.now(), null, "ACTIF", true, false,
-                new ArrayList<>(), BRANCH_ID, null);
+                // branchId, createdAt, updatedAt, usedTestsCount, invoice.
+                new ArrayList<>(), BRANCH_ID, null, null, null, null);
 
         when(contratRepository.findById(CONTRACT_ID)).thenReturn(Optional.of(contrat));
         when(invoiceRepository.findFirstByContratIdOrderByCreatedAtDesc(CONTRACT_ID))
@@ -150,7 +151,8 @@ class ContratServiceImplTest {
         ContratResponseDto mockDto = new ContratResponseDto(
                 CONTRACT_ID, null, null, null, null, null, null, null,
                 10, LocalDate.now(), null, "INACTIF", true, true,
-                new ArrayList<>(), BRANCH_ID, null);
+                // branchId, createdAt, updatedAt, usedTestsCount, invoice.
+                new ArrayList<>(), BRANCH_ID, null, null, null, null);
 
         when(contratRepository.findById(CONTRACT_ID)).thenReturn(Optional.of(contrat));
         when(contratRepository.save(any())).thenReturn(contrat);

@@ -51,9 +51,12 @@ class EmployeeServiceTest {
     }
 
     private EmployeeResponseDto buildResponse(Employee e) {
+        // address, dateOfBirth, placeOfBirth, cnssNumber, photoUrl, gender,
+        // nationality, city, userId — puis branchId et createdAt.
         return new EmployeeResponseDto(EMP_ID, e.getFirstName(), e.getLastName(),
                 e.getPhone(), e.getEmail(), e.getPosition(), e.getSalary(),
-                e.getHireDate(), null, BRANCH_ID, null);
+                e.getHireDate(), null, null, null, null, null, null, null, null, null,
+                BRANCH_ID, null);
     }
 
     @Test

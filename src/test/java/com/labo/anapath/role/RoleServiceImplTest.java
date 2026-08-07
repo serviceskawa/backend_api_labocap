@@ -55,7 +55,7 @@ class RoleServiceImplTest {
     }
 
     private RoleResponseDto buildResponseDto(String name, String slug) {
-        return new RoleResponseDto(ROLE_ID, name, slug, "desc", true, List.of(), LocalDateTime.now());
+        return new RoleResponseDto(ROLE_ID, name, slug, "desc", true, List.of(), null, LocalDateTime.now());
     }
 
     @Test
