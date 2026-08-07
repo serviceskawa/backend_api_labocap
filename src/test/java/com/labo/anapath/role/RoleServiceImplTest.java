@@ -1,5 +1,6 @@
 package com.labo.anapath.role;
 
+import com.labo.anapath.user.UserRepository;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.DuplicateResourceException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
@@ -39,6 +40,11 @@ class RoleServiceImplTest {
 
     @Mock
     private RoleMapper roleMapper;
+
+    // Ajouté au service pour interdire la suppression d'un rôle encore porté
+    // par un utilisateur ; le test ne l'avait pas suivi.
+    @Mock
+    private UserRepository userRepository;
 
     @InjectMocks
     private RoleServiceImpl roleService;

@@ -30,6 +30,8 @@ class RefundServiceImplTest {
     @Mock private RefundRequestRepository refundRequestRepository;
     @Mock private RefundRequestLogRepository refundRequestLogRepository;
     @Mock private InvoiceRepository invoiceRepository;
+    // Lu à la création du journal de remboursement.
+    @Mock private RefundReasonRepository refundReasonRepository;
 
     @InjectMocks private RefundServiceImpl service;
 
@@ -88,8 +90,6 @@ class RefundServiceImplTest {
     void createRefund_createsInitialLog() {
         when(refundRequestRepository.existsByInvoiceId(INVOICE_ID)).thenReturn(false);
         when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(buildInvoice()));
-        when(invoiceRepository.findByBranchIdAndStatusInvoiceAndCodeNotNullAndYear(any(), anyInt(), anyInt(), any()))
-                .thenReturn(Collections.emptyList());
         when(refundRequestRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(refundRequestLogRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(refundRequestLogRepository.findByRefundRequestId(any())).thenReturn(Collections.emptyList());

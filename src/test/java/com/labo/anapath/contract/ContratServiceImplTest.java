@@ -26,6 +26,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -72,7 +73,7 @@ class ContratServiceImplTest {
         when(contratRepository.findById(CONTRACT_ID)).thenReturn(Optional.of(contrat));
         when(invoiceRepository.findFirstByContratIdOrderByCreatedAtDesc(CONTRACT_ID))
                 .thenReturn(Optional.empty());
-        when(invoiceRepository.findByBranchIdAndCodeNotNullAndYear(any(), any(), any()))
+        when(invoiceRepository.findByBranchIdAndCodeNotNullAndYear(any(), anyInt(), any()))
                 .thenReturn(new ArrayList<>());
         when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(contratRepository.save(any())).thenReturn(contrat);

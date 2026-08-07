@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -65,9 +66,15 @@ class NotificationServiceImplTest {
         SettingApp smsEndpoint = new SettingApp();
         smsEndpoint.setValue("https://api.ourvoice.test/sms");
 
-        when(settingAppRepository.findByKey("api_key_ourvoice")).thenReturn(Optional.of(apiKey));
-        when(settingAppRepository.findByKey("link_ourvoice_call")).thenReturn(Optional.of(callEndpoint));
-        when(settingAppRepository.findByKey("link_ourvoice_sms")).thenReturn(Optional.of(smsEndpoint));
+        // La clé réelle est « key_ourvoice » — vérifié dans setting_apps.
+        //
+        // `lenient` : ce fabricant sert les tests d'appel ET ceux de SMS, or un
+        // test d'appel ne lit jamais le point d'entrée SMS et réciproquement.
+        // Sans lui, la vérification stricte de Mockito rejette l'amorce non
+        // sollicitée — ce qui dit seulement que la préparation est commune.
+        lenient().when(settingAppRepository.findByKey("key_ourvoice")).thenReturn(Optional.of(apiKey));
+        lenient().when(settingAppRepository.findByKey("link_ourvoice_call")).thenReturn(Optional.of(callEndpoint));
+        lenient().when(settingAppRepository.findByKey("link_ourvoice_sms")).thenReturn(Optional.of(smsEndpoint));
 
         // logAction tente de résoudre l'utilisateur — retourner empty est suffisant (ifPresent)
         when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());

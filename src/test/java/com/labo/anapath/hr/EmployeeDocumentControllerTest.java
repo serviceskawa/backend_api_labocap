@@ -51,7 +51,9 @@ class EmployeeDocumentControllerTest {
 
     private UserPrincipal mockPrincipal() {
         UserPrincipal p = org.mockito.Mockito.mock(UserPrincipal.class);
-        when(p.getBranchId()).thenReturn(BRANCH_ID);
+        // `lenient` : ce fabricant est partagé, et le test du salarié inconnu
+        // échoue avant de lire la branche. Supprimer l'amorce casserait les autres.
+        org.mockito.Mockito.lenient().when(p.getBranchId()).thenReturn(BRANCH_ID);
         return p;
     }
 
