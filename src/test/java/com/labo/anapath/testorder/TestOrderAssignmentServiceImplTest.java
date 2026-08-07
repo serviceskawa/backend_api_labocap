@@ -117,7 +117,6 @@ class TestOrderAssignmentServiceImplTest {
         when(assignmentRepository.findById(ASSIGNMENT_ID)).thenReturn(Optional.of(assignment));
         when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
         when(detailRepository.existsByTestOrderId(ORDER_ID)).thenReturn(false);
-        when(detailRepository.findByTestOrderId(ORDER_ID)).thenReturn(Optional.empty());
         when(detailRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(macroRepository.findByTestOrderId(any())).thenReturn(Optional.empty());
         when(macroRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));

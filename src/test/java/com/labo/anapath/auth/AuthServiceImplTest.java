@@ -118,7 +118,8 @@ class AuthServiceImplTest {
         when(jwtTokenProvider.generateRefreshToken(any(UUID.class))).thenReturn("refresh-token");
         when(jwtProperties.getExpirationMs()).thenReturn(86_400_000L);
         when(userMapper.toResponseDto(user)).thenReturn(
-                new UserResponseDto(USER_ID, "Admin", "Test", "admin@test.com", null, true, BRANCH_ID, LocalDateTime.now(), null, null, List.of()));
+                new UserResponseDto(USER_ID, "Admin", "Test", "admin@test.com", null, null, null, true,
+                        BRANCH_ID, LocalDateTime.now(), null, null, null, List.of()));
 
         LoginRequest request = new LoginRequest();
         request.setEmail("admin@test.com");
@@ -226,7 +227,8 @@ class AuthServiceImplTest {
         when(jwtTokenProvider.generateRefreshToken(USER_ID)).thenReturn("refresh-token");
         when(jwtProperties.getExpirationMs()).thenReturn(86_400_000L);
         when(userMapper.toResponseDto(user)).thenReturn(
-                new UserResponseDto(USER_ID, "Admin", "Test", "admin@test.com", null, true, BRANCH_ID, LocalDateTime.now(), null, null, List.of()));
+                new UserResponseDto(USER_ID, "Admin", "Test", "admin@test.com", null, null, null, true,
+                        BRANCH_ID, LocalDateTime.now(), null, null, null, List.of()));
 
         TwoFactorVerifyRequest request = new TwoFactorVerifyRequest();
         request.setTempToken("temp-token");

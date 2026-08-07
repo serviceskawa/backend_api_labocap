@@ -41,8 +41,11 @@ class EmployeeContratControllerTest {
     }
 
     private EmployeeContratResponseDto dummyDto() {
+        // probationEndDate, weeklyWorkHours, workingDaysPerWeek, terminationReason,
+        // hourlyGrossRate, transportAllowance, iban, bic, createdAt.
         return new EmployeeContratResponseDto(CONTRAT_ID, EMP_ID, "CDI",
-                LocalDate.of(2024, 1, 1), null, new BigDecimal("350000"), null);
+                LocalDate.of(2024, 1, 1), null, new BigDecimal("350000"),
+                null, null, null, null, null, null, null, null, null);
     }
 
     @Test

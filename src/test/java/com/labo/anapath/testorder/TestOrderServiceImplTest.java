@@ -97,7 +97,9 @@ class TestOrderServiceImplTest {
                 null, null, null, null,
                 null, null, null, null,
                 null, null, List.of(), BRANCH_ID, LocalDateTime.now(),
-                null, null, false, null, null);
+                // reportId, reportStatus, reportIsDelivered, invoiceId, archive,
+                // testAffiliate, option.
+                null, null, false, null, null, null, null);
     }
 
     @Test

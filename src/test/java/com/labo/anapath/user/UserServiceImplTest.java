@@ -64,7 +64,8 @@ class UserServiceImplTest {
 
     private UserResponseDto buildResponseDto(User user) {
         return new UserResponseDto(USER_ID, user.getFirstname(), user.getLastname(), user.getEmail(),
-                user.getPhone(), user.isActive(), BRANCH_ID, LocalDateTime.now(), List.of(), null, List.of());
+                user.getPhone(), null, null, user.isActive(), BRANCH_ID, LocalDateTime.now(),
+                List.of(), null, null, List.of());
     }
 
     @Test
