@@ -14,6 +14,15 @@ RUN mvn package -Dmaven.test.skip=true -B
 # ─── Stage 2 : runtime ───────────────────────────────────────────────────────
 FROM eclipse-temurin:21-jre-alpine
 
+# Client PostgreSQL — la tâche de sauvegarde quotidienne appelle `pg_dump`.
+# Sans lui, elle échouait chaque soir depuis la mise en conteneur : la commande
+# par défaut passait par `docker exec`, or ni le client Docker ni sa socket
+# n'existent ici. Aucune sauvegarde n'a jamais été produite.
+#
+# Version 16, celle du serveur : `pg_dump` refuse de sauvegarder une base dont
+# la version majeure dépasse la sienne. À faire suivre si le serveur monte.
+RUN apk add --no-cache postgresql16-client
+
 # Utilisateur non-root pour la sécurité
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
@@ -32,7 +41,12 @@ RUN chown appuser:appgroup app.jar
 # qu'en local (processus lancé sous le compte du développeur) tout marchait.
 # Docker recopie les droits du dossier de l'image dans le volume neuf.
 ENV STORAGE_PATH=/var/lib/labo/storage
-RUN mkdir -p "$STORAGE_PATH" && chown -R appuser:appgroup /var/lib/labo
+# Répertoire des sauvegardes, créé ici pour la même raison que le stockage —
+# un volume monté sur un chemin absent de l'image appartient à root, et le
+# conteneur tourne en non-root. Il vivait auparavant dans /app, hors de tout
+# volume : chaque redéploiement l'emportait.
+ENV APP_BACKUP_DIR=/var/lib/labo/backups
+RUN mkdir -p "$STORAGE_PATH" "$APP_BACKUP_DIR" && chown -R appuser:appgroup /var/lib/labo
 
 USER appuser
 
