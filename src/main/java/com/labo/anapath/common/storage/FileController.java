@@ -2,6 +2,7 @@ package com.labo.anapath.common.storage;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -23,6 +24,7 @@ import java.nio.file.Path;
 public class FileController {
 
     private final FileStorageService fileStorageService;
+    private final StoredFiles storedFiles;
 
     @GetMapping("/**")
     public ResponseEntity<Resource> getFile(@PathVariable(required = false) String relativePath,
@@ -40,18 +42,37 @@ public class FileController {
             return ResponseEntity.notFound().build();
         }
 
-        String contentType = detectContentType(filePath);
         String filename = filePath.getFileName().toString();
 
         // Servir avec un Content-Length connu (FileSystemResource) plutôt qu'un
         // StreamingResponseBody en Transfer-Encoding: chunked. Le chunked était
         // rejeté par le navigateur (net::ERR_INCOMPLETE_CHUNKED_ENCODING) → l'aperçu
         // et le téléchargement des pièces jointes échouaient.
-        Resource resource = new FileSystemResource(filePath);
+        //
+        // La sorte de fichier se lit dans le fichier lui-même, pas dans la
+        // configuration : les images d'avant le chiffrement restent servies par
+        // le flux, sans rien charger en mémoire, et le rattrapage de l'existant
+        // peut donc attendre.
+        Resource resource;
+        long longueur;
+        boolean chiffre = storedFiles.estChiffre(filePath);
+        if (chiffre) {
+            // Le Content-Length doit être celui du CLAIR. La taille sur disque
+            // compte en plus l'en-tête et le sceau : la poser tronquerait la
+            // réponse de quelques dizaines d'octets, et l'image serait cassée.
+            byte[] clair = storedFiles.lireDechiffre(filePath);
+            resource = new ByteArrayResource(clair);
+            longueur = clair.length;
+        } else {
+            resource = new FileSystemResource(filePath);
+            longueur = Files.size(filePath);
+        }
+
+        String contentType = detectContentType(filePath, chiffre);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
-                .contentLength(Files.size(filePath))
+                .contentLength(longueur)
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
                 .header("X-Content-Type-Options", "nosniff")
                 // Le CSP global de l'API est « default-src 'none' », ce qui implique
@@ -67,11 +88,20 @@ public class FileController {
                 .body(resource);
     }
 
-    private String detectContentType(Path path) {
-        try {
-            String detected = Files.probeContentType(path);
-            if (detected != null) return detected;
-        } catch (IOException ignored) {}
+    /**
+     * @param chiffre si vrai, le type se déduit du seul nom. {@code probeContentType}
+     *                consulte le contenu sur certaines plateformes ; sur des octets
+     *                chiffrés il rendrait « application/octet-stream », et le
+     *                navigateur proposerait de télécharger une image au lieu de
+     *                l'afficher. L'extension, elle, est conservée par le chiffrement.
+     */
+    private String detectContentType(Path path, boolean chiffre) {
+        if (!chiffre) {
+            try {
+                String detected = Files.probeContentType(path);
+                if (detected != null) return detected;
+            } catch (IOException ignored) {}
+        }
         String name = path.getFileName().toString().toLowerCase();
         if (name.endsWith(".pdf"))  return "application/pdf";
         if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";

@@ -171,15 +171,35 @@ class FileCipherTest {
     }
 
     @Test
-    @DisplayName("Une version inconnue est refusée")
+    @DisplayName("Une version plausible mais inconnue est refusée comme telle")
     void versionInconnue() {
+        // Le cas du retour arrière : du v2 écrit, relu par du code qui ne connaît
+        // que v1. Reconnu comme chiffré, donc refusé bruyamment — et non servi en
+        // clair, ce qui donnerait des octets chiffrés affichés en image.
         FileCipher c = chiffreur();
         byte[] chiffre = c.chiffrer(image(4096));
-        chiffre[FileCipher.OFFSET_VERSION] = 99;
+        chiffre[FileCipher.OFFSET_VERSION] = 2;
 
         assertThatThrownBy(() -> c.dechiffrer(chiffre))
                 .isInstanceOf(InvalidOperationException.class)
                 .hasMessageContaining("Version");
+    }
+
+    @Test
+    @DisplayName("Au-delà du plafond, la marque est tenue pour fortuite")
+    void versionImplausible() {
+        // L'autre côté de la frontière posée par VERSION_MAX. Un octet à 99 ne
+        // sera jamais un numéro de version de ce format ; « LABO » suivi de
+        // n'importe quoi est bien plus probablement un fichier qui commence par
+        // « LABORATOIRE ». Il doit donc passer pour du clair.
+        FileCipher c = chiffreur();
+        byte[] chiffre = c.chiffrer(image(4096));
+        chiffre[FileCipher.OFFSET_VERSION] = 99;
+
+        assertThat(FileCipher.estChiffre(chiffre)).isFalse();
+        assertThatThrownBy(() -> c.dechiffrer(chiffre))
+                .isInstanceOf(InvalidOperationException.class)
+                .hasMessageContaining("n'est pas chiffré");
     }
 
     @Test

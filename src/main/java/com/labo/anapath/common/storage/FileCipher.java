@@ -82,6 +82,23 @@ public class FileCipher {
 
     static final byte VERSION = 1;
 
+    /**
+     * Plafond des versions plausibles, pour distinguer la marque d'un hasard.
+     *
+     * <p>« LABO » n'est pas une suite d'octets improbable : c'est le début de
+     * « LABORATOIRE ». Un document texte ou un CSV commençant par ce mot serait
+     * pris pour un fichier chiffré — et le service RH accepte n'importe quelle
+     * extension, donc n'importe quel contenu. L'octet suivant lève l'ambiguïté :
+     * dans « LABORATOIRE » c'est « R » (82), hors de portée d'un numéro de
+     * version.</p>
+     *
+     * <p>Le plafond, plutôt que l'égalité stricte à {@link #VERSION} : un fichier
+     * d'un format futur, relu par cette version du code après un retour arrière,
+     * doit être <b>refusé bruyamment</b> et non servi comme du clair. Un refus se
+     * remarque ; des octets chiffrés servis en image ne se voient qu'à l'écran.</p>
+     */
+    static final byte VERSION_MAX = 16;
+
     private static final int TAILLE_IV = 12;          // recommandation GCM
     private static final int TAILLE_SCEAU_BITS = 128;
     private static final int TAILLE_CLE = 32;         // AES-256
@@ -93,6 +110,9 @@ public class FileCipher {
     static final int OFFSET_IV_CONTENU = OFFSET_CLE + TAILLE_CLE_ENCAPSULEE;
     static final int OFFSET_TAILLE = OFFSET_IV_CONTENU + TAILLE_IV;
     static final int TAILLE_ENTETE = OFFSET_TAILLE + Long.BYTES;
+
+    /** Nombre d'octets de tête nécessaires pour se prononcer sur la sorte du fichier. */
+    static final int TAILLE_ENTETE_RECONNAISSANCE = OFFSET_VERSION + 1;
 
     private final SecretKey cleMaitresse;
     private final SecureRandom alea = new SecureRandom();
@@ -136,7 +156,20 @@ public class FileCipher {
         if (contenu == null || contenu.length < TAILLE_ENTETE) {
             return false;
         }
-        return Arrays.equals(Arrays.copyOf(contenu, MAGIE.length), MAGIE);
+        return porteLaMarque(Arrays.copyOf(contenu, TAILLE_ENTETE_RECONNAISSANCE));
+    }
+
+    /**
+     * La marque ET une version plausible. Les deux, jamais l'une sans l'autre —
+     * voir {@link #VERSION_MAX}.
+     */
+    static boolean porteLaMarque(byte[] tete) {
+        if (tete.length < TAILLE_ENTETE_RECONNAISSANCE
+                || !Arrays.equals(Arrays.copyOf(tete, MAGIE.length), MAGIE)) {
+            return false;
+        }
+        byte version = tete[OFFSET_VERSION];
+        return version > 0 && version <= VERSION_MAX;
     }
 
     /** Taille du clair, lue dans l'en-tête sans déchiffrer le contenu. */
@@ -197,7 +230,7 @@ public class FileCipher {
             throw new InvalidOperationException(
                     "Fichier chiffré tronqué : en-tête incomplet");
         }
-        if (!Arrays.equals(Arrays.copyOf(fichier, MAGIE.length), MAGIE)) {
+        if (!porteLaMarque(Arrays.copyOf(fichier, TAILLE_ENTETE_RECONNAISSANCE))) {
             throw new InvalidOperationException("Ce fichier n'est pas chiffré");
         }
         byte version = fichier[OFFSET_VERSION];
