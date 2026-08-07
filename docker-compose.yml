@@ -49,6 +49,14 @@ services:
       DB_URL: jdbc:postgresql://db:${DB_PORT:-5432}/${DB_NAME:-labo_anapath}
       DB_USERNAME: ${DB_USERNAME:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant dans .env}
+      # Sauvegarde : `pg_dump` s'adresse au serveur par le réseau, comme
+      # l'application. DB_HOST vaut le nom du service, pas localhost.
+      # Spring lit `app.backup.*` : le préfixe APP_ est nécessaire, une
+      # variable nommée BACKUP_DIR ne serait jamais reliée à la propriété.
+      APP_BACKUP_DIR: /var/lib/labo/backups
+      APP_BACKUP_COMMAND: pg_dump -h db -p ${DB_PORT:-5432} -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-labo_anapath}
+      APP_BACKUP_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant dans .env}
+      APP_BACKUP_KEEP: ${BACKUP_KEEP:-30}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant dans .env}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
       JWT_REFRESH: ${JWT_REFRESH:-604800000}
@@ -85,6 +93,9 @@ services:
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Labo AnaPath}
     volumes:
       - storage:/var/lib/labo/storage
+      # Les sauvegardes doivent survivre au redéploiement : sans volume,
+      # elles vivaient dans la couche éphémère du conteneur.
+      - backups:/var/lib/labo/backups
     ports:
       # hôte:conteneur — API_PORT règle le port publié, APP_PORT celui écouté.
       # Publié sur 127.0.0.1 uniquement : l'accès public passe par le reverse
@@ -98,5 +109,6 @@ services:
       start_period: 60s
 
 volumes:
+  backups:
   db-data:
   storage:
