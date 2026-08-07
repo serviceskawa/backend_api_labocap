@@ -1,0 +1,43 @@
+package com.labo.anapath.common.storage;
+
+import org.springframework.beans.factory.ObjectProvider;
+
+import java.security.SecureRandom;
+import java.util.Base64;
+
+/**
+ * Fabrique un {@link StoredFiles} dans l'un ou l'autre régime, sans contexte Spring.
+ *
+ * <p>{@link ObjectProvider} n'a pas d'implémentation triviale dans Spring, et
+ * deux classes d'essai en ont besoin — celle du point de passage et celle du
+ * service de stockage, qui ne teste pas le chiffrement mais doit bien construire
+ * son collaborateur.</p>
+ */
+final class StoredFilesFixture {
+
+    private StoredFilesFixture() {}
+
+    /** Le régime d'avant : aucun chiffreur, comme avec le drapeau à faux. */
+    static StoredFiles enClair() {
+        return new StoredFiles(fournisseur(null));
+    }
+
+    static StoredFiles chiffrant(FileCipher c) {
+        return new StoredFiles(fournisseur(c));
+    }
+
+    static FileCipher chiffreurAleatoire() {
+        byte[] k = new byte[32];
+        new SecureRandom().nextBytes(k);
+        return new FileCipher(Base64.getEncoder().encodeToString(k));
+    }
+
+    static ObjectProvider<FileCipher> fournisseur(FileCipher c) {
+        return new ObjectProvider<>() {
+            @Override public FileCipher getIfAvailable() { return c; }
+            @Override public FileCipher getObject() { return c; }
+            @Override public FileCipher getObject(Object... args) { return c; }
+            @Override public FileCipher getIfUnique() { return c; }
+        };
+    }
+}

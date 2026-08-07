@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.Set;
 import java.util.UUID;
 
@@ -24,14 +23,17 @@ public class FileStorageServiceImpl implements FileStorageService {
     );
 
     private final Path basePath;
+    private final StoredFiles storedFiles;
 
     // Même valeur par défaut que les deux autres services de stockage
     // (testorder.FileStorageService et hr.FileStorageServiceImpl) : avec « ./storage »
     // ce service écrivait et relisait ailleurs que les autres si `app.storage.path`
     // venait à manquer — un fichier téléversé d'un côté aurait été introuvable de
     // l'autre, et c'est ce service qui sert /api/v1/files/**.
-    public FileStorageServiceImpl(@Value("${app.storage.path:/tmp/labo/storage}") String basePath) {
+    public FileStorageServiceImpl(@Value("${app.storage.path:/tmp/labo/storage}") String basePath,
+                                  StoredFiles storedFiles) {
         this.basePath = Paths.get(basePath).toAbsolutePath().normalize();
+        this.storedFiles = storedFiles;
     }
 
     @Override
@@ -48,7 +50,7 @@ public class FileStorageServiceImpl implements FileStorageService {
             }
             Files.createDirectories(targetDir);
             Path target = targetDir.resolve(filename);
-            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+            storedFiles.ecrire(file, target);
             return directory + "/" + filename;
         } catch (IOException e) {
             throw new InvalidOperationException("Erreur lors du stockage du fichier: " + e.getMessage());

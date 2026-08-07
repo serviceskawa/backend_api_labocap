@@ -1,5 +1,7 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.common.storage.StoredFiles;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -12,7 +14,10 @@ import java.nio.file.Paths;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class FileStorageService {
+
+    private final StoredFiles storedFiles;
 
     @Value("${app.storage.path:/tmp/labo/storage}")
     private String storagePath;
@@ -45,7 +50,7 @@ public class FileStorageService {
         if (!target.startsWith(uploadDir)) {
             throw new IllegalArgumentException("Chemin de fichier invalide");
         }
-        file.transferTo(target);
+        storedFiles.ecrire(file, target);
         return subDir + "/" + filename;
     }
 
