@@ -83,6 +83,8 @@ public class TestOrderServiceImpl implements TestOrderService {
     private final UserRepository userRepository;
     private final SettingRepository settingRepository;
     private final SettingAppRepository settingAppRepository;
+    /** Sert à rendre, dans la liste, le nom de la personne affectée au bon. */
+    private final TestOrderAssignmentDetailRepository assignmentDetailRepository;
     private final FileStorageService fileStorageService;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
@@ -105,9 +107,12 @@ public class TestOrderServiceImpl implements TestOrderService {
                 .stream().collect(Collectors.toMap(
                         i -> i.getTestOrder().getId(), i -> i, (a, b) -> a));
 
+        Map<UUID, String> affectesA = loadAssignedUserNames(ids);
+
         List<TestOrderResponseDto> content = orderPage.getContent().stream()
                 .map(order -> enrichDto(testOrderMapper.toResponseDto(order),
-                        reportMap.get(order.getId()), invoiceMap.get(order.getId())))
+                        reportMap.get(order.getId()), invoiceMap.get(order.getId()),
+                        affectesA.get(order.getId())))
                 .toList();
 
         return new PageResponse<>(content, orderPage.getNumber(), orderPage.getSize(),
@@ -147,9 +152,12 @@ public class TestOrderServiceImpl implements TestOrderService {
                 .stream().collect(Collectors.toMap(
                         i -> i.getTestOrder().getId(), i -> i, (a, b) -> a));
 
+        Map<UUID, String> affectesA = loadAssignedUserNames(ids);
+
         List<TestOrderResponseDto> content = orderPage.getContent().stream()
                 .map(order -> enrichDto(testOrderMapper.toResponseDto(order),
-                        reportMap.get(order.getId()), invoiceMap.get(order.getId())))
+                        reportMap.get(order.getId()), invoiceMap.get(order.getId()),
+                        affectesA.get(order.getId())))
                 .toList();
 
         return new PageResponse<>(content, orderPage.getNumber(), orderPage.getSize(),
@@ -190,7 +198,14 @@ public class TestOrderServiceImpl implements TestOrderService {
         TestOrderResponseDto dto = testOrderMapper.toResponseDto(order);
         Report report = reportRepository.findByTestOrderId(order.getId()).orElse(null);
         Invoice invoice = invoiceRepository.findByTestOrderId(order.getId()).orElse(null);
-        return enrichDto(dto, report, invoice);
+        // `List.of` refuse les valeurs nulles : on ne consulte les affectations que
+        // si le bon porte un identifiant. Le cas ne se rencontre pas sur une
+        // entité chargée depuis la base, mais un bon d'examen sans identifiant ne
+        // peut de toute façon figurer dans aucune affectation.
+        String affecteA = order.getId() == null
+                ? null
+                : loadAssignedUserNames(List.of(order.getId())).get(order.getId());
+        return enrichDto(dto, report, invoice, affecteA);
     }
 
     /**
@@ -476,7 +491,25 @@ public class TestOrderServiceImpl implements TestOrderService {
      * @param invoice facture associée au bon (null si pas encore créée)
      * @return un nouveau DTO avec les champs reportId, reportStatus, reportIsDelivered, invoiceId renseignés
      */
-    private TestOrderResponseDto enrichDto(TestOrderResponseDto dto, Report report, Invoice invoice) {
+    /**
+     * Noms des personnes affectées, indexés par bon d'examen.
+     *
+     * <p>Une requête pour toute la page, comme pour les comptes rendus et les
+     * factures juste au-dessus. Rendre une correspondance vide sur une liste
+     * vide évite un {@code IN ()} que PostgreSQL refuse.</p>
+     */
+    private Map<UUID, String> loadAssignedUserNames(List<UUID> orderIds) {
+        if (orderIds.isEmpty()) return Map.of();
+        Map<UUID, String> noms = new java.util.HashMap<>();
+        for (Object[] ligne : assignmentDetailRepository.findAssignedUserNames(orderIds)) {
+            String nom = ligne[1] != null ? ligne[1].toString().trim() : "";
+            if (!nom.isEmpty()) noms.put((UUID) ligne[0], nom);
+        }
+        return noms;
+    }
+
+    private TestOrderResponseDto enrichDto(TestOrderResponseDto dto, Report report, Invoice invoice,
+                                          String assignedUserName) {
         return new TestOrderResponseDto(
                 dto.id(), dto.code(), dto.status(), dto.prelevementDate(),
                 dto.referenceHopital(), dto.isUrgent(), dto.subtotal(), dto.discount(), dto.total(),
@@ -492,7 +525,8 @@ public class TestOrderServiceImpl implements TestOrderService {
                 invoice != null ? invoice.getId() : null,
                 dto.archive(),
                 dto.testAffiliate(),
-                dto.option()
+                dto.option(),
+                assignedUserName
         );
     }
 
@@ -1035,9 +1069,12 @@ public class TestOrderServiceImpl implements TestOrderService {
                 .stream().collect(Collectors.toMap(
                         i -> i.getTestOrder().getId(), i -> i, (a, b) -> a));
 
+        Map<UUID, String> affectesA = loadAssignedUserNames(ids);
+
         Page<TestOrderResponseDto> result = orderPage.map(order -> enrichDto(
                 testOrderMapper.toResponseDto(order),
-                reportMap.get(order.getId()), invoiceMap.get(order.getId())));
+                reportMap.get(order.getId()), invoiceMap.get(order.getId()),
+                affectesA.get(order.getId())));
         return PageResponse.of(result);
     }
 

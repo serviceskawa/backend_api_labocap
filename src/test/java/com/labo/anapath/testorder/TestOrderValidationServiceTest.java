@@ -107,8 +107,8 @@ class TestOrderValidationServiceTest {
                 null, null, null, null,
                 null, null, Collections.emptyList(), BRANCH_ID, null,
                 // reportId, reportStatus, reportIsDelivered, invoiceId, archive,
-                // testAffiliate, option.
-                null, null, false, null, null, null, null);
+                // testAffiliate, option, assignedUserName.
+                null, null, false, null, null, null, null, null);
     }
 
     // --- AC3 ---

@@ -43,6 +43,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -66,6 +67,8 @@ class TestOrderServiceImplTest {
     @Mock private com.labo.anapath.setting.SettingAppRepository settingAppRepository;
     @Mock private FileStorageService fileStorageService;
     @Mock private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    // Ajouté au service pour rendre le nom de la personne affectée dans la liste.
+    @Mock private TestOrderAssignmentDetailRepository assignmentDetailRepository;
 
     @InjectMocks
     private TestOrderServiceImpl testOrderService;
@@ -98,8 +101,8 @@ class TestOrderServiceImplTest {
                 null, null, null, null,
                 null, null, List.of(), BRANCH_ID, LocalDateTime.now(),
                 // reportId, reportStatus, reportIsDelivered, invoiceId, archive,
-                // testAffiliate, option.
-                null, null, false, null, null, null, null);
+                // testAffiliate, option, assignedUserName.
+                null, null, false, null, null, null, null, null);
     }
 
     @Test
@@ -183,6 +186,50 @@ class TestOrderServiceImplTest {
         PageResponse<TestOrderResponseDto> result = testOrderService.findAll(0, 20, new TestOrderFilterDto(), BRANCH_ID);
 
         assertThat(result.content()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("findAll - porte le nom de la personne affectée, ou null si le bon ne l'est pas")
+    void findAll_exposeLeNomDeLaPersonneAffectee() {
+        TestOrder affecte = buildOrder(TestOrderStatus.PENDING);
+        affecte.setId(UUID.randomUUID());
+        TestOrder libre = buildOrder(TestOrderStatus.PENDING);
+        libre.setId(UUID.randomUUID());
+
+        when(testOrderRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(affecte, libre)));
+        when(testOrderMapper.toResponseDto(any())).thenReturn(buildResponseDto());
+        // Le dépôt ne rend une ligne que pour les bons effectivement affectés :
+        // l'absence dans la correspondance vaut « non affecté ».
+        when(assignmentDetailRepository.findAssignedUserNames(anyList()))
+                .thenReturn(List.<Object[]>of(new Object[]{affecte.getId(), "Takin Romulus"}));
+
+        PageResponse<TestOrderResponseDto> result =
+                testOrderService.findAll(0, 20, new TestOrderFilterDto(), BRANCH_ID);
+
+        assertThat(result.content()).hasSize(2);
+        assertThat(result.content().get(0).assignedUserName()).isEqualTo("Takin Romulus");
+        assertThat(result.content().get(1).assignedUserName()).isNull();
+    }
+
+    @Test
+    @DisplayName("findAll - un nom vide en base est traité comme une absence d'affectation")
+    void findAll_nomVideEstTraiteCommeAbsent() {
+        TestOrder order = buildOrder(TestOrderStatus.PENDING);
+        order.setId(UUID.randomUUID());
+
+        when(testOrderRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(order)));
+        when(testOrderMapper.toResponseDto(any())).thenReturn(buildResponseDto());
+        // Un utilisateur sans prénom ni nom rendrait une chaîne d'espaces : la
+        // colonne afficherait un blanc au lieu du tiret d'absence.
+        when(assignmentDetailRepository.findAssignedUserNames(anyList()))
+                .thenReturn(List.<Object[]>of(new Object[]{order.getId(), "   "}));
+
+        PageResponse<TestOrderResponseDto> result =
+                testOrderService.findAll(0, 20, new TestOrderFilterDto(), BRANCH_ID);
+
+        assertThat(result.content().get(0).assignedUserName()).isNull();
     }
 
     @Test
