@@ -22,10 +22,10 @@
         .float-start { float: left; }
         .float-end { float: right; }
 
-        /* Ligne de tête : logo à gauche, QR à droite (même taille), sur la même ligne. */
-        .topbar { margin-bottom: 1.5rem; }
-        .topbar .logo { height: 84px; }
-        .topbar .qr { width: 84px; height: 84px; }
+        /* Ligne de tête : logo à gauche, raison sociale à droite. Le QR n'y est
+           plus — il accompagne le destinataire, comme dans Laravel. */
+        .topbar { margin-bottom: 0.5rem; }
+        .topbar .logo { height: 64px; }
 
         hr { border: 0; border-top: 1px solid #e5e7eb; margin: 0.75rem 0; }
 
@@ -73,10 +73,12 @@
         .totaux h3 { color: #343a40; font-size: 1.35rem; font-weight: 700; margin: 0.5rem 0 0 0; }
         .amount { float: right; padding-left: 2rem; }
 
-        /* Signature, à droite sous les totaux. */
+        /* Signature CENTRÉE sous les totaux — cachet, nom, puis tampon « payé ».
+           Elle était flottée à droite, ce qui décalait l'ensemble par rapport à
+           la facture Laravel, où le bloc est centré sur la largeur de page. */
         .signature { width: 100%; margin-top: 1rem; }
-        .signature .block { float: right; text-align: center; }
-        .signature img { max-height: 60px; display: block; margin: 0 auto 0.25rem auto; }
+        .signature .block { margin: 0 auto; text-align: center; width: 220px; }
+        .signature img { max-height: 96px; display: block; margin: 0 auto 0.25rem auto; }
         .signature .name { color: #343a40; font-weight: 600; }
 
         /* Bloc bas de page : un seul conteneur fixe ancré tout en bas de la feuille.
@@ -109,14 +111,20 @@
             font-size: 10px;
             color: #6c757d;
         }
-        /* En-tête : le nom du laboratoire s'aligne sur le logo, comme dans Laravel. */
-    .topbar .labname { display: inline-block; vertical-align: middle; margin-left: 10px;
-                       line-height: 1.25; }
-    .topbar .labname .l1 { font-weight: bold; font-size: 11pt; }
-    .topbar .labname .l2 { font-size: 8pt; color: #555; }
-    /* Tampon « PAYÉ » : sous le nom de l'opérateur, largeur mesurée pour ne pas
-       écraser la signature qui le précède. */
-    .signature .paid { display: block; width: 110px; margin: 6px auto 0; }
+        /* Raison sociale, alignée à droite de l'en-tête et sur la hauteur du logo —
+           disposition de Laravel, où le QR n'occupe pas cette ligne. */
+        .topbar .labname { text-align: right; padding-top: 26px; line-height: 1.3; }
+        .topbar .labname .l1 { font-weight: 700; font-size: 0.95rem; color: #343a40; }
+        .topbar .labname .l2 { font-size: 0.72rem; color: #6c757d; }
+        /* Destinataire : deux colonnes — le texte aligné à droite, le QR à sa droite.
+           Un simple flottant faisait chevaucher l'image et les libellés. */
+        .destinataire { border-collapse: collapse; float: right; }
+        .destinataire td { vertical-align: top; padding: 0; }
+        .destinataire td.texte { text-align: right; padding-right: 0.6rem; }
+        .destinataire td.texte .rightbox { float: none; text-align: right; }
+        .destinataire td.code { width: 92px; }
+        .destinataire .qr { width: 92px; height: 92px; }
+        .signature .paid { display: block; width: 108px; margin: 0.35rem auto 0; }
 </style>
 </head>
 <body>
@@ -133,19 +141,18 @@
 
 <div class="card-body">
 
-    <!-- Ligne de tête : logo (gauche) + QR (droite) -->
+    <!-- Ligne de tête : logo (gauche) · raison sociale (droite), puis un filet.
+         Calque de Laravel : le QR n'y figure pas, il accompagne le destinataire. -->
     <div class="clearfix topbar">
         <div class="float-start">
             <img class="logo" th:if="${!#strings.isEmpty(logo)}" th:src="${logo}" alt=""/>
-            <span class="labname" th:if="${!#strings.isEmpty(labName)}">
-                <span class="l1" th:text="${labName}">CENTRE ADECHINA ANATOMIE PATHOLOGIQUE</span><br/>
-                <span class="l2" th:text="${labSubtitle}">Laboratoire d'Anatomie Pathologique</span>
-            </span>
         </div>
-        <div class="float-end">
-            <img class="qr" th:if="${!#strings.isEmpty(headerQrcode)}" th:src="${headerQrcode}" alt="QR Code"/>
+        <div class="float-end labname" th:if="${!#strings.isEmpty(labName)}">
+            <span class="l1" th:text="${labName}">CENTRE ADECHINA ANATOMIE PATHOLOGIQUE</span><br/>
+            <span class="l2" th:text="${labSubtitle}">Laboratoire d'Anatomie Pathologique</span>
         </div>
     </div>
+    <hr/>
 
     <!-- En-tête : facture (gauche) · destinataire (droite) -->
     <table class="infos">
@@ -159,6 +166,8 @@
                 <p class="kv"><strong>CODE MECeF / DGI: </strong> <span th:text="${codeNormalise}"></span></p>
             </td>
             <td class="right">
+              <table class="destinataire"><tr>
+                <td class="texte">
                 <div class="rightbox">
                     <p class="kv"><strong>Adressée à:</strong></p>
                     <p class="kv"><strong>Nom: </strong> <span th:text="${clientName}"></span></p>
@@ -166,6 +175,11 @@
                     <p class="kv"><strong>Code client: </strong> <span th:text="${patientCode}"></span></p>
                     <p class="kv"><strong>Demande d'examen: </strong> <span th:text="${demandeExamen}"></span></p>
                 </div>
+                </td>
+                <td class="code">
+                    <img class="qr" th:if="${!#strings.isEmpty(headerQrcode)}" th:src="${headerQrcode}" alt="QR Code"/>
+                </td>
+              </tr></table>
             </td>
         </tr>
     </table>
