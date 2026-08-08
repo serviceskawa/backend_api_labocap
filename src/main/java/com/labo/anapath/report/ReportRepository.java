@@ -101,7 +101,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
                 COUNT(tor.id) AS total_general
             FROM test_orders tor
             JOIN type_orders to2 ON tor.type_order_id = to2.id
-            WHERE tor.status = 'VALIDATED' AND tor.branch_id = :branchId
+            WHERE tor.status IN ('VALIDATED','DELIVERED') AND tor.branch_id = :branchId
             AND (:month IS NULL OR EXTRACT(MONTH FROM tor.created_at) = :month)
             AND (:year  IS NULL OR EXTRACT(YEAR  FROM tor.created_at) = :year)
             """, nativeQuery = true)
@@ -113,7 +113,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
     @Query(value = """
             SELECT
                 SUM(CASE WHEN rep.status = 'DRAFT'     THEN 1 ELSE 0 END) AS attente,
-                SUM(CASE WHEN rep.status = 'VALIDATED' THEN 1 ELSE 0 END) AS termine,
+                SUM(CASE WHEN rep.status IN ('VALIDATED','DELIVERED') THEN 1 ELSE 0 END) AS termine,
                 SUM(CASE WHEN toad.test_order_id IS NOT NULL THEN 1 ELSE 0 END) AS affecte
             FROM reports rep
             JOIN test_orders tor ON tor.id = rep.test_order_id
@@ -201,7 +201,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
                    (:statusFilter = 1 AND r.is_delivered = true) OR
                    (:statusFilter = 2 AND r.is_called = true) OR
                    (:statusFilter = 3 AND r.status = 'DRAFT') OR
-                   (:statusFilter = 4 AND r.status = 'VALIDATED') OR
+                   (:statusFilter = 4 AND r.status IN ('VALIDATED','DELIVERED')) OR
                    (:statusFilter = 5 AND r.is_delivered = false))
               AND (:isLate IS NULL OR (r.status = 'DRAFT' AND DATE(r.created_at) <= CURRENT_DATE - 21))
             ORDER BY r.created_at DESC
@@ -225,7 +225,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
                    (:statusFilter = 1 AND r.is_delivered = true) OR
                    (:statusFilter = 2 AND r.is_called = true) OR
                    (:statusFilter = 3 AND r.status = 'DRAFT') OR
-                   (:statusFilter = 4 AND r.status = 'VALIDATED') OR
+                   (:statusFilter = 4 AND r.status IN ('VALIDATED','DELIVERED')) OR
                    (:statusFilter = 5 AND r.is_delivered = false))
               AND (:isLate IS NULL OR (r.status = 'DRAFT' AND DATE(r.created_at) <= CURRENT_DATE - 21))
             """,
@@ -401,7 +401,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             LEFT JOIN test_order_assignment_details d ON d.test_order_id = t.id
             LEFT JOIN test_order_assignments a ON a.id = d.test_order_assignment_id AND a.deleted_at IS NULL
             WHERE r.branch_id = :branchId
-              AND r.status = 'VALIDATED'
+              AND r.status IN ('VALIDATED','DELIVERED')
               AND r.deleted_at IS NULL
               AND (:doctorId IS NULL OR a.user_id = CAST(:doctorId AS uuid))
               AND (:month IS NULL OR EXTRACT(MONTH FROM r.signature_date) = :month)
