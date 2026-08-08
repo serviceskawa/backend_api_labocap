@@ -163,7 +163,7 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
     @Query(value = """
             SELECT u.id::text as id, CONCAT(u.lastname, ' ', u.firstname) as doctor,
                    COUNT(DISTINCT t.id) as assigne,
-                   COUNT(DISTINCT CASE WHEN r.status = 'VALIDATED' THEN t.id END) as traite
+                   COUNT(DISTINCT CASE WHEN r.status IN ('VALIDATED','DELIVERED') THEN t.id END) as traite
             FROM test_orders t
             JOIN users u ON u.id = t.attribuate_doctor_id
             LEFT JOIN reports r ON r.test_order_id = t.id
