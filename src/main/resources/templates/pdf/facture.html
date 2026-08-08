@@ -109,7 +109,15 @@
             font-size: 10px;
             color: #6c757d;
         }
-    </style>
+        /* En-tête : le nom du laboratoire s'aligne sur le logo, comme dans Laravel. */
+    .topbar .labname { display: inline-block; vertical-align: middle; margin-left: 10px;
+                       line-height: 1.25; }
+    .topbar .labname .l1 { font-weight: bold; font-size: 11pt; }
+    .topbar .labname .l2 { font-size: 8pt; color: #555; }
+    /* Tampon « PAYÉ » : sous le nom de l'opérateur, largeur mesurée pour ne pas
+       écraser la signature qui le précède. */
+    .signature .paid { display: block; width: 110px; margin: 6px auto 0; }
+</style>
 </head>
 <body>
 
@@ -129,6 +137,10 @@
     <div class="clearfix topbar">
         <div class="float-start">
             <img class="logo" th:if="${!#strings.isEmpty(logo)}" th:src="${logo}" alt=""/>
+            <span class="labname" th:if="${!#strings.isEmpty(labName)}">
+                <span class="l1" th:text="${labName}">CENTRE ADECHINA ANATOMIE PATHOLOGIQUE</span><br/>
+                <span class="l2" th:text="${labSubtitle}">Laboratoire d'Anatomie Pathologique</span>
+            </span>
         </div>
         <div class="float-end">
             <img class="qr" th:if="${!#strings.isEmpty(headerQrcode)}" th:src="${headerQrcode}" alt="QR Code"/>
@@ -202,6 +214,7 @@
         <div class="block">
             <img th:if="${!#strings.isEmpty(signatureImage)}" th:src="${signatureImage}" alt="Signature"/>
             <div class="name" th:text="${operatorName}">Admin Admin</div>
+            <img class="paid" th:if="${!#strings.isEmpty(paidStamp)}" th:src="${paidStamp}" alt="Payé"/>
         </div>
     </div>
 
