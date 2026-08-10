@@ -39,6 +39,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final PatientRepository patientRepository;
     private final LabTestRepository labTestRepository;
     private final CashboxRepository cashboxRepository;
+    private final CashboxOperationRepository cashboxOperationRepository;
     private final ContratRepository contratRepository;
     private final RefundRequestRepository refundRequestRepository;
     private final RefundReasonRepository refundReasonRepository;
@@ -264,12 +265,14 @@ public class InvoiceServiceImpl implements InvoiceService {
                     .orElseThrow(() -> new ResourceNotFoundException("Caisse vente", null));
             cashVente.setBalance(cashVente.getBalance().add(invoice.getTotal()));
             cashboxRepository.save(cashVente);
+            tracerOperationDeCaisse(invoice, cashVente, "CREDIT");
         } else {
             // Avoir → débit caisse dépense
             Cashbox cashDepense = cashboxRepository.findFirstByBranchIdAndType(invoice.getBranchId(), "depense")
                     .orElseThrow(() -> new ResourceNotFoundException("Caisse dépense", null));
             cashDepense.setBalance(cashDepense.getBalance().subtract(invoice.getTotal()));
             cashboxRepository.save(cashDepense);
+            tracerOperationDeCaisse(invoice, cashDepense, "DEBIT");
         }
 
         // R4 — Auto-clôture contrat si invoice_unique
@@ -280,6 +283,34 @@ public class InvoiceServiceImpl implements InvoiceService {
 
         Invoice saved = invoiceRepository.save(invoice);
         return financeMapper.withRefund(financeMapper.toInvoiceResponseDto(saved), findRefundFor(saved));
+    }
+
+    /**
+     * Consigne le règlement d'une facture comme opération de caisse.
+     *
+     * <p>Laravel créait un {@code CashboxAdd} à chaque paiement, en plus
+     * d'incrémenter le solde ({@code InvoiceController@updateStatus}). La
+     * reprise n'avait gardé que l'incrément : le solde de la caisse montait,
+     * mais aucune opération n'était écrite. Or l'écran de fermeture additionne
+     * précisément ces opérations — d'où un solde de fermeture à zéro malgré des
+     * dizaines de factures encaissées dans la journée.</p>
+     *
+     * <p>Le mode de paiement est porté par l'opération elle-même, là où Laravel
+     * le lisait sur la facture par jointure. Les deux tiennent : {@code
+     * invoiceId} est renseigné, ce qui laisse la jointure possible et rattache
+     * chaque mouvement à sa pièce justificative.</p>
+     */
+    private void tracerOperationDeCaisse(Invoice invoice, Cashbox caisse, String type) {
+        CashboxOperation operation = new CashboxOperation();
+        operation.setBranchId(invoice.getBranchId());
+        operation.setCashbox(caisse);
+        operation.setAmount(invoice.getTotal());
+        operation.setType(type);
+        operation.setPaymentMethod(invoice.getPayment());
+        operation.setInvoiceId(invoice.getId());
+        operation.setOperationDate(LocalDate.now());
+        operation.setDescription("Règlement facture " + invoice.getCode());
+        cashboxOperationRepository.save(operation);
     }
 
     @Override

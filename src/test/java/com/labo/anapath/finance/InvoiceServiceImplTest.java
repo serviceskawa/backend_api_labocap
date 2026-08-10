@@ -41,6 +41,7 @@ class InvoiceServiceImplTest {
     @Mock private PatientRepository patientRepository;
     @Mock private LabTestRepository labTestRepository;
     @Mock private CashboxRepository cashboxRepository;
+    @Mock private CashboxOperationRepository cashboxOperationRepository;
     @Mock private ContratRepository contratRepository;
     @Mock private RefundRequestRepository refundRequestRepository;
     @Mock private RefundReasonRepository refundReasonRepository;
@@ -107,6 +108,70 @@ class InvoiceServiceImplTest {
         assertThat(captor.getValue().getBalance()).isEqualByComparingTo(new BigDecimal("15000.00"));
         assertThat(inv.getPaid()).isTrue();
         assertThat(inv.getPayment()).isEqualTo("ESPECES");
+    }
+
+    /**
+     * Ce que le solde de fermeture additionne.
+     *
+     * <p>Le solde de la caisse montait bien sans qu'aucune opération ne soit
+     * écrite : l'écran de fermeture, qui somme les opérations par mode de
+     * paiement, affichait donc zéro malgré des dizaines de factures encaissées.
+     * Vérifier le seul solde ne suffit pas — c'est ce que faisait le test
+     * ci-dessus, et le défaut est passé.</p>
+     */
+    @Test
+    @DisplayName("markAsPaid - vente → opération de caisse tracée avec son mode de paiement")
+    void markAsPaid_vente_traceOperationDeCaisse() {
+        Invoice inv = buildInvoice(0);
+        Cashbox cashVente = new Cashbox();
+        cashVente.setBranchId(BRANCH_ID);
+        cashVente.setType("vente");
+        cashVente.setBalance(new BigDecimal("10000.00"));
+
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(inv));
+        when(cashboxRepository.findFirstByBranchIdAndType(BRANCH_ID, "vente")).thenReturn(Optional.of(cashVente));
+        when(invoiceRepository.save(any())).thenReturn(inv);
+        when(financeMapper.toInvoiceResponseDto(inv)).thenReturn(null);
+
+        InvoiceStatusUpdateDto dto = new InvoiceStatusUpdateDto();
+        dto.setPayment("MOBILEMONEY");
+
+        service.markAsPaid(INVOICE_ID, dto, BRANCH_ID);
+
+        ArgumentCaptor<CashboxOperation> captor = ArgumentCaptor.forClass(CashboxOperation.class);
+        verify(cashboxOperationRepository).save(captor.capture());
+        CashboxOperation op = captor.getValue();
+        assertThat(op.getType()).isEqualTo("CREDIT");
+        assertThat(op.getAmount()).isEqualByComparingTo(inv.getTotal());
+        // Le mode doit correspondre exactement aux clés sommées par l'écran de
+        // fermeture (ESPECES, MOBILEMONEY, CHEQUES, VIREMENT).
+        assertThat(op.getPaymentMethod()).isEqualTo("MOBILEMONEY");
+        assertThat(op.getInvoiceId()).isEqualTo(inv.getId());
+        assertThat(op.getCashbox()).isSameAs(cashVente);
+    }
+
+    @Test
+    @DisplayName("markAsPaid - avoir → opération tracée au débit")
+    void markAsPaid_avoir_traceOperationAuDebit() {
+        Invoice inv = buildInvoice(1);
+        Cashbox cashDepense = new Cashbox();
+        cashDepense.setBranchId(BRANCH_ID);
+        cashDepense.setType("depense");
+        cashDepense.setBalance(new BigDecimal("10000.00"));
+
+        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(inv));
+        when(cashboxRepository.findFirstByBranchIdAndType(BRANCH_ID, "depense")).thenReturn(Optional.of(cashDepense));
+        when(invoiceRepository.save(any())).thenReturn(inv);
+        when(financeMapper.toInvoiceResponseDto(inv)).thenReturn(null);
+
+        InvoiceStatusUpdateDto dto = new InvoiceStatusUpdateDto();
+        dto.setPayment("ESPECES");
+
+        service.markAsPaid(INVOICE_ID, dto, BRANCH_ID);
+
+        ArgumentCaptor<CashboxOperation> captor = ArgumentCaptor.forClass(CashboxOperation.class);
+        verify(cashboxOperationRepository).save(captor.capture());
+        assertThat(captor.getValue().getType()).isEqualTo("DEBIT");
     }
 
     @Test
