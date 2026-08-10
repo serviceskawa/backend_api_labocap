@@ -106,26 +106,20 @@ public class AuthServiceImpl implements AuthService {
             User user = userRepository.findById(userPrincipal.getId())
                     .orElseThrow(() -> new UnauthorizedException("Utilisateur non trouvé"));
 
-            // If 2FA is enabled, return a short-lived temp token instead of full JWT
-            if (user.isTwoFactorEnabled()) {
-                String tempToken = jwtTokenProvider.generateTempToken(userPrincipal.getId());
-                // Générer et envoyer l'OTP par email
-                sendAndStoreOtp(user);
-                log.info("2FA challenge requis pour: {}", maskEmail(request.getEmail()));
-                return LoginResponse.requires2fa(
-                        tempToken, JwtTokenProvider.TEMP_TOKEN_VALIDITY_MS / 1000);
-            }
-
-            String accessToken = jwtTokenProvider.generateToken(userPrincipal);
-            String refreshToken = jwtTokenProvider.generateRefreshToken(userPrincipal.getId());
-            long expiresIn = jwtProperties.getExpirationMs() / 1000;
-
-            user.setConnect(true);
-            user.setLastLoginDevice(getUserAgentHash());
-            userRepository.save(user);
-
-            log.info("Connexion réussie pour: {}", maskEmail(request.getEmail()));
-            return new LoginResponse(accessToken, refreshToken, expiresIn, userMapper.toResponseDto(user));
+            // Le code à usage unique est exigé à CHAQUE connexion, pour tout le
+            // monde. Il l'était auparavant selon `two_factor_enabled`, réglage
+            // qu'un compte sur deux n'avait pas : la moitié des sessions
+            // s'ouvraient sur le seul mot de passe.
+            //
+            // Le mot de passe est donc validé ici, mais aucun jeton d'accès
+            // n'est délivré : seul un jeton temporaire de courte durée, que
+            // `challenge()` échange contre les jetons définitifs une fois le
+            // code vérifié. Il n'existe plus de chemin de connexion sans OTP.
+            String tempToken = jwtTokenProvider.generateTempToken(userPrincipal.getId());
+            sendAndStoreOtp(user);
+            log.info("Code de connexion envoyé à : {}", maskEmail(request.getEmail()));
+            return LoginResponse.requires2fa(
+                    tempToken, JwtTokenProvider.TEMP_TOKEN_VALIDITY_MS / 1000);
         } catch (DisabledException ex) {
             log.warn("Échec de connexion (compte désactivé) pour: {}", maskEmail(request.getEmail()));
             throw new UnauthorizedException("Identifiants invalides.");
