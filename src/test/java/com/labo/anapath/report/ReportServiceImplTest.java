@@ -42,6 +42,8 @@ class ReportServiceImplTest {
     @Mock private UserRepository userRepository;
     @Mock private SettingReportTemplateRepository templateRepository;
     @Mock private ReportMapper reportMapper;
+    @Mock private com.labo.anapath.common.email.EmailService emailService;
+    @Mock private com.labo.anapath.common.email.NotificationSettings notificationSettings;
 
     @InjectMocks
     private ReportServiceImpl service;
@@ -277,5 +279,126 @@ class ReportServiceImplTest {
         assertThat(saved.getRetrieverSignature()).isEqualTo("data:image/png;base64,abc123");
         assertThat(saved.getDeliveryDate()).isNotNull();
         assertThat(saved.getCallDate()).isNotNull();
+    }
+
+    // ------------------------------------------------------------------
+    // Traçabilité des modifications après signature
+    // ------------------------------------------------------------------
+
+    /** Compte-rendu déjà signé : un médecin apposé et une date de signature. */
+    private Report compteRenduSigne(UUID medecinId) {
+        Report r = buildDraftReport();
+        r.setStatus(ReportStatus.VALIDATED);
+        r.setSignatureDate(java.time.LocalDateTime.now().minusDays(1));
+        r.setContent("<p>Texte d'origine</p>");
+        com.labo.anapath.user.User medecin = new com.labo.anapath.user.User();
+        medecin.setId(medecinId);
+        r.setSignatory1(medecin);
+        return r;
+    }
+
+    /** Reprend le compte-rendu à l'identique ; l'appelant modifie ce qu'il veut. */
+    private ReportRequestDto dtoMiroir(UUID medecinId, String contenu) {
+        ReportRequestDto dto = new ReportRequestDto();
+        dto.setReportId(REPORT_ID);
+        dto.setStatus("VALIDATED");
+        dto.setContent(contenu);
+        dto.setSignatory1Id(medecinId);
+        return dto;
+    }
+
+    private List<LogReport> tracesEnregistrees() {
+        ArgumentCaptor<LogReport> captor = ArgumentCaptor.forClass(LogReport.class);
+        verify(logReportRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
+        return captor.getAllValues();
+    }
+
+    @Test
+    @DisplayName("update - contenu retouché après signature → trace et alerte administrateurs")
+    void update_apresSignature_traceEtAlerte() {
+        UUID medecinId = UUID.randomUUID();
+        Report report = compteRenduSigne(medecinId);
+        report.setCode("CO26-0001");
+
+        com.labo.anapath.user.User auteur = new com.labo.anapath.user.User();
+        auteur.setId(USER_ID);
+        auteur.setFirstname("Coralie");
+        auteur.setLastname("OGOUSSAN");
+
+        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
+        when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(reportMapper.toResponseDto(any())).thenReturn(null);
+        when(userRepository.findById(medecinId))
+                .thenReturn(Optional.of(report.getSignatory1()));
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(auteur));
+        when(notificationSettings.labName(BRANCH_ID)).thenReturn("CAAP");
+        when(notificationSettings.adminEmails(BRANCH_ID))
+                .thenReturn(List.of("admin@caap.bj", "direction@caap.bj"));
+
+        service.update(REPORT_ID, dtoMiroir(medecinId, "<p>Texte corrigé</p>"),
+                USER_ID, BRANCH_ID);
+
+        LogReport trace = tracesEnregistrees().stream()
+                .filter(l -> ReportServiceImpl.ACTION_APRES_SIGNATURE.equals(l.getAction()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Aucune trace après signature enregistrée"));
+        assertThat(trace.getDescription())
+                .contains("Coralie OGOUSSAN")
+                .contains("Contenu macroscopique");
+        assertThat(trace.getUser()).isEqualTo(auteur);
+
+        // Chaque administrateur configuré est averti, pas seulement le premier.
+        verify(emailService).sendPostSignatureChangeAlert(eq("admin@caap.bj"),
+                eq("CO26-0001"), any(), any(), eq("Coralie OGOUSSAN"), any(), eq("CAAP"));
+        verify(emailService).sendPostSignatureChangeAlert(eq("direction@caap.bj"),
+                eq("CO26-0001"), any(), any(), eq("Coralie OGOUSSAN"), any(), eq("CAAP"));
+    }
+
+    @Test
+    @DisplayName("update - réenregistrement à l'identique → aucune alerte")
+    void update_apresSignature_sansChangement_neTracePas() {
+        UUID medecinId = UUID.randomUUID();
+        Report report = compteRenduSigne(medecinId);
+
+        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
+        when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(reportMapper.toResponseDto(any())).thenReturn(null);
+        when(userRepository.findById(medecinId))
+                .thenReturn(Optional.of(report.getSignatory1()));
+
+        service.update(REPORT_ID, dtoMiroir(medecinId, "<p>Texte d'origine</p>"),
+                USER_ID, BRANCH_ID);
+
+        // On vise l'action précise plutôt qu'un décompte de sauvegardes : le
+        // journal ordinaire (« Mettre à jour ») n'a rien à voir ici.
+        verify(logReportRepository, never()).save(org.mockito.ArgumentMatchers.argThat(
+                l -> ReportServiceImpl.ACTION_APRES_SIGNATURE.equals(l.getAction())));
+        verify(emailService, never()).sendPostSignatureChangeAlert(
+                any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("update - compte rendu non signé → aucune alerte")
+    void update_sansSignature_neTracePas() {
+        Report report = buildDraftReport();
+        report.setContent("<p>Brouillon</p>");
+
+        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
+        when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(reportMapper.toResponseDto(any())).thenReturn(null);
+
+        ReportRequestDto dto = new ReportRequestDto();
+        dto.setReportId(REPORT_ID);
+        dto.setStatus("DRAFT");
+        dto.setContent("<p>Brouillon retouché</p>");
+
+        service.update(REPORT_ID, dto, USER_ID, BRANCH_ID);
+
+        // On vise l'action précise plutôt qu'un décompte de sauvegardes : le
+        // journal ordinaire (« Mettre à jour ») n'a rien à voir ici.
+        verify(logReportRepository, never()).save(org.mockito.ArgumentMatchers.argThat(
+                l -> ReportServiceImpl.ACTION_APRES_SIGNATURE.equals(l.getAction())));
+        verify(emailService, never()).sendPostSignatureChangeAlert(
+                any(), any(), any(), any(), any(), any(), any());
     }
 }

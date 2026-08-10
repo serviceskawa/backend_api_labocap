@@ -71,6 +71,26 @@ public interface EmailService {
     void sendNewTicketAlert(String to, String ticketCode, String createdByName, String labName);
 
     /**
+     * Avertit un administrateur qu'un compte-rendu déjà signé a été modifié.
+     *
+     * <p>Sans équivalent Laravel : le besoin naît de ce qu'un compte-rendu
+     * signé reste modifiable pour accueillir un complément. La modification est
+     * légitime, mais elle engage la signature d'un médecin et doit donc être
+     * portée à la connaissance des administrateurs.</p>
+     *
+     * @param to             adresse de l'administrateur
+     * @param reportCode     code du compte-rendu concerné
+     * @param testOrderCode  code de la demande d'examen liée
+     * @param signatoryName  médecin dont la signature est engagée
+     * @param modifiedByName auteur de la modification
+     * @param changedFields  champs touchés, déjà mis en forme
+     * @param labName        nom du laboratoire (en-tête / signature)
+     */
+    void sendPostSignatureChangeAlert(String to, String reportCode, String testOrderCode,
+                                      String signatoryName, String modifiedByName,
+                                      String changedFields, String labName);
+
+    /**
      * Envoie l'alerte "compte-rendu non fait" pour une demande d'examen en retard.
      * (Réplique Laravel : {@code MailReportNonFait}, seuil 18 jours.)
      *

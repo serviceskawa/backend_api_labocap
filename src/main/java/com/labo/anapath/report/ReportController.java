@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -329,5 +330,24 @@ public class ReportController {
             @PathVariable UUID id, @PathVariable UUID templateId) {
         return ResponseEntity.ok(ApiResponse.success("Modèle associé au compte-rendu",
                 reportService.setTemplate(id, templateId)));
+    }
+
+    /**
+     * Modifications apportées au compte-rendu après sa signature.
+     *
+     * <p>Route distincte de l'historique complet : celui-ci mêle impressions et
+     * enregistrements ordinaires, quand la mise en exergue ne doit montrer que
+     * ce qui engage la signature d'un médecin.</p>
+     *
+     * <p>Ouverte à {@code view-reports} : constater qu'un dossier a bougé après
+     * signature relève de la lecture, pas de l'administration — un médecin doit
+     * pouvoir le voir sur un compte-rendu qu'il consulte.</p>
+     */
+    @GetMapping("/{id}/modifications-apres-signature")
+    @PreAuthorize("hasAnyAuthority('view-reports', 'edit-reports')")
+    public ResponseEntity<ApiResponse<List<ModificationApresSignatureDto>>> modificationsApresSignature(
+            @PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success(
+                reportService.getModificationsApresSignature(id)));
     }
 }
