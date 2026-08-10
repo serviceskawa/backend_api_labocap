@@ -149,9 +149,9 @@ public class ReportServiceImpl implements ReportService {
         if (!isCreate) {
             report = reportRepository.findById(dto.getReportId())
                     .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", dto.getReportId()));
-            if (report.getStatus() == ReportStatus.DELIVERED) {
-                throw new InvalidOperationException("Impossible de modifier un rapport livré.");
-            }
+            // Un compte-rendu livré reste modifiable : voir la note sur
+            // `update` ci-dessous — la livraison est un fait matériel, pas un
+            // scellé éditorial, et les compléments arrivent après la remise.
         } else {
             report = new Report();
             report.setBranchId(branchId);
@@ -371,7 +371,19 @@ public class ReportServiceImpl implements ReportService {
 
     /**
      * Met à jour le contenu textuel et le commentaire d'un compte-rendu.
-     * Un CR au statut DELIVERED ne peut plus être modifié.
+     *
+     * <p>Un compte-rendu livré <b>reste modifiable</b>. Le verrou posé ici
+     * n'existait pas dans Laravel, où la remise du résultat était un simple
+     * drapeau {@code is_delivered} — orthogonal au statut, qui ne connaissait
+     * que 0 (en attente) et 1 (terminé). La réécriture a fait de DELIVERED une
+     * valeur du statut, fusionnant deux notions distinctes : dès lors, livrer
+     * un résultat le scellait définitivement.</p>
+     *
+     * <p>Or un complément arrive par nature <i>après</i> la remise — c'est
+     * précisément ce que servent {@code description_supplementaire} et la case
+     * « Complémentaire ». Le verrou rendait cette fonction inatteignable au
+     * moment même où elle devient utile, et bloquait la correction de dossiers
+     * déjà sortis.</p>
      *
      * @param id  identifiant UUID du CR
      * @param dto nouvelles données
@@ -382,9 +394,6 @@ public class ReportServiceImpl implements ReportService {
     public ReportResponseDto update(UUID id, ReportRequestDto dto, UUID userId, UUID branchId) {
         Report report = reportRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
-        if (report.getStatus() == ReportStatus.DELIVERED) {
-            throw new InvalidOperationException("Impossible de modifier un compte-rendu déjà livré.");
-        }
 
         // -------------------------------------------------------------------
         // Réplique EXACTE de ReportController@store (Laravel) : un unique

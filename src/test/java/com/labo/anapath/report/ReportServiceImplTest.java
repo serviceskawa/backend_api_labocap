@@ -161,21 +161,35 @@ class ReportServiceImplTest {
         verify(reportRepository).findFiltered(eq(BRANCH_ID), eq(month), eq(year), eq(doctorId), any(Pageable.class));
     }
 
+    /**
+     * Remplace un test qui consacrait le verrou inverse.
+     *
+     * <p>Un complément arrive après la remise du résultat : refuser la
+     * modification d'un compte-rendu livré rendait inatteignable la fonction
+     * même qui sert à ce moment-là. Laravel ne posait aucun verrou — la
+     * livraison y était un drapeau {@code is_delivered} distinct du statut.</p>
+     */
     @Test
-    @DisplayName("createOrUpdate - rapport DELIVERED → InvalidOperationException")
-    void createOrUpdate_deliveredReport_throwsInvalidOperation() {
+    @DisplayName("createOrUpdate - un rapport livré reste modifiable (complément)")
+    void createOrUpdate_deliveredReport_estModifiable() {
         Report delivered = buildDraftReport();
         delivered.setStatus(ReportStatus.DELIVERED);
+        delivered.setTestOrder(buildOrder());
 
         ReportRequestDto dto = new ReportRequestDto();
         dto.setReportId(REPORT_ID);
+        dto.setDescriptionSupplementaire("Complément après remise du résultat.");
 
         when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(delivered));
+        when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(reportMapper.toResponseDto(any())).thenReturn(null);
 
-        assertThatThrownBy(() -> service.createOrUpdate(dto, BRANCH_ID))
-                .isInstanceOf(InvalidOperationException.class);
+        service.createOrUpdate(dto, BRANCH_ID);
 
-        verify(reportRepository, never()).save(any());
+        ArgumentCaptor<Report> captor = ArgumentCaptor.forClass(Report.class);
+        verify(reportRepository).save(captor.capture());
+        assertThat(captor.getValue().getDescriptionSupplementaire())
+                .isEqualTo("Complément après remise du résultat.");
     }
 
     // ===== Tests story 3-7 — Validation, signature, livraison =====
