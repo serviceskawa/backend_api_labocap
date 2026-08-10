@@ -107,4 +107,23 @@ public interface UserRepository extends JpaRepository<User, UUID> {
             ORDER BY u.updated_at DESC
             """, nativeQuery = true)
     List<DashboardProjection.ConnectedUser> findConnectedUsersByBranchId(@Param("branchId") UUID branchId);
+
+    /**
+     * Les signataires possibles d'un compte rendu : les porteurs du rôle « docteur ».
+     *
+     * <p>Existe parce que {@code GET /users} exige {@code edit-users}, permission
+     * qu'aucun médecin n'a — leur rôle ne porte que des droits sur les comptes
+     * rendus. Le sélecteur de signataire recevait donc un 403 silencieux et
+     * s'affichait vide, pour tous les médecins.</p>
+     *
+     * <p>Les comptes inactifs sont inclus : trois des cinq docteurs le sont, et
+     * ils ont signé 9 278 comptes rendus. Les écarter viderait le champ sur tous
+     * ces dossiers. L'appelant reçoit l'état et le signale.</p>
+     */
+    @Query("""
+            SELECT u FROM User u JOIN u.roles r
+            WHERE r.slug = 'docteur' AND u.deletedAt IS NULL
+            ORDER BY u.lastname, u.firstname
+            """)
+    List<User> findSignataires();
 }

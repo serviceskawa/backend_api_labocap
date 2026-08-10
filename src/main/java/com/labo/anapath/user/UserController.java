@@ -38,6 +38,7 @@ import java.util.UUID;
 public class UserController {
 
     private final UserService userService;
+    private final UserRepository userRepository;
 
     /**
      * Retourne la liste paginée des utilisateurs de la succursale courante.
@@ -47,6 +48,26 @@ public class UserController {
      * @param principal principal de sécurité de l'utilisateur connecté
      * @return page de {@link UserResponseDto}
      */
+    /**
+     * Les signataires possibles d'un compte rendu — les porteurs du rôle « docteur ».
+     *
+     * <p>Surface volontairement minimale : identifiant, nom, état du compte. Elle
+     * existe parce que {@code GET /users} exige {@code edit-users}, permission
+     * qu'aucun médecin ne possède — leur rôle ne porte que des droits sur les
+     * comptes rendus. Le sélecteur de signataire recevait donc un 403 silencieux
+     * et s'affichait vide, pour tous les médecins.</p>
+     *
+     * <p>Élargir {@code /users} aurait donné aux médecins le droit de créer et de
+     * supprimer des comptes ; on ouvre plutôt cette liste-ci, sous la permission
+     * qu'ils ont déjà pour éditer un compte rendu.</p>
+     */
+    @GetMapping("/signataires")
+    @PreAuthorize("hasAuthority('edit-reports')")
+    public ResponseEntity<ApiResponse<List<SignataireDto>>> signataires() {
+        return ResponseEntity.ok(ApiResponse.success(
+                userRepository.findSignataires().stream().map(SignataireDto::de).toList()));
+    }
+
     @GetMapping
     @PreAuthorize("hasAuthority('edit-users')")
     public ResponseEntity<ApiResponse<PageResponse<UserResponseDto>>> findAll(
