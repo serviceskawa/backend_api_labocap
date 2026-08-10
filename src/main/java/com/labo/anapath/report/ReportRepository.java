@@ -49,6 +49,27 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             @Param("doctorId") UUID doctorId,
             Pageable pageable);
 
+    /**
+     * Liste filtrée avec recherche libre.
+     *
+     * <p>Le mot-clé est confronté à tout ce qui permet de retrouver le dossier
+     * d'un patient : code du compte-rendu, code de la demande, code du patient,
+     * nom, prénom, téléphones, et le texte même du compte-rendu (macro, micro
+     * et compléments). La reprise n'en couvrait que trois — code de la demande,
+     * nom et prénom — là où Laravel cherchait aussi dans le code du
+     * compte-rendu, le code du patient et le contenu.</p>
+     *
+     * <p>Le contenu est cherché dans {@code content}, non dans
+     * {@code description} : la migration a rempli les deux à l'identique, mais
+     * seule la première est écrite depuis la bascule. Interroger la seconde
+     * laisserait échapper tous les comptes-rendus rédigés depuis.</p>
+     *
+     * <p>Un {@code LIKE '%…%'} sur des colonnes TEXT interdit tout index. À
+     * l'échelle actuelle — de l'ordre de quatorze mille comptes-rendus, environ
+     * trois mille de plus par an — le parcours séquentiel reste imperceptible.
+     * Si la recherche venait à traîner, la réponse est un index GIN trigramme
+     * ({@code pg_trgm}) sur les colonnes de texte, pas un retrait de champs.</p>
+     */
     @Query(value = """
             SELECT r.* FROM reports r
             JOIN test_orders tor ON tor.id = r.test_order_id AND tor.deleted_at IS NULL
@@ -60,9 +81,17 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
               AND (:doctorId IS NULL OR r.signatory1 = CAST(:doctorId AS uuid))
               AND (:status   IS NULL OR r.status::text = :status)
               AND (:search   IS NULL OR (
-                    lower(coalesce(tor.code,       '')) LIKE lower('%' || CAST(:search AS text) || '%')
+                    lower(coalesce(r.code,         '')) LIKE lower('%' || CAST(:search AS text) || '%')
+                 OR lower(coalesce(tor.code,       '')) LIKE lower('%' || CAST(:search AS text) || '%')
+                 OR lower(coalesce(pat.code,       '')) LIKE lower('%' || CAST(:search AS text) || '%')
                  OR lower(coalesce(pat.firstname,  '')) LIKE lower('%' || CAST(:search AS text) || '%')
                  OR lower(coalesce(pat.lastname,   '')) LIKE lower('%' || CAST(:search AS text) || '%')
+                 OR lower(coalesce(pat.telephone1, '')) LIKE lower('%' || CAST(:search AS text) || '%')
+                 OR lower(coalesce(pat.telephone2, '')) LIKE lower('%' || CAST(:search AS text) || '%')
+                 OR lower(coalesce(r.content,      '')) LIKE lower('%' || CAST(:search AS text) || '%')
+                 OR lower(coalesce(r.content_micro,'')) LIKE lower('%' || CAST(:search AS text) || '%')
+                 OR lower(coalesce(r.description_supplementaire,      '')) LIKE lower('%' || CAST(:search AS text) || '%')
+                 OR lower(coalesce(r.description_supplementaire_micro,'')) LIKE lower('%' || CAST(:search AS text) || '%')
               ))
             ORDER BY r.created_at DESC
             """,
@@ -77,9 +106,17 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
               AND (:doctorId IS NULL OR r.signatory1 = CAST(:doctorId AS uuid))
               AND (:status   IS NULL OR r.status::text = :status)
               AND (:search   IS NULL OR (
-                    lower(coalesce(tor.code,       '')) LIKE lower('%' || CAST(:search AS text) || '%')
+                    lower(coalesce(r.code,         '')) LIKE lower('%' || CAST(:search AS text) || '%')
+                 OR lower(coalesce(tor.code,       '')) LIKE lower('%' || CAST(:search AS text) || '%')
+                 OR lower(coalesce(pat.code,       '')) LIKE lower('%' || CAST(:search AS text) || '%')
                  OR lower(coalesce(pat.firstname,  '')) LIKE lower('%' || CAST(:search AS text) || '%')
                  OR lower(coalesce(pat.lastname,   '')) LIKE lower('%' || CAST(:search AS text) || '%')
+                 OR lower(coalesce(pat.telephone1, '')) LIKE lower('%' || CAST(:search AS text) || '%')
+                 OR lower(coalesce(pat.telephone2, '')) LIKE lower('%' || CAST(:search AS text) || '%')
+                 OR lower(coalesce(r.content,      '')) LIKE lower('%' || CAST(:search AS text) || '%')
+                 OR lower(coalesce(r.content_micro,'')) LIKE lower('%' || CAST(:search AS text) || '%')
+                 OR lower(coalesce(r.description_supplementaire,      '')) LIKE lower('%' || CAST(:search AS text) || '%')
+                 OR lower(coalesce(r.description_supplementaire_micro,'')) LIKE lower('%' || CAST(:search AS text) || '%')
               ))
             """,
             nativeQuery = true)
@@ -190,9 +227,17 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             WHERE r.branch_id = :branchId
               AND r.deleted_at IS NULL
               AND (:search IS NULL OR :search = ''
+                   OR LOWER(COALESCE(r.code, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
                    OR LOWER(COALESCE(t.code, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(p.code, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
                    OR LOWER(COALESCE(p.firstname, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
-                   OR LOWER(COALESCE(p.lastname, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')))
+                   OR LOWER(COALESCE(p.lastname, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(p.telephone1, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(p.telephone2, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(r.content, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(r.content_micro, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(r.description_supplementaire, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(r.description_supplementaire_micro, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')))
               AND (:typeOrderId IS NULL OR t.type_order_id = CAST(:typeOrderId AS uuid))
               AND (:dateBegin IS NULL OR DATE(r.created_at) >= CAST(:dateBegin AS date))
               AND (:dateEnd IS NULL OR DATE(r.created_at) <= CAST(:dateEnd AS date))
@@ -214,9 +259,17 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             WHERE r.branch_id = :branchId
               AND r.deleted_at IS NULL
               AND (:search IS NULL OR :search = ''
+                   OR LOWER(COALESCE(r.code, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
                    OR LOWER(COALESCE(t.code, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(p.code, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
                    OR LOWER(COALESCE(p.firstname, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
-                   OR LOWER(COALESCE(p.lastname, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')))
+                   OR LOWER(COALESCE(p.lastname, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(p.telephone1, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(p.telephone2, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(r.content, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(r.content_micro, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(r.description_supplementaire, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(r.description_supplementaire_micro, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')))
               AND (:typeOrderId IS NULL OR t.type_order_id = CAST(:typeOrderId AS uuid))
               AND (:dateBegin IS NULL OR DATE(r.created_at) >= CAST(:dateBegin AS date))
               AND (:dateEnd IS NULL OR DATE(r.created_at) <= CAST(:dateEnd AS date))
@@ -280,8 +333,15 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
               AND (CAST(:content AS text) IS NULL OR CAST(:content AS text) = ''
                    OR LOWER(COALESCE(r.code, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
                    OR LOWER(COALESCE(t.code, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
+                   OR LOWER(COALESCE(p.code, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
                    OR LOWER(COALESCE(p.firstname, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
-                   OR LOWER(COALESCE(p.lastname, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%')))
+                   OR LOWER(COALESCE(p.lastname, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
+                   OR LOWER(COALESCE(p.telephone1, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
+                   OR LOWER(COALESCE(p.telephone2, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
+                   OR LOWER(COALESCE(r.content, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
+                   OR LOWER(COALESCE(r.content_micro, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
+                   OR LOWER(COALESCE(r.description_supplementaire, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
+                   OR LOWER(COALESCE(r.description_supplementaire_micro, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%')))
               AND (:isUrgent IS NULL OR t.is_urgent = :isUrgent)
             ORDER BY r.created_at DESC
             """,
@@ -308,8 +368,15 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
               AND (CAST(:content AS text) IS NULL OR CAST(:content AS text) = ''
                    OR LOWER(COALESCE(r.code, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
                    OR LOWER(COALESCE(t.code, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
+                   OR LOWER(COALESCE(p.code, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
                    OR LOWER(COALESCE(p.firstname, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
-                   OR LOWER(COALESCE(p.lastname, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%')))
+                   OR LOWER(COALESCE(p.lastname, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
+                   OR LOWER(COALESCE(p.telephone1, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
+                   OR LOWER(COALESCE(p.telephone2, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
+                   OR LOWER(COALESCE(r.content, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
+                   OR LOWER(COALESCE(r.content_micro, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
+                   OR LOWER(COALESCE(r.description_supplementaire, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%'))
+                   OR LOWER(COALESCE(r.description_supplementaire_micro, '')) LIKE LOWER(CONCAT('%', CAST(:content AS text), '%')))
               AND (:isUrgent IS NULL OR t.is_urgent = :isUrgent)
             """,
             nativeQuery = true)
@@ -351,11 +418,17 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             WHERE r.branch_id = :branchId
               AND r.deleted_at IS NULL
               AND (CAST(:search AS text) IS NULL OR CAST(:search AS text) = ''
+                   OR LOWER(COALESCE(r.code, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
                    OR LOWER(COALESCE(t.code, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
                    OR LOWER(COALESCE(p.firstname, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
                    OR LOWER(COALESCE(p.lastname, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
                    OR LOWER(COALESCE(p.code, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
-                   OR LOWER(COALESCE(p.telephone1, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')))
+                   OR LOWER(COALESCE(p.telephone1, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(p.telephone2, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(r.content, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(r.content_micro, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(r.description_supplementaire, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(r.description_supplementaire_micro, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')))
               AND (CAST(:statusFilter AS text) IS NULL OR r.status = CAST(:statusFilter AS text))
               AND (CAST(:dateBegin AS text) IS NULL OR DATE(r.created_at) >= CAST(:dateBegin AS date))
               AND (CAST(:dateEnd AS text) IS NULL OR DATE(r.created_at) <= CAST(:dateEnd AS date))
@@ -369,11 +442,17 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             WHERE r.branch_id = :branchId
               AND r.deleted_at IS NULL
               AND (CAST(:search AS text) IS NULL OR CAST(:search AS text) = ''
+                   OR LOWER(COALESCE(r.code, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
                    OR LOWER(COALESCE(t.code, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
                    OR LOWER(COALESCE(p.firstname, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
                    OR LOWER(COALESCE(p.lastname, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
                    OR LOWER(COALESCE(p.code, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
-                   OR LOWER(COALESCE(p.telephone1, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')))
+                   OR LOWER(COALESCE(p.telephone1, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(p.telephone2, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(r.content, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(r.content_micro, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(r.description_supplementaire, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%'))
+                   OR LOWER(COALESCE(r.description_supplementaire_micro, '')) LIKE LOWER(CONCAT('%', CAST(:search AS text), '%')))
               AND (CAST(:statusFilter AS text) IS NULL OR r.status = CAST(:statusFilter AS text))
               AND (CAST(:dateBegin AS text) IS NULL OR DATE(r.created_at) >= CAST(:dateBegin AS date))
               AND (CAST(:dateEnd AS text) IS NULL OR DATE(r.created_at) <= CAST(:dateEnd AS date))
