@@ -288,7 +288,18 @@ public class TestOrderServiceImpl implements TestOrderService {
     }
 
     /**
-     * Met à jour un bon d'examen existant. Interdit sur un bon déjà validé.
+     * Met à jour un bon d'examen existant. Interdit dès que la facture est payée.
+     *
+     * <p>La garde portait auparavant sur le statut VALIDATED, ce qui n'a pas
+     * d'équivalent dans Laravel : {@code TestOrderController@updateTest} n'y
+     * vérifie que {@code $invoice->paid != 1}. La contrainte d'origine est
+     * comptable — ne pas désaligner une facture encaissée de ses lignes — et
+     * non éditoriale.</p>
+     *
+     * <p>Elle était en outre incohérente : un bon VALIDATED était refusé
+     * tandis qu'un bon DELIVERED, plus avancé, passait. En recette, des
+     * dossiers déjà sortis mais nécessitant un complément se retrouvaient
+     * bloqués sans raison comptable.</p>
      *
      * @param id       identifiant UUID du bon
      * @param dto      nouvelles données
@@ -300,8 +311,13 @@ public class TestOrderServiceImpl implements TestOrderService {
     public TestOrderResponseDto update(UUID id, TestOrderRequestDto dto, UUID branchId) {
         TestOrder order = testOrderRepository.findByIdAndBranchId(id, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", id));
-        if (order.getStatus() == TestOrderStatus.VALIDATED) {
-            throw new InvalidOperationException("Impossible de modifier un bon d'examen déjà validé.");
+        // Absence de facture = rien à désaligner : la modification reste ouverte,
+        // comme dans Laravel où `$invoice->paid` d'une facture absente n'est
+        // jamais égal à 1.
+        Invoice factureLiee = invoiceRepository.findByTestOrderId(order.getId()).orElse(null);
+        if (factureLiee != null && Boolean.TRUE.equals(factureLiee.getPaid())) {
+            throw new InvalidOperationException(
+                    "Facture déjà payée : les examens de ce bon ne peuvent plus être modifiés.");
         }
         assertNoDuplicateTests(dto.getDetails());
         order.setPrelevementDate(dto.getPrelevementDate());
