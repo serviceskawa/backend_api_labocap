@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="fr">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+</head>
+<body style="margin:0; padding:0; background-color:#f4f4f4; font-family: Arial, sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f4; padding:24px 0;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="500" cellpadding="0" cellspacing="0"
+                       style="max-width:500px; width:100%; background-color:#ffffff; border-radius:8px; overflow:hidden;">
+                    <tr>
+                        <td style="background-color:#1a5276; padding:18px 24px; text-align:center;">
+                            <span style="color:#ffffff; font-size:18px; font-weight:bold;"
+                                  th:text="${labName}">Laboratoire</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:24px;">
+                            <p style="font-size:15px; color:#333333; margin:0 0 16px;">Bonjour,</p>
+
+                            <!-- Le fait à retenir, dit une fois et sans détour. -->
+                            <p style="font-size:15px; color:#333333; margin:0 0 16px; line-height:1.5;">
+                                Le compte rendu
+                                <strong th:text="${reportCode}">CO00-0000</strong>
+                                a été modifié <strong>après sa signature</strong> par
+                                <strong th:text="${modifiedByName}">Auteur</strong>.
+                            </p>
+
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                                   style="border-left:3px solid #b03a2e; background-color:#fdf3f2; margin:0 0 16px;">
+                                <tr>
+                                    <td style="padding:14px 16px; font-size:14px; color:#333333; line-height:1.6;">
+                                        <strong>Demande d'examen :</strong>
+                                        <span th:text="${testOrderCode}">EX00-0000</span><br/>
+                                        <strong>Signature engagée :</strong>
+                                        <span th:text="${signatoryName}">Docteur</span><br/>
+                                        <strong>Champs modifiés :</strong>
+                                        <span th:text="${changedFields}">Contenu macroscopique</span>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="font-size:14px; color:#555555; margin:0 0 16px; line-height:1.5;">
+                                Cette modification est enregistrée dans l'historique du compte rendu,
+                                où elle reste consultable avec son auteur et sa date.
+                            </p>
+
+                            <p style="font-size:15px; color:#333333; margin:24px 0 0;">
+                                Merci,<br/>
+                                <span th:text="${labName}">Laboratoire</span>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="background-color:#f0f0f0; padding:12px 24px; text-align:center;">
+                            <span style="font-size:11px; color:#999999;">
+                                Cet email a été généré automatiquement, merci de ne pas y répondre.
+                            </span>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

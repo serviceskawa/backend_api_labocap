@@ -189,6 +189,40 @@ public class EmailServiceImpl implements EmailService {
 
     @Async
     @Override
+    public void sendPostSignatureChangeAlert(String to, String reportCode, String testOrderCode,
+                                             String signatoryName, String modifiedByName,
+                                             String changedFields, String labName) {
+        try {
+            Context context = new Context();
+            context.setVariable("reportCode", reportCode);
+            context.setVariable("testOrderCode", testOrderCode);
+            context.setVariable("signatoryName", signatoryName);
+            context.setVariable("modifiedByName", modifiedByName);
+            context.setVariable("changedFields", changedFields);
+            context.setVariable("labName", labName);
+
+            String htmlContent = templateEngine.process("email/post-signature-change", context);
+
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(to);
+            // Le code figure dans l'objet : un administrateur qui en reçoit
+            // plusieurs doit les distinguer sans ouvrir chaque message.
+            helper.setSubject("Compte rendu " + reportCode + " modifié après signature");
+            helper.setText(htmlContent, true);
+
+            mailSender.send(message);
+            log.info("Alerte modification après signature envoyée à {} pour {}",
+                    maskEmail(to), reportCode);
+        } catch (Exception e) {
+            log.error("Échec d'envoi de l'alerte après signature à {}: {}",
+                    maskEmail(to), e.getMessage());
+        }
+    }
+
+    @Async
+    @Override
     public void sendReportNonFaitAlert(String to, String doctorName, String testOrderCode,
                                        int days, String labName) {
         try {

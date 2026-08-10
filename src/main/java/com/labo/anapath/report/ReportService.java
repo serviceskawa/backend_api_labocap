@@ -68,4 +68,13 @@ public interface ReportService {
 
     ReportPerformanceDto getPerformanceStats(
             UUID branchId, String doctorId, Integer month, Integer year);
+
+    /**
+     * Modifications apportées au compte-rendu après sa signature.
+     *
+     * @param reportId identifiant UUID du compte-rendu
+     * @return liste chronologique, vide si le compte-rendu n'a pas bougé depuis
+     *         sa signature — le cas de l'immense majorité des dossiers
+     */
+    List<ModificationApresSignatureDto> getModificationsApresSignature(UUID reportId);
 }

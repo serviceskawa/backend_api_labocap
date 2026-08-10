@@ -395,6 +395,12 @@ public class ReportServiceImpl implements ReportService {
         Report report = reportRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
 
+        // Un compte-rendu est signé dès qu'un médecin y est apposé et que la
+        // validation a posé la date. L'empreinte est prise AVANT toute écriture :
+        // au-delà, l'état d'origine est perdu et la comparaison impossible.
+        boolean etaitSigne = report.getSignatureDate() != null && report.getSignatory1() != null;
+        EmpreinteCompteRendu empreinte = etaitSigne ? EmpreinteCompteRendu.de(report) : null;
+
         // -------------------------------------------------------------------
         // Réplique EXACTE de ReportController@store (Laravel) : un unique
         // enregistrement pilote le contenu ET le statut du compte-rendu.
@@ -480,7 +486,106 @@ public class ReportServiceImpl implements ReportService {
         }
         logAction(saved.getId(), "Mettre à jour", userId);
 
+        if (empreinte != null) {
+            List<String> champsModifies = empreinte.champsModifies(saved);
+            if (!champsModifies.isEmpty()) {
+                tracerModificationApresSignature(saved, champsModifies, userId);
+            }
+        }
+
         return reportMapper.toResponseDto(saved);
+    }
+
+    /** Libellé de l'action portée au journal ; sert aussi de critère de relecture. */
+    static final String ACTION_APRES_SIGNATURE = "Modification après signature";
+
+    /** Sépare le récit de la liste des champs dans la description journalisée. */
+    private static final String MARQUEUR_CHAMPS = "Champs : ";
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional(readOnly = true)
+    public List<ModificationApresSignatureDto> getModificationsApresSignature(UUID reportId) {
+        return logReportRepository
+                .findByReportIdAndActionOrderByCreatedAtAsc(reportId, ACTION_APRES_SIGNATURE)
+                .stream()
+                .map(trace -> new ModificationApresSignatureDto(
+                        trace.getUser() != null ? trace.getUser().getId() : null,
+                        trace.getUser() != null
+                                ? (trace.getUser().getFirstname() + " "
+                                    + trace.getUser().getLastname()).trim()
+                                : "Utilisateur supprimé",
+                        trace.getCreatedAt(),
+                        champsDepuisDescription(trace.getDescription())))
+                .toList();
+    }
+
+    /**
+     * Extrait la liste des champs de la description journalisée.
+     *
+     * <p>Le marqueur peut manquer sur une entrée écrite par une version
+     * antérieure : on rend alors la description entière plutôt que rien, quitte
+     * à être verbeux — une trace lisible vaut mieux qu'une case vide.</p>
+     */
+    private static String champsDepuisDescription(String description) {
+        if (description == null) {
+            return "";
+        }
+        int position = description.indexOf(MARQUEUR_CHAMPS);
+        return position >= 0
+                ? description.substring(position + MARQUEUR_CHAMPS.length())
+                : description;
+    }
+
+    /**
+     * Consigne une modification survenue après signature et en avertit les
+     * administrateurs.
+     *
+     * <p>Un compte-rendu signé engage le médecin qui l'a signé. Le modifier
+     * ensuite reste possible — les compléments arrivent après la remise du
+     * résultat — mais ne doit pas passer inaperçu : l'action est portée au
+     * journal avec le détail des champs touchés et l'auteur, puis signalée aux
+     * adresses configurées sous {@code admin_mails}.</p>
+     *
+     * <p>L'échec d'un envoi n'annule pas la modification : la trace en base est
+     * la garantie, le courriel n'en est que le rappel. {@code EmailServiceImpl}
+     * absorbe déjà ses propres erreurs ; on protège ici la résolution des
+     * destinataires, qui dépend d'un paramétrage pouvant manquer.</p>
+     */
+    private void tracerModificationApresSignature(Report report, List<String> champs, UUID userId) {
+        User auteur = userRepository.findById(userId).orElse(null);
+        String nomAuteur = auteur != null
+                ? (auteur.getFirstname() + " " + auteur.getLastname()).trim()
+                : "Utilisateur inconnu";
+        String listeChamps = String.join(", ", champs);
+
+        LogReport trace = new LogReport();
+        trace.setBranchId(report.getBranchId());
+        trace.setReport(report);
+        trace.setUser(auteur);
+        trace.setAction(ACTION_APRES_SIGNATURE);
+        trace.setDescription("Modifié par " + nomAuteur + " après signature. "
+                + MARQUEUR_CHAMPS + listeChamps);
+        logReportRepository.save(trace);
+
+        log.warn("Compte-rendu {} modifié après signature par {} — champs: {}",
+                report.getCode(), nomAuteur, listeChamps);
+
+        try {
+            String nomLabo = notificationSettings.labName(report.getBranchId());
+            String codeDemande = report.getTestOrder() != null ? report.getTestOrder().getCode() : "";
+            String signataire = report.getSignatory1() != null
+                    ? (report.getSignatory1().getFirstname() + " "
+                        + report.getSignatory1().getLastname()).trim()
+                    : "";
+            for (String destinataire : notificationSettings.adminEmails(report.getBranchId())) {
+                emailService.sendPostSignatureChangeAlert(destinataire, report.getCode(),
+                        codeDemande, signataire, nomAuteur, listeChamps, nomLabo);
+            }
+        } catch (Exception e) {
+            log.error("Alerte de modification après signature non envoyée pour {}: {}",
+                    report.getCode(), e.getMessage());
+        }
     }
 
     /**
