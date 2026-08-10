@@ -93,13 +93,24 @@ public class SettingReportTemplateController {
     /**
      * Retourne la liste paginée des modèles de rapport de la filiale connectée.
      *
+     * <p>Ouvert à {@code edit-reports} en plus de {@code view-settings} : les
+     * modèles servent à rédiger les comptes rendus, mais seul le super-admin
+     * détient {@code view-settings}. Docteurs, laborantins et secrétariat — les
+     * quatre rôles qui écrivent réellement les comptes rendus — recevaient un
+     * 403 et voyaient « Aucun template ». Même travers que le sélecteur de
+     * signataires : une permission d'administration exigée pour remplir une
+     * liste déroulante.</p>
+     *
+     * <p>La création, la modification et la suppression restent réservées à
+     * {@code edit-settings} : seule la lecture est élargie.</p>
+     *
      * @param page      numéro de page
      * @param size      taille de la page
      * @param principal utilisateur authentifié
      * @return page de modèles de rapport
      */
     @GetMapping
-    @PreAuthorize("hasAuthority('view-settings')")
+    @PreAuthorize("hasAnyAuthority('view-settings', 'edit-reports')")
     public ResponseEntity<ApiResponse<PageResponse<SettingReportTemplateResponseDto>>> findAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -116,7 +127,7 @@ public class SettingReportTemplateController {
      * @return le modèle correspondant
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('view-settings')")
+    @PreAuthorize("hasAnyAuthority('view-settings', 'edit-reports')")
     public ResponseEntity<ApiResponse<SettingReportTemplateResponseDto>> findById(@PathVariable UUID id) {
         SettingReportTemplate t = settingReportTemplateRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Modèle de rapport", id));
