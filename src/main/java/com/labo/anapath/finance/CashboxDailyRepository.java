@@ -26,7 +26,38 @@ public interface CashboxDailyRepository extends JpaRepository<CashboxDaily, UUID
 
     Optional<CashboxDaily> findFirstByBranchIdAndStatusOrderByUpdatedAtDesc(UUID branchId, Integer status);
 
-    @Query("SELECT COALESCE(SUM(o.amount), 0) FROM CashboxOperation o WHERE o.branchId = :branchId AND o.type = 'CREDIT' AND o.paymentMethod = :method AND o.createdAt >= :sinceDate")
+    /**
+     * Encaissements de la session en cours pour un mode de paiement donné.
+     *
+     * <p>Somme les <b>factures</b>, comme Laravel. {@code
+     * CashboxDailyController@detail_fermeture_caisse} additionnait les
+     * {@code cashbox_adds} <i>rattachés à une facture</i> dont le {@code payment}
+     * correspond ({@code whereHas('invoice')}), et le montant d'un
+     * {@code cashbox_add} valait précisément {@code invoice.total}. La somme
+     * revient donc au total des factures réglées depuis l'ouverture.</p>
+     *
+     * <p>La version précédente sommait les opérations de caisse. Deux défauts en
+     * découlaient : elle dépendait d'une écriture qui n'existait pas encore
+     * (d'où un solde de fermeture à zéro), et les opérations reprises de la
+     * migration ont {@code invoice_id} et {@code payment_method} à NULL, donc
+     * aucune journée antérieure n'aurait pu être ventilée. Partir des factures
+     * lève les deux : la donnée est là depuis toujours.</p>
+     *
+     * <p>{@code status_invoice = 0} retient les factures de vente et écarte les
+     * avoirs — l'équivalent du {@code cashbox_id = 2} de Laravel, qui visait la
+     * caisse de vente. {@code updated_at} est l'instant du règlement : c'est la
+     * sauvegarde opérée par {@code markAsPaid}.</p>
+     */
+    @Query(value = """
+            SELECT COALESCE(SUM(i.total), 0)
+            FROM invoices i
+            WHERE i.branch_id = :branchId
+              AND i.deleted_at IS NULL
+              AND i.paid = true
+              AND i.status_invoice = 0
+              AND i.payment = :method
+              AND i.updated_at >= :sinceDate
+            """, nativeQuery = true)
     BigDecimal sumCreditByPaymentMethod(
             @Param("branchId") UUID branchId,
             @Param("method") String method,
