@@ -332,19 +332,56 @@ class TestOrderServiceImplTest {
         verify(testOrderRepository).save(order);
     }
 
+    /**
+     * Remplace un test qui bloquait sur le statut VALIDATED — règle sans
+     * équivalent dans Laravel, où seule une facture payée fige les lignes.
+     */
     @Test
-    @DisplayName("update - bon VALIDÉ → InvalidOperationException")
-    void update_validatedOrder_throwsInvalidOperation() {
+    @DisplayName("update - facture payée → InvalidOperationException")
+    void update_facturePayee_throwsInvalidOperation() {
         TestOrder order = buildOrder(TestOrderStatus.VALIDATED);
+        // `buildOrder` ne pose pas d'identifiant, or le service cherche la
+        // facture par `order.getId()` : sans cela le stub ne correspondrait pas.
+        order.setId(ORDER_ID);
         TestOrderRequestDto dto = new TestOrderRequestDto();
         dto.setPrelevementDate(LocalDate.now());
         dto.setPatientId(PATIENT_ID);
 
+        com.labo.anapath.finance.Invoice facture = new com.labo.anapath.finance.Invoice();
+        facture.setPaid(true);
+
         when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
+        when(invoiceRepository.findByTestOrderId(ORDER_ID)).thenReturn(Optional.of(facture));
 
         assertThatThrownBy(() -> testOrderService.update(ORDER_ID, dto, BRANCH_ID))
                 .isInstanceOf(InvalidOperationException.class)
-                .hasMessageContaining("validé");
+                .hasMessageContaining("payée");
+    }
+
+    @Test
+    @DisplayName("update - bon validé, facture impayée → modification autorisée")
+    void update_bonValideFactureImpayee_estAutorise() {
+        TestOrder order = buildOrder(TestOrderStatus.VALIDATED);
+        // `buildOrder` ne pose pas d'identifiant, or le service cherche la
+        // facture par `order.getId()` : sans cela le stub ne correspondrait pas.
+        order.setId(ORDER_ID);
+        TestOrderRequestDto dto = new TestOrderRequestDto();
+        dto.setPrelevementDate(LocalDate.now());
+        dto.setPatientId(PATIENT_ID);
+        dto.setReferenceHopital("REF-COMPLEMENT");
+
+        com.labo.anapath.finance.Invoice facture = new com.labo.anapath.finance.Invoice();
+        facture.setPaid(false);
+
+        when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
+        when(invoiceRepository.findByTestOrderId(ORDER_ID)).thenReturn(Optional.of(facture));
+        when(testOrderRepository.save(any())).thenReturn(order);
+        when(testOrderMapper.toResponseDto(order)).thenReturn(buildResponseDto());
+
+        testOrderService.update(ORDER_ID, dto, BRANCH_ID);
+
+        assertThat(order.getReferenceHopital()).isEqualTo("REF-COMPLEMENT");
+        verify(testOrderRepository).save(order);
     }
 
     @Test
