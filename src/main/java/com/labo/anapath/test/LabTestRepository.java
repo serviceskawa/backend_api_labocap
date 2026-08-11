@@ -43,7 +43,9 @@ public interface LabTestRepository extends JpaRepository<LabTest, UUID> {
     @Query("""
             SELECT t FROM LabTest t
             WHERE t.branchId = :branchId
-              AND (CAST(:search AS string) IS NULL OR LOWER(t.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
+              AND (CAST(:search AS string) IS NULL
+                   OR FUNCTION('unaccent', LOWER(t.name))
+                      LIKE FUNCTION('unaccent', LOWER(CONCAT('%', CAST(:search AS string), '%'))))
               AND (CAST(:status AS string) IS NULL OR t.status = :status)
             """)
     Page<LabTest> findByFilters(@Param("branchId") UUID branchId,
@@ -70,11 +72,24 @@ public interface LabTestRepository extends JpaRepository<LabTest, UUID> {
      * Recherche les analyses dont le nom contient le terme donné, dans une succursale.
      * Utilisé pour l'autocomplétion dans les formulaires de demande.
      *
-     * @param name     terme de recherche (recherche partielle, insensible à la casse)
+     * <p>Insensible aux accents autant qu'à la casse : le catalogue mêle les deux
+     * orthographes — « HYSTERECTOMIE » et « HYSTÉRECTOMIE » y coexistent, comme
+     * « BIOPSIES DU SEIN » et ses variantes accentuées. Une dérivation Spring Data
+     * (« ContainingIgnoreCase ») ne replie que la casse : le médecin qui tapait
+     * l'accent ne voyait pas les entrées sans, et réciproquement.</p>
+     *
+     * @param name     terme de recherche (partiel, insensible casse et accents)
      * @param branchId identifiant de la succursale
      * @return liste des analyses correspondantes
      */
-    List<LabTest> findByNameContainingIgnoreCaseAndBranchId(String name, UUID branchId);
+    @Query("""
+            SELECT t FROM LabTest t
+            WHERE t.branchId = :branchId
+              AND FUNCTION('unaccent', LOWER(t.name))
+                  LIKE FUNCTION('unaccent', LOWER(CONCAT('%', CAST(:name AS string), '%')))
+            """)
+    List<LabTest> findByNameContainingIgnoreCaseAndBranchId(@Param("name") String name,
+                                                            @Param("branchId") UUID branchId);
 
     /**
      * Vérifie si une analyse portant ce nom existe dans la succursale (insensible à la casse).
