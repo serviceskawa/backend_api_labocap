@@ -29,25 +29,57 @@ public interface LabTestRepository extends JpaRepository<LabTest, UUID> {
     Page<LabTest> findByBranchId(UUID branchId, Pageable pageable);
 
     /**
-     * Retourne la liste paginée des analyses d'une succursale en appliquant des filtres
-     * optionnels sur le nom (recherche partielle, insensible à la casse) et le statut.
+     * Liste paginée des analyses d'une succursale, filtrée par nom et statut.
      *
-     * <p>Un paramètre {@code null} désactive le filtre correspondant.</p>
+     * <p>La recherche exige que <b>chaque mot saisi</b> figure dans le nom, et non
+     * que le nom contienne la phrase entière. « biopsie du seins » ne
+     * correspondait à rien : le catalogue porte « BIOPSIES DU SEIN », au
+     * pluriel sur le premier mot et au singulier sur le dernier — aucune
+     * sous-chaîne commune. Mot à mot, les six entrées de la famille remontent.</p>
+     *
+     * <p>Un {@code s} final est retiré des mots de plus de trois lettres, ce qui
+     * réconcilie singulier et pluriel dans les deux sens. La règle est
+     * volontairement grossière : elle traite le cas français courant sans
+     * prétendre à une lemmatisation.</p>
+     *
+     * <p>Écarté : la similarité trigramme. Sur « biopsie du seins » elle ramenait
+     * « Biopsie du col » et « Biopsie du poumon » à des scores voisins des bonnes
+     * réponses — un seuil qui sépare les deux n'existe pas de façon stable.
+     * L'exigence mot à mot est déterministe et explicable à l'utilisateur.</p>
+     *
+     * <p>Requête native : {@code LIKE ALL (…)} sur un tableau construit à la
+     * volée n'a pas d'équivalent en JPQL.</p>
      *
      * @param branchId identifiant de la succursale
-     * @param search   terme de recherche partielle sur le nom (ou {@code null})
+     * @param search   termes de recherche séparés par des espaces (ou {@code null})
      * @param status   statut exact à filtrer, ACTIF/INACTIF (ou {@code null})
-     * @param pageable paramètres de pagination et de tri
-     * @return page d'analyses correspondant aux filtres
      */
-    @Query("""
-            SELECT t FROM LabTest t
-            WHERE t.branchId = :branchId
-              AND (CAST(:search AS string) IS NULL
-                   OR FUNCTION('unaccent', LOWER(t.name))
-                      LIKE FUNCTION('unaccent', LOWER(CONCAT('%', CAST(:search AS string), '%'))))
-              AND (CAST(:status AS string) IS NULL OR t.status = :status)
-            """)
+    @Query(value = """
+            SELECT * FROM lab_tests t
+            WHERE t.branch_id = :branchId
+              AND (CAST(:search AS text) IS NULL OR CAST(:search AS text) = ''
+                   OR unaccent(lower(t.name)) LIKE ALL (
+                        SELECT '%' || CASE WHEN length(w) > 3
+                                           THEN regexp_replace(w, 's$', '')
+                                           ELSE w END || '%'
+                        FROM unnest(string_to_array(unaccent(lower(CAST(:search AS text))), ' ')) AS w
+                        WHERE w <> ''))
+              AND (CAST(:status AS text) IS NULL OR t.status = CAST(:status AS text))
+            ORDER BY t.created_at DESC
+            """,
+            countQuery = """
+            SELECT count(*) FROM lab_tests t
+            WHERE t.branch_id = :branchId
+              AND (CAST(:search AS text) IS NULL OR CAST(:search AS text) = ''
+                   OR unaccent(lower(t.name)) LIKE ALL (
+                        SELECT '%' || CASE WHEN length(w) > 3
+                                           THEN regexp_replace(w, 's$', '')
+                                           ELSE w END || '%'
+                        FROM unnest(string_to_array(unaccent(lower(CAST(:search AS text))), ' ')) AS w
+                        WHERE w <> ''))
+              AND (CAST(:status AS text) IS NULL OR t.status = CAST(:status AS text))
+            """,
+            nativeQuery = true)
     Page<LabTest> findByFilters(@Param("branchId") UUID branchId,
                                 @Param("search") String search,
                                 @Param("status") String status,
@@ -82,12 +114,17 @@ public interface LabTestRepository extends JpaRepository<LabTest, UUID> {
      * @param branchId identifiant de la succursale
      * @return liste des analyses correspondantes
      */
-    @Query("""
-            SELECT t FROM LabTest t
-            WHERE t.branchId = :branchId
-              AND FUNCTION('unaccent', LOWER(t.name))
-                  LIKE FUNCTION('unaccent', LOWER(CONCAT('%', CAST(:name AS string), '%')))
-            """)
+    @Query(value = """
+            SELECT * FROM lab_tests t
+            WHERE t.branch_id = :branchId
+              AND unaccent(lower(t.name)) LIKE ALL (
+                    SELECT '%' || CASE WHEN length(w) > 3
+                                       THEN regexp_replace(w, 's$', '')
+                                       ELSE w END || '%'
+                    FROM unnest(string_to_array(unaccent(lower(CAST(:name AS text))), ' ')) AS w
+                    WHERE w <> '')
+            ORDER BY t.name
+            """, nativeQuery = true)
     List<LabTest> findByNameContainingIgnoreCaseAndBranchId(@Param("name") String name,
                                                             @Param("branchId") UUID branchId);
 

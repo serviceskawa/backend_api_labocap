@@ -123,11 +123,27 @@ public class CashboxDailyServiceImpl implements CashboxDailyService {
         return toDto(cashboxDailyRepository.save(daily));
     }
 
+    /**
+     * Encaissements de la session que l'on s'apprête à fermer.
+     *
+     * <p>Le point de départ est l'ouverture de <b>cette</b> session. Sans
+     * {@code sessionId}, on retombe sur « la dernière session ouverte », ce qui
+     * était l'unique comportement jusqu'ici et fausse le total dès qu'une
+     * session ancienne traîne : en fermant celle du jour, la référence bascule
+     * sur une session oubliée depuis des jours et le total couvre toute cette
+     * période. Un caissier ayant encaissé 876 000 se voyait proposer plus de
+     * deux millions.</p>
+     *
+     * <p>La date retenue est restituée dans le DTO : la période doit être
+     * lisible à l'écran, faute de quoi un écart reste indéchiffrable.</p>
+     */
     @Override
     @Transactional(readOnly = true)
-    public CashboxDailySummaryDto getDailySummary(UUID branchId) {
-        LocalDateTime sinceDate = cashboxDailyRepository
-                .findFirstByBranchIdAndStatusOrderByUpdatedAtDesc(branchId, 1)
+    public CashboxDailySummaryDto getDailySummary(UUID branchId, UUID sessionId) {
+        LocalDateTime sinceDate = (sessionId != null
+                ? cashboxDailyRepository.findById(sessionId)
+                        .filter(d -> branchId.equals(d.getBranchId()))
+                : cashboxDailyRepository.findFirstByBranchIdAndStatusOrderByUpdatedAtDesc(branchId, 1))
                 .map(d -> d.getUpdatedAt() != null ? d.getUpdatedAt() : d.getCreatedAt())
                 .orElse(LocalDate.now().atStartOfDay());
 
@@ -137,7 +153,7 @@ public class CashboxDailyServiceImpl implements CashboxDailyService {
         BigDecimal virement = orZero(cashboxDailyRepository.sumCreditByPaymentMethod(branchId, "VIREMENT", sinceDate));
         BigDecimal total = especes.add(mobileMoney).add(cheques).add(virement);
 
-        return new CashboxDailySummaryDto(especes, mobileMoney, cheques, virement, total);
+        return new CashboxDailySummaryDto(especes, mobileMoney, cheques, virement, total, sinceDate);
     }
 
     @Override
