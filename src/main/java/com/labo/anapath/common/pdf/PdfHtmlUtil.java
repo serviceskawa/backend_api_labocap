@@ -37,6 +37,8 @@ public final class PdfHtmlUtil {
         }
         Document doc = Jsoup.parse(html);
         retirerPrefixesDeNamespace(doc);
+        traduireBalisesFont(doc);
+        ajouterFamillesGeneriques(doc);
         doc.outputSettings()
                 .syntax(Document.OutputSettings.Syntax.xml)
                 .escapeMode(Entities.EscapeMode.xhtml)
@@ -80,5 +82,115 @@ public final class PdfHtmlUtil {
             aRetirer.forEach(el::removeAttr);
         }
         prefixes.forEach(Element::unwrap);
+    }
+
+    // ------------------------------------------------------------------
+    // Fidélité aux choix de mise en forme du rédacteur
+    // ------------------------------------------------------------------
+
+    /**
+     * Famille générique correspondant à une police nommée.
+     *
+     * <p>OpenHTMLToPDF ne connaît que les quatorze polices de base du PDF, et il
+     * ne reconnaît <b>aucun</b> nom commercial : ni « Arial », ni « Courier
+     * New ». Seul un mot-clé générique ({@code sans-serif}, {@code serif},
+     * {@code monospace}) le fait aboutir. Sans lui il retombe sur son défaut —
+     * du Times — quel que soit le choix du rédacteur.</p>
+     */
+    private static final java.util.Map<String, String> GENERIQUES = java.util.Map.ofEntries(
+            java.util.Map.entry("arial", "sans-serif"),
+            java.util.Map.entry("helvetica", "sans-serif"),
+            java.util.Map.entry("verdana", "sans-serif"),
+            java.util.Map.entry("tahoma", "sans-serif"),
+            java.util.Map.entry("trebuchet ms", "sans-serif"),
+            java.util.Map.entry("calibri", "sans-serif"),
+            java.util.Map.entry("times new roman", "serif"),
+            java.util.Map.entry("times", "serif"),
+            java.util.Map.entry("georgia", "serif"),
+            java.util.Map.entry("garamond", "serif"),
+            java.util.Map.entry("book antiqua", "serif"),
+            java.util.Map.entry("courier new", "monospace"),
+            java.util.Map.entry("courier", "monospace"),
+            java.util.Map.entry("consolas", "monospace"));
+
+    /** Correspondance des tailles HTML historiques {@code <font size="1..7">}. */
+    private static final java.util.Map<String, String> TAILLES_FONT = java.util.Map.of(
+            "1", "10px", "2", "13px", "3", "16px", "4", "18px",
+            "5", "24px", "6", "32px", "7", "48px");
+
+    /**
+     * Traduit les {@code <font face=… size=…>} en styles CSS.
+     *
+     * <p>L'éditeur de comptes rendus s'appuie sur {@code document.execCommand},
+     * qui produit encore ces balises héritées faute de {@code styleWithCSS}.
+     * Le moteur PDF ne les interprète pas : la police et la taille choisies par
+     * le médecin disparaissaient purement et simplement du document.</p>
+     *
+     * <p>La balise est conservée — seulement enrichie d'un {@code style} — pour
+     * ne pas perturber l'imbrication du contenu existant.</p>
+     */
+    private static void traduireBalisesFont(Document doc) {
+        for (Element el : doc.select("font")) {
+            StringBuilder style = new StringBuilder(el.attr("style"));
+            String face = el.attr("face");
+            if (!face.isBlank()) {
+                ajouter(style, "font-family", face);
+                el.removeAttr("face");
+            }
+            String size = el.attr("size");
+            if (TAILLES_FONT.containsKey(size.trim())) {
+                ajouter(style, "font-size", TAILLES_FONT.get(size.trim()));
+                el.removeAttr("size");
+            }
+            String couleur = el.attr("color");
+            if (!couleur.isBlank()) {
+                ajouter(style, "color", couleur);
+                el.removeAttr("color");
+            }
+            if (style.length() > 0) {
+                el.attr("style", style.toString());
+            }
+        }
+    }
+
+    /**
+     * Complète toute {@code font-family} dépourvue de famille générique.
+     *
+     * <p>Sans cet ajout, « Arial » seul donne du Times — vérifié en rendant le
+     * document et en lisant la police effectivement embarquée. Avec
+     * « Arial, sans-serif », on obtient Helvetica, métriquement équivalente.
+     * Georgia et Verdana n'ont pas d'équivalent parmi les polices de base :
+     * elles aboutissent respectivement à du serif et du sans-serif, ce qui
+     * respecte au moins l'intention du rédacteur.</p>
+     *
+     * <p>Le repli par défaut est {@code sans-serif} : le corps du compte rendu
+     * est en Arial, une police inconnue y détonnerait moins en sans qu'en
+     * serif.</p>
+     */
+    private static void ajouterFamillesGeneriques(Document doc) {
+        for (Element el : doc.select("[style]")) {
+            String style = el.attr("style");
+            java.util.regex.Matcher m = java.util.regex.Pattern
+                    .compile("font-family\\s*:\\s*([^;]+)", java.util.regex.Pattern.CASE_INSENSITIVE)
+                    .matcher(style);
+            if (!m.find()) {
+                continue;
+            }
+            String familles = m.group(1).trim();
+            if (familles.toLowerCase().matches(".*\\b(sans-serif|serif|monospace|cursive|fantasy)\\b.*")) {
+                continue;
+            }
+            String premiere = familles.split(",")[0].trim()
+                    .replaceAll("^[\"']|[\"']$", "").toLowerCase();
+            String generique = GENERIQUES.getOrDefault(premiere, "sans-serif");
+            el.attr("style", style.substring(0, m.end()) + ", " + generique + style.substring(m.end()));
+        }
+    }
+
+    private static void ajouter(StringBuilder style, String propriete, String valeur) {
+        if (style.length() > 0 && style.charAt(style.length() - 1) != ';') {
+            style.append(';');
+        }
+        style.append(propriete).append(':').append(valeur).append(';');
     }
 }
