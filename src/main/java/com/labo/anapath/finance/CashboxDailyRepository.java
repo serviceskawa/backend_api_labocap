@@ -64,6 +64,31 @@ public interface CashboxDailyRepository extends JpaRepository<CashboxDaily, UUID
             @Param("sinceDate") LocalDateTime sinceDate);
 
     /**
+     * Nombre de règlements de la session pour un mode de paiement donné.
+     *
+     * <p>Mêmes critères et même fenêtre que {@link #sumCreditByPaymentMethod} —
+     * c'est tout l'objet de cette requête. L'écran de fermeture comptait
+     * auparavant les opérations de caisse, filtrées sur la seule date de la
+     * session : le nombre affiché n'avait donc ni la même source ni la même
+     * période que le montant placé juste à côté. Une session ouverte depuis
+     * plusieurs jours affichait « 0 » en face de plusieurs millions.</p>
+     */
+    @Query(value = """
+            SELECT COUNT(*)
+            FROM invoices i
+            WHERE i.branch_id = :branchId
+              AND i.deleted_at IS NULL
+              AND i.paid = true
+              AND i.status_invoice = 0
+              AND i.payment = :method
+              AND i.updated_at >= :sinceDate
+            """, nativeQuery = true)
+    long countCreditByPaymentMethod(
+            @Param("branchId") UUID branchId,
+            @Param("method") String method,
+            @Param("sinceDate") LocalDateTime sinceDate);
+
+    /**
      * Plus grand numéro d'ordre attribué à une ouverture de caisse de l'année en
      * cours — voir {@code generateCodeOpeningCashbox()} de Laravel (format
      * {@code OC250001}).

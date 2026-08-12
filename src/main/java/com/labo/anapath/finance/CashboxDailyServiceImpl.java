@@ -153,7 +153,15 @@ public class CashboxDailyServiceImpl implements CashboxDailyService {
         BigDecimal virement = orZero(cashboxDailyRepository.sumCreditByPaymentMethod(branchId, "VIREMENT", sinceDate));
         BigDecimal total = especes.add(mobileMoney).add(cheques).add(virement);
 
-        return new CashboxDailySummaryDto(especes, mobileMoney, cheques, virement, total, sinceDate);
+        // Mêmes critères, même fenêtre : le nombre doit décrire exactement les
+        // règlements que le montant additionne.
+        long nbEspeces = cashboxDailyRepository.countCreditByPaymentMethod(branchId, "ESPECES", sinceDate);
+        long nbMobileMoney = cashboxDailyRepository.countCreditByPaymentMethod(branchId, "MOBILEMONEY", sinceDate);
+        long nbCheques = cashboxDailyRepository.countCreditByPaymentMethod(branchId, "CHEQUES", sinceDate);
+        long nbVirement = cashboxDailyRepository.countCreditByPaymentMethod(branchId, "VIREMENT", sinceDate);
+
+        return new CashboxDailySummaryDto(especes, mobileMoney, cheques, virement, total,
+                nbEspeces, nbMobileMoney, nbCheques, nbVirement, sinceDate);
     }
 
     @Override
