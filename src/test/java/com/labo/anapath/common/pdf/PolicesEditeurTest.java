@@ -70,14 +70,15 @@ class PolicesEditeurTest {
     }
 
     /**
-     * Georgia et Verdana n'ont pas d'équivalent parmi les quatorze polices de
-     * base. À défaut de les embarquer, l'intention est respectée : l'une reste
-     * une serif, l'autre une sans-serif — au lieu de devenir toutes deux du
-     * Times.
+     * L'éditeur ne propose plus que les trois polices que le PDF sait honorer.
+     * Le repli reste néanmoins éprouvé : d'anciens comptes rendus, ou un
+     * copier-coller depuis un traitement de texte, peuvent porter n'importe
+     * quelle famille. L'intention est alors préservée — une serif reste une
+     * serif — au lieu que tout devienne du Times.
      */
     @Test
-    @DisplayName("Georgia reste serif, Verdana reste sans-serif")
-    void georgiaEtVerdanaGardentLeurGenre() {
+    @DisplayName("Une police non embarquable garde au moins son genre")
+    void policeInconnueGardeSonGenre() {
         assertThat(policesDuPdf("<font face=\"Georgia\">Texte</font>")).contains("Times-Roman");
         assertThat(policesDuPdf("<font face=\"Verdana\">Texte</font>")).contains("Helvetica");
     }
@@ -101,11 +102,14 @@ class PolicesEditeurTest {
      * choisie par le médecin était donc perdue, sans que rien ne le signale.
      */
     @Test
-    @DisplayName("La taille choisie dans l'éditeur est reportée dans le PDF")
+    @DisplayName("La taille reportée est celle que l'éditeur affiche, non celle du navigateur")
     void tailleReportee() {
-        String xhtml = PdfHtmlUtil.toXhtml(
-                "<html><body><font size=\"5\">Texte</font></body></html>");
-        assertThat(xhtml).contains("font-size:24px");
+        // L'éditeur intitule « 18 » la valeur 5 ; les tailles historiques du
+        // navigateur y verraient 24 px, soit un tiers de trop.
+        assertThat(PdfHtmlUtil.toXhtml("<html><body><font size=\"5\">T</font></body></html>"))
+                .contains("font-size:18px");
+        assertThat(PdfHtmlUtil.toXhtml("<html><body><font size=\"3\">T</font></body></html>"))
+                .contains("font-size:12px");
     }
 
     @Test

@@ -113,10 +113,22 @@ public final class PdfHtmlUtil {
             java.util.Map.entry("courier", "monospace"),
             java.util.Map.entry("consolas", "monospace"));
 
-    /** Correspondance des tailles HTML historiques {@code <font size="1..7">}. */
+    /**
+     * Correspondance des tailles {@code <font size="1..7">}.
+     *
+     * <p>Les valeurs sont celles que <b>l'éditeur affiche</b> au médecin
+     * (RichTextEditor.tsx : 8, 10, 12, 14, 18, 24, 36), et non les tailles
+     * historiques du navigateur — 1 y vaut 10 px, 3 en vaut 16. Suivre ces
+     * dernières aurait rendu « 12 » en 16 px : un tiers de trop, sur un choix
+     * délibéré du rédacteur.</p>
+     *
+     * <p>Aucun compte rendu repris de Laravel ne contient de {@code <font
+     * size>} — vérifié en base — donc aucun risque de réinterpréter
+     * l'existant.</p>
+     */
     private static final java.util.Map<String, String> TAILLES_FONT = java.util.Map.of(
-            "1", "10px", "2", "13px", "3", "16px", "4", "18px",
-            "5", "24px", "6", "32px", "7", "48px");
+            "1", "8px", "2", "10px", "3", "12px", "4", "14px",
+            "5", "18px", "6", "24px", "7", "36px");
 
     /**
      * Traduit les {@code <font face=… size=…>} en styles CSS.
