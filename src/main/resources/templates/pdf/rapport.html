@@ -15,26 +15,30 @@
             @bottom-center { content: element(pagefooter); }
         }
         /*
-           Interligne aligné sur le legacy.
+           Interligne aligné sur le legacy, par la mesure et non par le calcul.
 
-           Le gabarit Laravel (pdf/canva_caap.blade.php) ne déclarait AUCUN
-           line-height : DomPDF appliquait alors son `font_height_ratio`, réglé
-           à 1.1 dans config/dompdf.php. Ne rien déclarer ici ne reproduirait pas
-           ce comportement — OpenHTMLToPDF a sa propre interprétation de
-           `normal`. La valeur est donc posée explicitement, pour que le rendu
-           soit déterministe et non tributaire du moteur.
+           Le gabarit Laravel ne déclarait aucun line-height. On aurait pu croire
+           que DomPDF appliquait son `font_height_ratio` (1.1 dans
+           config/dompdf.php) comme multiplicateur : c'est faux, ce réglage
+           pondère les métriques de la police. Un document rendu par DomPDF
+           lui-même, avec la configuration du projet legacy, donne 12,0 pt
+           d'interligne pour un corps de 9,75 pt — soit 1,23.
 
-           Le corps du texte, lui, était déjà identique : Arial (que les deux
-           moteurs résolvent en Helvetica, police de base du format PDF), 13 px
-           convertis à 96 DPI — soit 9,75 pt, mesurés dans le PDF produit.
+           Le corps, lui, était déjà conforme : Arial (que les deux moteurs
+           résolvent en Helvetica, police de base du format PDF), 13 px à
+           96 DPI — 9,75 pt d'un côté, 9,8 de l'autre.
         */
-        body { font-family: Arial, sans-serif; margin: 0; padding: 0; line-height: 1.1; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; line-height: 1.23; }
         .entete img { width: 100%; }
         table.meta-row { width: 100%; border-collapse: collapse; margin-top: 22px; }
         table.meta-row td { vertical-align: top; padding: 0; }
-        /* 1.6 remplacé par l'héritage du corps (1.1) : le legacy ne distinguait
-           pas ce bloc, qui s'en trouvait un tiers moins haut. */
-        .meta { font-size: 13px; }
+        /* Interligne : hérité du corps, le legacy ne distinguant pas ce bloc.
+           Le 1.6 qui figurait ici l'étirait d'un tiers.
+
+           `margin-left` : le legacy pose 10 px sur ce bloc précis
+           (canva_caap.blade.php, div du bloc d'en-tête). Mesuré, le texte y
+           commence à 30,3 pt du bord contre 22,5 sans lui. */
+        .meta { font-size: 13px; margin-left: 10px; }
         .qr-cell { text-align: right; width: 90px; }
         .qr-cell img { width: 80px; display: inline-block; vertical-align: top; }
         .title-band {
