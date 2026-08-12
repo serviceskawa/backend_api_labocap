@@ -1,0 +1,15 @@
+-- Recherche insensible aux accents.
+--
+-- Le catalogue et les comptes rendus mêlent les deux orthographes : « HYSTERECTOMIE »
+-- et « HYSTÉRECTOMIE » coexistent, de même que « SEIN » et « SEÎN », héritage de
+-- vingt ans de saisie libre. `ILIKE` replie la casse mais pas les accents : chaque
+-- recherche ne voyait donc que sa propre variante, d'où des examens et des comptes
+-- rendus introuvables selon la façon dont on les tape.
+--
+-- `unaccent` fournit le repliement. L'extension est livrée avec PostgreSQL
+-- (contrib) et ne demande aucune installation système.
+--
+-- Note : `unaccent()` n'est pas IMMUTABLE, elle ne peut donc pas servir telle
+-- quelle dans un index. Ce n'est pas gênant ici — les recherches se font déjà par
+-- `LIKE '%…%'`, qui exclut l'index de toute façon.
+CREATE EXTENSION IF NOT EXISTS unaccent;

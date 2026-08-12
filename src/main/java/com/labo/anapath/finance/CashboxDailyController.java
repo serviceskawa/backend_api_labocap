@@ -51,12 +51,21 @@ public class CashboxDailyController {
                 cashboxDailyService.findAll(page, size, principal.getBranchId())));
     }
 
+    /**
+     * Encaissements à présenter lors d'une fermeture.
+     *
+     * <p>{@code sessionId} désigne la session que l'on ferme : le total part de
+     * son ouverture. Omis, on retombe sur la dernière session ouverte de la
+     * branche — comportement d'origine, qui fausse le calcul dès qu'une session
+     * plus ancienne est restée ouverte.</p>
+     */
     @GetMapping("/summary")
     @PreAuthorize("hasAuthority('view-cashbox-dailies')")
     public ResponseEntity<ApiResponse<CashboxDailySummaryDto>> getDailySummary(
+            @RequestParam(required = false) UUID sessionId,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                cashboxDailyService.getDailySummary(principal.getBranchId())));
+                cashboxDailyService.getDailySummary(principal.getBranchId(), sessionId)));
     }
 
     @GetMapping("/{id}")

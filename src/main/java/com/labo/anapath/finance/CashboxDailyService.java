@@ -14,7 +14,11 @@ public interface CashboxDailyService {
 
     CashboxDailyResponseDto closeCashbox(UUID id, CashboxDailyCloseDto dto, UUID userId);
 
-    CashboxDailySummaryDto getDailySummary(UUID branchId);
+    /**
+     * @param sessionId session concernée par la fermeture ; {@code null} retombe
+     *                  sur la dernière session ouverte de la branche
+     */
+    CashboxDailySummaryDto getDailySummary(UUID branchId, UUID sessionId);
 
     void delete(UUID id);
 }

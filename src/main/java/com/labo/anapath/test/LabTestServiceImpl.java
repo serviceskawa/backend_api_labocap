@@ -44,8 +44,12 @@ public class LabTestServiceImpl implements LabTestService {
         String searchFilter = (search != null && !search.isBlank()) ? search.trim() : null;
         String statusFilter = (status != null && !status.isBlank()) ? status.trim() : null;
         return PageResponse.of(
+                // Sans tri Spring : `findByFilters` est une requête native, qui ne
+                // traduit pas un tri exprimé sur les propriétés de l'entité
+                // (« createdAt » ≠ colonne « created_at »). L'ordre est porté par
+                // la requête elle-même.
                 labTestRepository.findByFilters(branchId, searchFilter, statusFilter,
-                                PageRequest.of(page, size, Sort.by("createdAt").descending()))
+                                PageRequest.of(page, size))
                         .map(mapper::toLabTestResponseDto));
     }
 
