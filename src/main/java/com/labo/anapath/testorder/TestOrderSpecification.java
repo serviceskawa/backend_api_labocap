@@ -88,14 +88,31 @@ public class TestOrderSpecification {
             }
             if (filter.getSearch() != null && !filter.getSearch().isBlank()) {
                 String pattern = "%" + filter.getSearch().toLowerCase() + "%";
-                // Recherche globale : code du bon OU nom/prénom du patient (comme la
-                // DataTable Laravel). Jointure LEFT pour ne pas exclure les bons sans
-                // patient dont le code correspond.
+                // Recherche globale : code du bon, patient, et NOM DES EXAMENS
+                // demandés. Jointures LEFT pour ne pas exclure un bon sans
+                // patient ou sans ligne d'examen dont le code correspondrait.
                 var patientJoin = root.join("patient", jakarta.persistence.criteria.JoinType.LEFT);
-                Predicate codeMatch = cb.like(cb.lower(cb.coalesce(root.get("code"), "")), pattern);
-                Predicate firstMatch = cb.like(cb.lower(cb.coalesce(patientJoin.get("firstname"), "")), pattern);
-                Predicate lastMatch = cb.like(cb.lower(cb.coalesce(patientJoin.get("lastname"), "")), pattern);
-                predicates.add(cb.or(codeMatch, firstMatch, lastMatch));
+                var detailJoin = root.join("details", jakarta.persistence.criteria.JoinType.LEFT);
+
+                Predicate codeMatch = like(cb, root.get("code"), pattern);
+                Predicate firstMatch = like(cb, patientJoin.get("firstname"), pattern);
+                Predicate lastMatch = like(cb, patientJoin.get("lastname"), pattern);
+                // Nom et prénom saisis d'un trait — « AHOSSI Jean » ne
+                // correspond à aucune des deux colonnes prises isolément. Les
+                // deux ordres, les données étant inversées en base.
+                Predicate nomComplet = like(cb, cb.concat(cb.concat(
+                        cb.coalesce(patientJoin.get("firstname"), ""), " "),
+                        cb.coalesce(patientJoin.<String>get("lastname"), "")), pattern);
+                Predicate nomInverse = like(cb, cb.concat(cb.concat(
+                        cb.coalesce(patientJoin.get("lastname"), ""), " "),
+                        cb.coalesce(patientJoin.<String>get("firstname"), "")), pattern);
+                // `testName` plutôt que `labTest.name` : c'est le libellé figé
+                // au moment de la commande, toujours renseigné, et il survit au
+                // renommage ou à la suppression de l'examen au catalogue.
+                Predicate examenMatch = like(cb, detailJoin.get("testName"), pattern);
+
+                predicates.add(cb.or(codeMatch, firstMatch, lastMatch,
+                        nomComplet, nomInverse, examenMatch));
             }
             if (filter.getContratId() != null) {
                 predicates.add(cb.equal(root.get("contrat").get("id"), filter.getContratId()));
@@ -106,6 +123,22 @@ public class TestOrderSpecification {
 
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    /**
+     * Comparaison insensible à la casse <b>et aux accents</b>.
+     *
+     * <p>Le catalogue mêle les deux orthographes — « HYSTERECTOMIE » et
+     * « HYSTÉRECTOMIE » y coexistent, héritage de la saisie libre. {@code lower}
+     * seul ne replie pas les accents : chaque recherche ne verrait que sa propre
+     * variante, ce qui a valu au laboratoire des examens réputés introuvables.</p>
+     */
+    private static Predicate like(jakarta.persistence.criteria.CriteriaBuilder cb,
+                                  jakarta.persistence.criteria.Expression<String> champ,
+                                  String motif) {
+        return cb.like(
+                cb.function("unaccent", String.class, cb.lower(cb.coalesce(champ, ""))),
+                cb.function("unaccent", String.class, cb.literal(motif)));
     }
 
     /**
