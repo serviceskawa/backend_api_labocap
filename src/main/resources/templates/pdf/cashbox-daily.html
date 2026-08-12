@@ -6,8 +6,13 @@
         @page { size: A4; margin: 10mm; }
 
         body {
-            font-family: "Helvetica Neue", "Nunito", Arial, sans-serif;
-            font-size: 14px;
+            /* Nunito en tête, et non « Helvetica Neue » : OpenHTMLToPDF résout
+               cette dernière en Helvetica — police de base du format PDF — et
+               n'atteignait donc jamais Nunito, celle sous laquelle le legacy
+               imprimait cet état (thème d'administration, app.min.css). */
+            font-family: "Nunito", Arial, sans-serif;
+            /* 0.9rem du thème legacy, soit 14,4 px sur une base de 16. */
+            font-size: 14.4px;
             color: #6c757d;
             margin: 0;
             background: #ffffff;

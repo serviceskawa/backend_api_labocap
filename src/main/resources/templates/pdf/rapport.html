@@ -14,11 +14,27 @@
             margin: 15px 30px 115px 30px;
             @bottom-center { content: element(pagefooter); }
         }
-        body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+        /*
+           Interligne aligné sur le legacy.
+
+           Le gabarit Laravel (pdf/canva_caap.blade.php) ne déclarait AUCUN
+           line-height : DomPDF appliquait alors son `font_height_ratio`, réglé
+           à 1.1 dans config/dompdf.php. Ne rien déclarer ici ne reproduirait pas
+           ce comportement — OpenHTMLToPDF a sa propre interprétation de
+           `normal`. La valeur est donc posée explicitement, pour que le rendu
+           soit déterministe et non tributaire du moteur.
+
+           Le corps du texte, lui, était déjà identique : Arial (que les deux
+           moteurs résolvent en Helvetica, police de base du format PDF), 13 px
+           convertis à 96 DPI — soit 9,75 pt, mesurés dans le PDF produit.
+        */
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; line-height: 1.1; }
         .entete img { width: 100%; }
         table.meta-row { width: 100%; border-collapse: collapse; margin-top: 22px; }
         table.meta-row td { vertical-align: top; padding: 0; }
-        .meta { font-size: 13px; line-height: 1.6; }
+        /* 1.6 remplacé par l'héritage du corps (1.1) : le legacy ne distinguait
+           pas ce bloc, qui s'en trouvait un tiers moins haut. */
+        .meta { font-size: 13px; }
         .qr-cell { text-align: right; width: 90px; }
         .qr-cell img { width: 80px; display: inline-block; vertical-align: top; }
         .title-band {

@@ -195,30 +195,13 @@ public class InvoicePdfServiceImpl implements InvoicePdfService {
     /**
      * Embarque Nunito dans le PDF.
      *
-     * <p>OpenHTMLToPDF ne connaît que les 14 polices de base du format PDF : sans cet
-     * enregistrement, la famille déclarée dans la feuille de style est ignorée et le
-     * document est rendu en Helvetica, avec d'autres métriques et d'autres retours à la
-     * ligne que la page imprimée par le navigateur côté Laravel.</p>
+     * <p>Délègue à {@link com.labo.anapath.common.pdf.PdfFonts} : le dispositif
+     * était ici et n'y servait qu'à la facture, tandis que l'état de caisse et
+     * la fiche de paie l'oubliaient et sortaient en Helvetica sans que rien ne
+     * le signale. Mutualisé pour que cet oubli ne se reproduise plus.</p>
      */
     private void registerNunito(PdfRendererBuilder builder) {
-        registerFont(builder, "pdf-assets/fonts/Nunito-Regular.ttf", 400);
-        registerFont(builder, "pdf-assets/fonts/Nunito-SemiBold.ttf", 600);
-        registerFont(builder, "pdf-assets/fonts/Nunito-Bold.ttf", 700);
-    }
-
-    private void registerFont(PdfRendererBuilder builder, String classpathLocation, int weight) {
-        ClassPathResource resource = new ClassPathResource(classpathLocation);
-        if (!resource.exists()) {
-            log.warn("Police PDF absente ({}) : rendu en police de substitution.", classpathLocation);
-            return;
-        }
-        builder.useFont(() -> {
-            try {
-                return resource.getInputStream();
-            } catch (Exception e) {
-                throw new IllegalStateException("Lecture de la police " + classpathLocation + " impossible", e);
-            }
-        }, "Nunito", weight, BaseRendererBuilder.FontStyle.NORMAL, true);
+        com.labo.anapath.common.pdf.PdfFonts.enregistrerNunito(builder);
     }
 
     /**
