@@ -161,6 +161,10 @@ public class PdfReportServiceImpl implements PdfReportService {
         // Convert to PDF
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             PdfRendererBuilder builder = new PdfRendererBuilder();
+            // Le compte rendu est le seul document dont le rédacteur choisit la
+            // police. Sans ces substituts, tout choix sortant des quatorze
+            // polices de base du PDF retombait sur du Times.
+            com.labo.anapath.common.pdf.PdfFonts.enregistrerSubstituts(builder);
             builder.withHtmlContent(html, null);
             builder.toStream(outputStream);
             builder.run();

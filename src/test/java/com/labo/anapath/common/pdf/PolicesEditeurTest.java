@@ -28,10 +28,17 @@ import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 class PolicesEditeurTest {
 
     private Set<String> policesDuPdf(String corpsHtml) {
+        return policesDuPdf(corpsHtml, true);
+    }
+
+    private Set<String> policesDuPdf(String corpsHtml, boolean avecSubstituts) {
         String html = "<html><body>" + corpsHtml + "</body></html>";
         byte[] pdf;
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             PdfRendererBuilder builder = new PdfRendererBuilder();
+            if (avecSubstituts) {
+                PdfFonts.enregistrerSubstituts(builder);
+            }
             builder.withHtmlContent(PdfHtmlUtil.toXhtml(html), null);
             builder.toStream(out);
             builder.run();
@@ -70,17 +77,48 @@ class PolicesEditeurTest {
     }
 
     /**
-     * L'éditeur ne propose plus que les trois polices que le PDF sait honorer.
-     * Le repli reste néanmoins éprouvé : d'anciens comptes rendus, ou un
-     * copier-coller depuis un traitement de texte, peuvent porter n'importe
+     * Les cinq polices sans équivalent parmi les quatorze de base doivent
+     * désormais être <b>embarquées</b>, et non approchées : c'est tout l'objet
+     * des substituts libres. Le test lit le nom de la police effectivement
+     * incluse dans le document.
+     */
+    @Test
+    @DisplayName("Georgia s'incarne en Gelasio, embarquée dans le document")
+    void georgiaEmbarquee() {
+        assertThat(String.join(",", policesDuPdf("<font face=\"Georgia\">Texte</font>")))
+                .contains("Gelasio");
+    }
+
+    @Test
+    @DisplayName("Verdana, Tahoma et Trebuchet MS s'incarnent en DejaVu Sans")
+    void sansSerifLargesEmbarquees() {
+        for (String f : new String[] {"Verdana", "Tahoma", "Trebuchet MS"}) {
+            assertThat(String.join(",", policesDuPdf("<font face=\"" + f + "\">Texte</font>")))
+                    .as("police embarquée pour %s", f)
+                    .contains("DejaVu");
+        }
+    }
+
+    @Test
+    @DisplayName("Comic Sans MS s'incarne en Comic Neue")
+    void comicSansEmbarquee() {
+        assertThat(String.join(",", policesDuPdf("<font face=\"Comic Sans MS\">Texte</font>")))
+                .contains("ComicNeue");
+    }
+
+    /**
+     * Le repli reste utile pour ce que l'éditeur ne propose pas : un
+     * copier-coller depuis un traitement de texte peut introduire n'importe
      * quelle famille. L'intention est alors préservée — une serif reste une
      * serif — au lieu que tout devienne du Times.
      */
     @Test
-    @DisplayName("Une police non embarquable garde au moins son genre")
+    @DisplayName("Une police inconnue garde au moins son genre")
     void policeInconnueGardeSonGenre() {
-        assertThat(policesDuPdf("<font face=\"Georgia\">Texte</font>")).contains("Times-Roman");
-        assertThat(policesDuPdf("<font face=\"Verdana\">Texte</font>")).contains("Helvetica");
+        assertThat(policesDuPdf("<font face=\"Garamond\">Texte</font>", false))
+                .contains("Times-Roman");
+        assertThat(policesDuPdf("<font face=\"Calibri\">Texte</font>", false))
+                .contains("Helvetica");
     }
 
     @Test
