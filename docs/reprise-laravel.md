@@ -183,18 +183,30 @@ caisse. Déployer l'une sans l'autre les laisse à moitié en place.
 
 ### Résidus de données
 
-Les chiffres ci-dessous viennent de la **base de production**, relevés le
-11 août ; la copie locale de développement ne les reproduit pas.
+Relevés sur la **base de production** le 13 août (`scripts/etat-clotures-caisse.sh`).
 
 | Sujet | État |
 |---|---|
-| 25 sessions de caisse jamais fermées, dont une du 07/08 | Ne faussent plus le calcul ; l'historique reste faux |
-| Deux caisses de vente **sans nom** | Indiscernables dans le sélecteur — cause de l'ouverture sur la mauvaise |
+| 24 sessions de caisse jamais fermées, sur 734 | Ne faussent plus le calcul ; l'historique reste faux |
+| `OC260156` (10/08) : solde de fermeture à 0 au lieu de 705 000 | Seule clôture affectée par le calcul sur les seules espèces |
+| Deux clôtures de **2023** au `total_ecart` incohérent (−75 000 cumulés) | Antérieures à la reprise — donnée héritée, non causée par la migration |
 | 8 815 opérations migrées sans `invoice_id` ni `payment_method` | Journées antérieures non ventilables par mode |
 | `admin_mails` | Si vide, les alertes après signature ne partent pas — silencieusement |
 
+> **Correction.** Une version antérieure de ce document annonçait « deux caisses
+> de vente sans nom » comme un résidu de production. C'était faux : la production
+> n'a que **deux caisses au total**, une de vente et une de dépense, toutes deux
+> nommées « Caisse ». Le doublon n'existe que dans la copie locale de
+> développement. L'heuristique corrigée par `c248b9d` reste néanmoins fondée —
+> elle se serait sabotée dès qu'une seconde caisse de vente aurait été créée.
+
 ### Décisions en attente
 
+- Reprendre le solde de fermeture d'`OC260156` : `0` au lieu de `705 000`.
+  Valeur d'affichage, sans effet sur le solde de la caisse — celui-ci ne dépend
+  que de l'écart, nul sur cette clôture.
+- Les deux clôtures de 2023 au `total_ecart` incohérent : donnée héritée, à
+  laisser ou à reprendre selon ce que la comptabilité en dit.
 - Restreindre la somme de fermeture à la caisse de vente, comme Laravel
   (`cashbox_id = 2`) : sinon un virement bancaire enregistré en opération gonfle
   le total.
