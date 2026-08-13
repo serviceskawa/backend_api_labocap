@@ -27,6 +27,23 @@ public interface CashboxDailyRepository extends JpaRepository<CashboxDaily, UUID
     Optional<CashboxDaily> findFirstByBranchIdAndStatusOrderByUpdatedAtDesc(UUID branchId, Integer status);
 
     /**
+     * Session ouverte juste après celle dont on donne l'instant de création.
+     *
+     * <p>Sert de borne haute au calcul de fermeture. Sans elle, la fenêtre d'une
+     * session n'a pas de fin : une session du 07/08 encore ouverte compte
+     * l'argent encaissé après l'ouverture de celle du 10/08 — argent que la
+     * fermeture de cette dernière comptera une seconde fois.</p>
+     *
+     * <p>Chaque session couvre ainsi exactement l'intervalle qui la sépare de la
+     * suivante. Aucun franc ne tombe entre deux sessions, aucun n'est compté
+     * deux fois. Lorsqu'il n'y a pas de session suivante — le cas courant, celle
+     * qu'on ferme étant la dernière — la fenêtre reste ouverte jusqu'à
+     * maintenant.</p>
+     */
+    Optional<CashboxDaily> findFirstByBranchIdAndCreatedAtGreaterThanOrderByCreatedAtAsc(
+            UUID branchId, LocalDateTime createdAt);
+
+    /**
      * Encaissements de la session en cours pour un mode de paiement donné.
      *
      * <p>Somme les <b>factures</b>, comme Laravel. {@code
@@ -57,11 +74,13 @@ public interface CashboxDailyRepository extends JpaRepository<CashboxDaily, UUID
               AND i.status_invoice = 0
               AND i.payment = :method
               AND i.updated_at >= :sinceDate
+              AND (CAST(:untilDate AS timestamp) IS NULL OR i.updated_at < CAST(:untilDate AS timestamp))
             """, nativeQuery = true)
     BigDecimal sumCreditByPaymentMethod(
             @Param("branchId") UUID branchId,
             @Param("method") String method,
-            @Param("sinceDate") LocalDateTime sinceDate);
+            @Param("sinceDate") LocalDateTime sinceDate,
+            @Param("untilDate") LocalDateTime untilDate);
 
     /**
      * Nombre de règlements de la session pour un mode de paiement donné.
@@ -82,11 +101,13 @@ public interface CashboxDailyRepository extends JpaRepository<CashboxDaily, UUID
               AND i.status_invoice = 0
               AND i.payment = :method
               AND i.updated_at >= :sinceDate
+              AND (CAST(:untilDate AS timestamp) IS NULL OR i.updated_at < CAST(:untilDate AS timestamp))
             """, nativeQuery = true)
     long countCreditByPaymentMethod(
             @Param("branchId") UUID branchId,
             @Param("method") String method,
-            @Param("sinceDate") LocalDateTime sinceDate);
+            @Param("sinceDate") LocalDateTime sinceDate,
+            @Param("untilDate") LocalDateTime untilDate);
 
     /**
      * Plus grand numéro d'ordre attribué à une ouverture de caisse de l'année en
