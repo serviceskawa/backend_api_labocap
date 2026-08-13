@@ -4,10 +4,11 @@
 #
 # CE QU'IL CHERCHE
 #
-#   1. Le solde de fermeture ne retenait que les espèces comptées, là où le
-#      legacy additionne tous les modes (`close_balance = open_money +
-#      totalConfirmation`). Une journée encaissée en Mobile Money enregistrait
-#      donc un solde nul.
+#   1. Le solde de fermeture ne retenait que les espèces comptées. Il doit
+#      valoir le TOTAL DES FACTURES réglées pendant la vie de la session
+#      (`total_calculated`) — règle retenue par le client, qui s'écarte du
+#      legacy : celui-ci enregistrait ce que le caissier avait compté. Une
+#      journée encaissée en Mobile Money enregistrait un solde nul.
 #
 #   2. L'écart était calculé `calculé − compté`, à l'envers du legacy
 #      (`compté − calculé`). Or la fermeture AJOUTE cet écart au solde de la
@@ -67,23 +68,22 @@ SQL
 
 echo
 echo "── 2. Soldes de fermeture à reprendre"
-echo "   (solde enregistré ≠ fond initial + total compté)"
+echo "   (solde enregistré ≠ total des factures de la période)"
 sql <<SQL
 SELECT code,
        date,
        opening_balance::bigint          AS fond_initial,
        cash_confirmation::bigint        AS especes_comptees,
        total_confirmation::bigint       AS total_compte,
+       total_calculated::bigint         AS total_facture,
        closing_balance::bigint          AS solde_enregistre,
-       (COALESCE(opening_balance,0) + COALESCE(total_confirmation,0))::bigint AS solde_attendu,
-       ((COALESCE(opening_balance,0) + COALESCE(total_confirmation,0))
-         - COALESCE(closing_balance,0))::bigint AS manquant
+       COALESCE(total_calculated,0)::bigint AS solde_attendu,
+       (COALESCE(total_calculated,0) - COALESCE(closing_balance,0))::bigint AS manquant
 FROM cashbox_dailies
 WHERE deleted_at IS NULL
   AND status = 0
   AND date >= DATE '$BASCULE'
-  AND COALESCE(closing_balance,0)
-      IS DISTINCT FROM (COALESCE(opening_balance,0) + COALESCE(total_confirmation,0))
+  AND COALESCE(closing_balance,0) IS DISTINCT FROM COALESCE(total_calculated,0)
 ORDER BY date DESC
 LIMIT 40;
 SQL
