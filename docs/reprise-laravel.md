@@ -189,7 +189,6 @@ Relevés sur la **base de production** le 13 août (`scripts/etat-clotures-caiss
 |---|---|
 | 24 sessions de caisse jamais fermées, sur 734 | Ne faussent plus le calcul ; l'historique reste faux |
 | `OC260156` (10/08) : solde de fermeture à 0 au lieu de 705 000 | Seule clôture affectée par le calcul sur les seules espèces |
-| Deux clôtures de **2023** au `total_ecart` incohérent (−75 000 cumulés) | Antérieures à la reprise — donnée héritée, non causée par la migration |
 | 8 815 opérations migrées sans `invoice_id` ni `payment_method` | Journées antérieures non ventilables par mode |
 | `admin_mails` | Si vide, les alertes après signature ne partent pas — silencieusement |
 
@@ -205,8 +204,6 @@ Relevés sur la **base de production** le 13 août (`scripts/etat-clotures-caiss
 - Reprendre le solde de fermeture d'`OC260156` : `0` au lieu de `705 000`.
   Valeur d'affichage, sans effet sur le solde de la caisse — celui-ci ne dépend
   que de l'écart, nul sur cette clôture.
-- Les deux clôtures de 2023 au `total_ecart` incohérent : donnée héritée, à
-  laisser ou à reprendre selon ce que la comptabilité en dit.
 - Restreindre la somme de fermeture à la caisse de vente, comme Laravel
   (`cashbox_id = 2`) : sinon un virement bancaire enregistré en opération gonfle
   le total.

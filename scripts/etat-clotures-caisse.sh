@@ -20,27 +20,40 @@
 #   passées sont figées en base ; ce script sert à décider s'il faut les
 #   reprendre, et de combien.
 #
-#   Les clôtures issues de la migration Laravel satisfont les formules d'origine
-#   et n'apparaissent donc pas : le filtre isole de lui-même celles produites par
-#   la nouvelle plateforme.
+# PÉRIODE EXAMINÉE
+#
+#   Seules les clôtures postérieures à la bascule sont retenues. Une version
+#   antérieure de ce script n'en posait aucune : elle remontait des journées de
+#   2023, dont les valeurs viennent de Laravel et n'ont rien à voir avec les
+#   défauts corrigés ici. Je croyais que les formules d'origine suffiraient à
+#   écarter le legacy — elles ne le font pas, la saisie manuelle de l'époque
+#   ayant laissé des écarts que ces formules ne reproduisent pas.
 #
 # USAGE
-#   ./etat-clotures-caisse.sh <conteneur>        (ex. labo-db en production)
+#   ./etat-clotures-caisse.sh <conteneur> [bascule]
+#
+#   [bascule] : date de mise en service, AAAA-MM-JJ (défaut 2026-08-08)
 #
 set -euo pipefail
 
 CONTENEUR="${1:-}"
+BASCULE="${2:-2026-08-08}"
 if [ -z "$CONTENEUR" ]; then
-    echo "Usage : $0 <conteneur-postgres>" >&2
+    echo "Usage : $0 <conteneur-postgres> [AAAA-MM-JJ]" >&2
     exit 1
 fi
+
+case "$BASCULE" in
+    [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
+    *) echo "Date attendue au format AAAA-MM-JJ, reçu : $BASCULE" >&2; exit 1 ;;
+esac
 
 sql() {
     docker exec -i "$CONTENEUR" \
         sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1'
 }
 
-echo "═══ État des clôtures de caisse ═══"
+echo "═══ État des clôtures de caisse — depuis la bascule du $BASCULE ═══"
 echo
 
 echo "── 1. Vue d'ensemble"
@@ -55,7 +68,7 @@ SQL
 echo
 echo "── 2. Soldes de fermeture à reprendre"
 echo "   (solde enregistré ≠ fond initial + total compté)"
-sql <<'SQL'
+sql <<SQL
 SELECT code,
        date,
        opening_balance::bigint          AS fond_initial,
@@ -68,6 +81,7 @@ SELECT code,
 FROM cashbox_dailies
 WHERE deleted_at IS NULL
   AND status = 0
+  AND date >= DATE '$BASCULE'
   AND COALESCE(closing_balance,0)
       IS DISTINCT FROM (COALESCE(opening_balance,0) + COALESCE(total_confirmation,0))
 ORDER BY date DESC
@@ -77,7 +91,7 @@ SQL
 echo
 echo "── 3. Écarts enregistrés à l'envers"
 echo "   (écart stocké ≠ total compté − total calculé)"
-sql <<'SQL'
+sql <<SQL
 SELECT code,
        date,
        total_calculated::bigint   AS calcule,
@@ -87,6 +101,7 @@ SELECT code,
 FROM cashbox_dailies
 WHERE deleted_at IS NULL
   AND status = 0
+  AND date >= DATE '$BASCULE'
   AND COALESCE(total_ecart,0)
       IS DISTINCT FROM (COALESCE(total_confirmation,0) - COALESCE(total_calculated,0))
 ORDER BY date DESC
@@ -97,13 +112,14 @@ echo
 echo "── 4. Dérive cumulée du solde des caisses"
 echo "   Chaque clôture ajoute son écart au solde de la caisse. Ce total est"
 echo "   donc ce dont les soldes se sont éloignés du fait du signe inversé."
-sql <<'SQL'
+sql <<SQL
 SELECT count(*) AS clotures_concernees,
        SUM((COALESCE(total_confirmation,0) - COALESCE(total_calculated,0))
            - COALESCE(total_ecart,0))::bigint AS derive_totale
 FROM cashbox_dailies
 WHERE deleted_at IS NULL
   AND status = 0
+  AND date >= DATE '$BASCULE'
   AND COALESCE(total_ecart,0)
       IS DISTINCT FROM (COALESCE(total_confirmation,0) - COALESCE(total_calculated,0));
 SQL
