@@ -16,6 +16,9 @@ public interface MobileAuthService {
     /** Ouvre une session depuis un appareil enrôlé, déverrouillé par son PIN. */
     MobileLoginResponse connecter(MobileLoginRequest requete);
 
+    /** Renouvelle une session mobile à partir de son jeton de rafraîchissement. */
+    MobileLoginResponse rafraichir(String refreshToken);
+
     /** Pose ou remplace le code PIN de l'utilisateur courant. */
     void definirPin(UUID userId, String pin);
 

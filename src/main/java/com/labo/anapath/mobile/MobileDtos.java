@@ -77,6 +77,16 @@ public final class MobileDtos {
             List<String> permissions) {
     }
 
+    /**
+     * Renouvellement d'une session mobile.
+     *
+     * <p>Le jeton voyage dans le corps, là où le web le confie à un cookie
+     * HttpOnly : l'application n'a pas de navigateur, elle range son jeton dans
+     * le trousseau du système et doit pouvoir le présenter explicitement.</p>
+     */
+    public record MobileRefreshRequest(@NotBlank String refreshToken) {
+    }
+
     /** Création d'un code d'enrôlement par un administrateur. */
     public record EnrollmentCodeRequest(@NotNull UUID userId) {
     }

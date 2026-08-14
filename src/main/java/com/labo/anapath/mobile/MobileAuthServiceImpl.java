@@ -64,6 +64,7 @@ public class MobileAuthServiceImpl implements MobileAuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final JwtProperties jwtProperties;
     private final CustomUserDetailsService userDetailsService;
+    private final com.labo.anapath.auth.AuthService authService;
 
     @Override
     @Transactional
@@ -171,6 +172,44 @@ public class MobileAuthServiceImpl implements MobileAuthService {
                 user.getFirstname() + " " + user.getLastname(),
                 user.getBranchId(),
                 permissions);
+    }
+
+    /**
+     * Renouvelle la session sans redemander le PIN.
+     *
+     * <p>Délègue à {@code AuthService.refresh}, qui valide le jeton, vérifie son
+     * type, refuse ceux déjà révoqués et met le jeton consommé en liste noire.
+     * Réécrire cette rotation ici aurait signifié la maintenir en double, et
+     * qu'un correctif de sécurité appliqué d'un côté manque de l'autre.</p>
+     *
+     * <p>Seul l'emballage change : le web renvoie ses jetons par cookies
+     * HttpOnly, l'application les reçoit dans le corps.</p>
+     */
+    @Override
+    @Transactional
+    public MobileLoginResponse rafraichir(String refreshToken) {
+        var reponse = authService.refresh(refreshToken);
+
+        UUID userId = jwtTokenProvider.extractUserId(reponse.accessToken());
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UnauthorizedException("Session invalide."));
+
+        // Le droit d'employer l'application est revérifié à chaque renouvellement :
+        // le retirer à quelqu'un doit le mettre dehors au plus tard à l'expiration
+        // du jeton courant, sans attendre qu'il se déconnecte de lui-même.
+        if (!aLaPermissionMobile(userId)) {
+            throw new UnauthorizedException("Cet utilisateur n'a plus accès à l'application mobile.");
+        }
+
+        UserPrincipal principal = (UserPrincipal) userDetailsService.loadUserById(userId);
+        return new MobileLoginResponse(
+                reponse.accessToken(),
+                reponse.refreshToken(),
+                jwtProperties.getExpirationMs() / 1000,
+                userId,
+                user.getFirstname() + " " + user.getLastname(),
+                user.getBranchId(),
+                principal.getAuthorities().stream().map(a -> a.getAuthority()).toList());
     }
 
     @Override

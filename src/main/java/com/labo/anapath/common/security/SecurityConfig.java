@@ -103,6 +103,10 @@ public class SecurityConfig {
                         // avec l'application en serait extraite.
                         .requestMatchers("/api/v1/mobile/enroll").permitAll()
                         .requestMatchers("/api/v1/mobile/login").permitAll()
+                        // Le renouvellement présente un jeton de rafraîchissement,
+                        // qui est lui-même le secret : il ne peut donc pas exiger
+                        // un jeton d'accès valide, sinon il ne servirait à rien.
+                        .requestMatchers("/api/v1/mobile/refresh").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/v3/api-docs/**").permitAll()
                         .requestMatchers("/swagger-ui/**").permitAll()

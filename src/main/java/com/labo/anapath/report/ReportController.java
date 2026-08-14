@@ -233,8 +233,13 @@ public class ReportController {
     @PreAuthorize("hasAuthority('validate-reports')")
     public ResponseEntity<ApiResponse<ReportResponseDto>> validate(
             @PathVariable UUID id,
+            // Corps facultatif : l'application mobile y joint la preuve produite
+            // par l'enclave sécurisée du téléphone. Le web n'envoie rien et
+            // conserve le comportement d'origine.
+            @Valid @RequestBody(required = false) ValidationSigneeDto preuve,
             @AuthenticationPrincipal UserPrincipal principal) {
-        return ResponseEntity.ok(ApiResponse.success("Compte-rendu validé", reportService.validate(id, principal.getId())));
+        return ResponseEntity.ok(ApiResponse.success("Compte-rendu validé",
+                reportService.validate(id, principal.getId(), preuve)));
     }
 
     /**

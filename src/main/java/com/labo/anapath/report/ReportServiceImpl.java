@@ -10,6 +10,8 @@ import com.labo.anapath.setting.SettingReportTemplateRepository;
 import com.labo.anapath.testorder.TestOrderRepository;
 import com.labo.anapath.user.User;
 import com.labo.anapath.user.UserRepository;
+import com.labo.anapath.mobile.MobileDevice;
+import org.springframework.security.access.AccessDeniedException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -45,6 +47,8 @@ public class ReportServiceImpl implements ReportService {
     private final ReportMapper reportMapper;
     private final EmailService emailService;
     private final NotificationSettings notificationSettings;
+    private final com.labo.anapath.mobile.MobileDeviceRepository mobileDeviceRepository;
+    private final com.labo.anapath.mobile.SignatureAppareil signatureAppareil;
 
     @Override
     @Transactional(readOnly = true)
@@ -630,6 +634,12 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional
     public ReportResponseDto validate(UUID id, UUID userId) {
+        return validate(id, userId, null);
+    }
+
+    @Override
+    @Transactional
+    public ReportResponseDto validate(UUID id, UUID userId, ValidationSigneeDto preuve) {
         Report report = reportRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
         if (report.getStatus() == ReportStatus.VALIDATED || report.getStatus() == ReportStatus.DELIVERED) {
@@ -638,9 +648,55 @@ public class ReportServiceImpl implements ReportService {
         report.setStatus(ReportStatus.VALIDATED);
         report.setSignatureDate(LocalDateTime.now());
         report.setDeliveryDate(LocalDateTime.now());
+
+        if (preuve != null) {
+            verifierEtAttacherLaPreuve(report, userId, preuve);
+        }
+
         Report saved = reportRepository.save(report);
-        logAction(id, "Validé", userId);
+        logAction(id, preuve != null ? "Validé (signé par appareil)" : "Validé", userId);
         return reportMapper.toResponseDto(saved);
+    }
+
+    /**
+     * Contrôle la preuve d'appareil, puis l'attache au compte-rendu.
+     *
+     * <p>Quatre conditions, toutes nécessaires : l'appareil existe et n'est pas
+     * révoqué ; il appartient bien à l'auteur de l'acte ; l'horodatage signé est
+     * frais ; et la signature vérifie contre la clé publique déposée à
+     * l'enrôlement. Le condensé est <strong>recomposé par le serveur</strong> et
+     * jamais repris du client — sans quoi il suffirait d'envoyer un message
+     * quelconque avec sa propre signature.</p>
+     *
+     * <p>Une preuve invalide fait échouer la validation. La traiter comme
+     * absente reviendrait à offrir un moyen simple de contourner l'exigence,
+     * puisqu'il suffirait d'envoyer n'importe quoi.</p>
+     */
+    private void verifierEtAttacherLaPreuve(Report report, UUID userId, ValidationSigneeDto preuve) {
+        MobileDevice appareil = mobileDeviceRepository.findByIdAndRevokedAtIsNull(preuve.deviceId())
+                .orElseThrow(() -> new AccessDeniedException("Appareil inconnu ou révoqué."));
+
+        if (!appareil.getUserId().equals(userId)) {
+            throw new AccessDeniedException("Cet appareil n'appartient pas à l'auteur de la validation.");
+        }
+        // Horloge décalée : ce n'est pas un refus de droit mais une condition
+        // qu'on peut corriger, et le dire ne renseigne personne d'utile.
+        // AccessDeniedException aurait donné « Accès refusé » — le porteur du
+        // téléphone aurait cherché du côté de ses permissions pendant des heures.
+        if (!signatureAppareil.horodatageAcceptable(preuve.signedAt())) {
+            throw new InvalidOperationException(
+                    "L'heure de l'appareil s'écarte trop de celle du serveur. "
+                            + "Activez la mise à l'heure automatique, puis réessayez.");
+        }
+
+        String condense = signatureAppareil.condense(report.getId(), userId, preuve.signedAt());
+        if (!signatureAppareil.verifier(appareil.getPublicKey(), condense, preuve.signature())) {
+            throw new AccessDeniedException("Signature d'appareil invalide.");
+        }
+
+        report.setSigningDeviceId(appareil.getId());
+        report.setDeviceSignature(preuve.signature());
+        report.setDeviceSignedAt(preuve.signedAt());
     }
 
     @Override

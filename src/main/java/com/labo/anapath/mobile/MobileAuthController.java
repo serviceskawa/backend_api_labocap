@@ -50,6 +50,20 @@ public class MobileAuthController {
         return ResponseEntity.ok(ApiResponse.success("Appareil enrôlé", mobileAuthService.enroler(requete)));
     }
 
+    /**
+     * Renouvelle la session sans redemander le PIN. Public.
+     *
+     * <p>Le jeton est présenté dans le corps et non par cookie : c'est la même
+     * rotation que le web — jeton consommé mis en liste noire — mais l'application
+     * range le sien dans le trousseau du système et doit pouvoir le fournir.</p>
+     */
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<MobileLoginResponse>> rafraichir(
+            @Valid @RequestBody MobileRefreshRequest requete) {
+        return ResponseEntity.ok(ApiResponse.success("Session renouvelée",
+                mobileAuthService.rafraichir(requete.refreshToken())));
+    }
+
     /** Ouvre une session depuis un appareil enrôlé. Public. */
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<MobileLoginResponse>> connecter(
