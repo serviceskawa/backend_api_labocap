@@ -95,6 +95,14 @@ public class SecurityConfig {
                         // d'authentification, avant qu'un JWT n'existe. Liste blanche de
                         // clés côté contrôleur — voir PublicBrandingController.
                         .requestMatchers("/api/v1/public/branding").permitAll()
+                        // Application mobile : deux chemins seulement s'ouvrent sans
+                        // jeton, et chacun exige un secret remis hors ligne — le code
+                        // d'enrôlement délivré par un administrateur, puis le PIN du
+                        // porteur, adossé à un appareil que le serveur peut révoquer.
+                        // Rien n'est embarqué dans le binaire : une clé d'API livrée
+                        // avec l'application en serait extraite.
+                        .requestMatchers("/api/v1/mobile/enroll").permitAll()
+                        .requestMatchers("/api/v1/mobile/login").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/v3/api-docs/**").permitAll()
                         .requestMatchers("/swagger-ui/**").permitAll()

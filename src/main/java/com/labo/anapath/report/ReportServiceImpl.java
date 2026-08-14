@@ -90,6 +90,23 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
+    public ReportDetailDto findDetailByTestOrderCode(String code, UUID branchId) {
+        String recherche = code == null ? "" : code.trim();
+        if (recherche.isEmpty()) {
+            throw new ResourceNotFoundException("Aucun code de demande d'examen fourni.");
+        }
+        // On délègue à findDetailById : le cloisonnement par branche, le journal
+        // et le nom du patient y sont déjà traités. Le code ne fait donc que
+        // désigner le dossier, sans ouvrir un second chemin de lecture qui
+        // divergerait du premier.
+        Report report = reportRepository.findByTestOrder_CodeIgnoreCase(recherche)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Aucun compte-rendu ne correspond au code « " + recherche + " »."));
+        return findDetailById(report.getId(), branchId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public ReportDetailDto findDetailById(UUID id, UUID branchId) {
         Report report = reportRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
@@ -196,6 +213,7 @@ public class ReportServiceImpl implements ReportService {
         }
 
         if ("VALIDATED".equalsIgnoreCase(dto.getStatus())) {
+            exigerLeDroitDeValider(report.getStatus());
             report.setStatus(ReportStatus.VALIDATED);
             report.setSignatureDate(LocalDateTime.now());
             report.setDeliveryDate(LocalDateTime.now());
@@ -456,6 +474,7 @@ public class ReportServiceImpl implements ReportService {
 
         // Statut piloté par le select (Laravel : $request->status == 1 / == 0)
         if ("VALIDATED".equalsIgnoreCase(dto.getStatus())) {
+            exigerLeDroitDeValider(report.getStatus());
             report.setStatus(ReportStatus.VALIDATED);
             report.setDeliveryDate(LocalDateTime.now());
         } else if ("DRAFT".equalsIgnoreCase(dto.getStatus())) {
@@ -687,9 +706,61 @@ public class ReportServiceImpl implements ReportService {
         report.setCallDate(LocalDateTime.now());
         report.setRetrieverName(dto.getSignatorName());
         report.setRetrieverSignature(dto.getSignature());
+        // Cohérence de statut, comme dans deliver() et markDelivered().
+        //
+        // Cette méthode posait `isDelivered` sans toucher au statut : le compte-rendu
+        // se disait remis tout en restant VALIDATED, et la demande d'examen ne bougeait
+        // pas du tout. Les listes, qui affichent `order.status`, montraient donc encore
+        // « Validé » pour un dossier signé et emporté. Recueillir la signature du
+        // récupérateur EST la remise — c'est le geste qui la constate.
+        report.setStatus(ReportStatus.DELIVERED);
+        if (report.getTestOrder() != null) {
+            report.getTestOrder().setStatus(com.labo.anapath.testorder.TestOrderStatus.DELIVERED);
+        }
         Report saved = reportRepository.save(report);
         logAction(id, "Signature enregistrée", userId);
         return reportMapper.toResponseDto(saved);
+    }
+
+    /**
+     * Exige le droit {@code validate-reports} pour faire passer un compte-rendu
+     * à l'état validé.
+     *
+     * <h4>Pourquoi la garde est ici et pas seulement sur {@code /validate}</h4>
+     *
+     * <p>Le point d'entrée {@code POST /reports/{id}/validate} n'est appelé par
+     * personne : l'interface web fait passer le statut à VALIDATED en
+     * <strong>enregistrant</strong> le compte-rendu, avec {@code status} dans le
+     * corps. Poser la permission sur le seul point d'entrée dédié laissait donc
+     * la vraie porte grande ouverte, et la séparation n'aurait vécu que sur le
+     * papier.</p>
+     *
+     * <p>La vérification ne se déclenche qu'à la <em>transition</em> : rouvrir et
+     * réenregistrer un compte-rendu déjà validé ne la rejoue pas. Sans cela, un
+     * agent d'accueil ne pourrait plus corriger une coquille sur un dossier
+     * validé — ce qu'il a le droit de faire, et qui n'est pas un acte médical.</p>
+     *
+     * <p>La lecture passe par le contexte de sécurité plutôt que par un
+     * paramètre : la signature de ces méthodes est partagée avec le reste du
+     * service, et l'y faire entrer imposerait de la modifier partout pour un
+     * besoin qui ne concerne que cette branche.</p>
+     */
+    private void exigerLeDroitDeValider(ReportStatus statutActuel) {
+        if (statutActuel == ReportStatus.VALIDATED || statutActuel == ReportStatus.DELIVERED) {
+            return;
+        }
+        var authentification = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        boolean autorise = authentification != null && authentification.getAuthorities().stream()
+                .anyMatch(a -> "validate-reports".equals(a.getAuthority()));
+        if (!autorise) {
+            // AccessDeniedException et non UnauthorizedException : l'utilisateur est
+            // bien authentifié, il lui manque un droit. C'est un 403, et c'est ce que
+            // lève @PreAuthorize ailleurs — un 401 ferait tenter au client un
+            // rafraîchissement de jeton, voire une déconnexion, pour rien.
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Valider un compte-rendu engage un diagnostic et requiert le droit « validate-reports ».");
+        }
     }
 
     /**
