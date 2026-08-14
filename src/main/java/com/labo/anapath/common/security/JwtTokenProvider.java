@@ -70,19 +70,58 @@ public class JwtTokenProvider {
      * @return token JWT signé sous forme de chaîne compacte
      */
     public String generateToken(UserPrincipal userPrincipal) {
+        return generateToken(userPrincipal, null);
+    }
+
+    /**
+     * Variante portant l'appareil enrôlé d'où la session a été ouverte.
+     *
+     * <p>La revendication {@code deviceId} n'est posée que par l'application
+     * mobile. Elle permet de distinguer une session de téléphone d'une session
+     * de poste de travail, et donc d'exiger une signature d'appareil sur les
+     * actes engageants <strong>sans rien changer pour le web</strong>, qui doit
+     * continuer de fonctionner tel quel.</p>
+     *
+     * <p>Elle ne confère aucun droit : c'est une provenance, pas une
+     * autorisation. Les permissions restent rechargées depuis la base à chaque
+     * requête, et un jeton forgé échouerait à la vérification de signature du
+     * JWT lui-même.</p>
+     *
+     * @param deviceId appareil d'origine, ou {@code null} pour une session web
+     */
+    public String generateToken(UserPrincipal userPrincipal, UUID deviceId) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + jwtProperties.getExpirationMs());
 
         // Permissions are NOT embedded in the token — the filter reloads them from DB
         // (JwtAuthenticationFilter.loadUserById). Embedding 300+ slugs would bloat the JWT.
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .id(UUID.randomUUID().toString())
                 .subject(userPrincipal.getId().toString())
-                .claim("branchId", userPrincipal.getBranchId().toString())
+                .claim("branchId", userPrincipal.getBranchId().toString());
+        if (deviceId != null) {
+            builder.claim("deviceId", deviceId.toString());
+        }
+        return builder
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(getSigningKey())
                 .compact();
+    }
+
+    /**
+     * Appareil enrôlé d'où provient la session, ou {@code null} pour le web.
+     *
+     * <p>Sert à exiger une preuve d'appareil là où la provenance mobile permet
+     * une garantie plus forte que la simple session ouverte.</p>
+     */
+    public UUID extractDeviceId(String token) {
+        try {
+            Object valeur = extractAllClaims(token).get("deviceId");
+            return valeur == null ? null : UUID.fromString(valeur.toString());
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**

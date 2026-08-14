@@ -165,7 +165,7 @@ public class MobileAuthServiceImpl implements MobileAuthService {
 
         log.info("Connexion mobile réussie : deviceId={} userId={}", appareil.getId(), user.getId());
         return new MobileLoginResponse(
-                jwtTokenProvider.generateToken(principal),
+                jwtTokenProvider.generateToken(principal, appareil.getId()),
                 jwtTokenProvider.generateRefreshToken(user.getId()),
                 jwtProperties.getExpirationMs() / 1000,
                 user.getId(),
@@ -187,12 +187,24 @@ public class MobileAuthServiceImpl implements MobileAuthService {
      */
     @Override
     @Transactional
-    public MobileLoginResponse rafraichir(String refreshToken) {
-        var reponse = authService.refresh(refreshToken);
+    public MobileLoginResponse rafraichir(MobileRefreshRequest requete) {
+        var reponse = authService.refresh(requete.refreshToken());
 
         UUID userId = jwtTokenProvider.extractUserId(reponse.accessToken());
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UnauthorizedException("Session invalide."));
+
+        // L'appareil est revalidé à chaque renouvellement, et le jeton reconduit
+        // reporte sa provenance. Sans cela, il perdrait la revendication posée à
+        // la connexion, et avec elle l'obligation de signer les validations : il
+        // aurait suffi d'attendre un renouvellement pour s'en affranchir.
+        MobileDevice appareil = deviceRepository.findByIdAndRevokedAtIsNull(requete.deviceId())
+                .orElseThrow(() -> new UnauthorizedException("Appareil inconnu ou révoqué."));
+        if (!appareil.getUserId().equals(userId)) {
+            throw new UnauthorizedException("Cet appareil n'appartient pas au titulaire de la session.");
+        }
+        appareil.setLastSeenAt(LocalDateTime.now());
+        deviceRepository.save(appareil);
 
         // Le droit d'employer l'application est revérifié à chaque renouvellement :
         // le retirer à quelqu'un doit le mettre dehors au plus tard à l'expiration
@@ -203,7 +215,9 @@ public class MobileAuthServiceImpl implements MobileAuthService {
 
         UserPrincipal principal = (UserPrincipal) userDetailsService.loadUserById(userId);
         return new MobileLoginResponse(
-                reponse.accessToken(),
+                // Réémis avec la revendication d'appareil : celui d'AuthService
+                // ne la porte pas, puisqu'il sert aussi le web.
+                jwtTokenProvider.generateToken(principal, appareil.getId()),
                 reponse.refreshToken(),
                 jwtProperties.getExpirationMs() / 1000,
                 userId,

@@ -49,6 +49,7 @@ public class ReportServiceImpl implements ReportService {
     private final NotificationSettings notificationSettings;
     private final com.labo.anapath.mobile.MobileDeviceRepository mobileDeviceRepository;
     private final com.labo.anapath.mobile.SignatureAppareil signatureAppareil;
+    private final com.labo.anapath.mobile.ProvenanceRequete provenanceRequete;
 
     @Override
     @Transactional(readOnly = true)
@@ -648,6 +649,22 @@ public class ReportServiceImpl implements ReportService {
         report.setStatus(ReportStatus.VALIDATED);
         report.setSignatureDate(LocalDateTime.now());
         report.setDeliveryDate(LocalDateTime.now());
+
+        // Une session ouverte depuis un téléphone enrôlé DOIT signer. Sans cette
+        // exigence, il suffirait à l'application d'omettre la preuve pour
+        // retomber au niveau de garantie du web, et le dispositif ne tiendrait
+        // que par la bonne volonté du client. Le web, lui, n'a pas de clé et
+        // continue de valider sur la seule foi de sa session.
+        UUID appareilDeLaSession = provenanceRequete.appareilCourant();
+        if (appareilDeLaSession != null && preuve == null) {
+            throw new AccessDeniedException(
+                    "Une validation depuis l'application mobile doit être signée par l'appareil.");
+        }
+        if (preuve != null && appareilDeLaSession != null
+                && !appareilDeLaSession.equals(preuve.deviceId())) {
+            throw new AccessDeniedException(
+                    "La preuve ne provient pas de l'appareil ayant ouvert la session.");
+        }
 
         if (preuve != null) {
             verifierEtAttacherLaPreuve(report, userId, preuve);

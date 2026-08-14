@@ -61,7 +61,7 @@ public class MobileAuthController {
     public ResponseEntity<ApiResponse<MobileLoginResponse>> rafraichir(
             @Valid @RequestBody MobileRefreshRequest requete) {
         return ResponseEntity.ok(ApiResponse.success("Session renouvelée",
-                mobileAuthService.rafraichir(requete.refreshToken())));
+                mobileAuthService.rafraichir(requete)));
     }
 
     /** Ouvre une session depuis un appareil enrôlé. Public. */

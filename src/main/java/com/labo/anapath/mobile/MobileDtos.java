@@ -84,7 +84,15 @@ public final class MobileDtos {
      * HttpOnly : l'application n'a pas de navigateur, elle range son jeton dans
      * le trousseau du système et doit pouvoir le présenter explicitement.</p>
      */
-    public record MobileRefreshRequest(@NotBlank String refreshToken) {
+    public record MobileRefreshRequest(
+            @NotBlank String refreshToken,
+            /**
+             * Appareil qui renouvelle. Sans lui, le jeton reconduit perdrait sa
+             * provenance mobile — et avec elle l'obligation de signer les
+             * validations. Il suffirait alors d'attendre un renouvellement pour
+             * retomber au niveau de garantie du web.
+             */
+            @NotNull UUID deviceId) {
     }
 
     /** Création d'un code d'enrôlement par un administrateur. */
