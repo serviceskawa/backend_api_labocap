@@ -49,12 +49,27 @@ public class SignatureAppareil {
     private static final Duration FENETRE = Duration.ofMinutes(5);
 
     /**
+     * Format d'horodatage du condensé, fixé explicitement.
+     *
+     * <p>Ne jamais employer {@code LocalDateTime.toString()} ici : il <b>omet les
+     * secondes lorsqu'elles valent zéro</b> et ajoute les nanosecondes lorsqu'il
+     * y en a. Le client, lui, écrit un format constant. Une signature sur
+     * soixante aurait donc échoué — au hasard, une fois par minute —, et le
+     * défaut aurait été très pénible à reproduire.</p>
+     *
+     * <p>Ce format fait partie du contrat avec l'application : le modifier
+     * invaliderait les signatures des versions déjà déployées.</p>
+     */
+    private static final java.time.format.DateTimeFormatter HORODATAGE =
+            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+
+    /**
      * Compose le condensé à signer. La même méthode sert des deux côtés — le
      * client Flutter la reproduit à l'identique — donc tout changement de format
      * invaliderait les signatures des versions déjà déployées.
      */
     public String condense(UUID reportId, UUID userId, LocalDateTime signedAt) {
-        return "validate:" + reportId + ":" + userId + ":" + signedAt;
+        return "validate:" + reportId + ":" + userId + ":" + HORODATAGE.format(signedAt);
     }
 
     /**
@@ -105,7 +120,15 @@ public class SignatureAppareil {
         if (signedAt == null) {
             return false;
         }
-        Duration ecart = Duration.between(signedAt, LocalDateTime.now()).abs();
+        // Comparaison en UTC, et non dans le fuseau du serveur.
+        //
+        // L'horodatage signé est convenu en UTC — c'est écrit dans le contrat
+        // avec l'application. Comparer avec l'heure locale de la machine ferait
+        // dépendre l'acceptation du fuseau où le conteneur tourne : un serveur
+        // réglé sur l'heure du Bénin accepterait ce qu'un conteneur en UTC
+        // refuserait, et le défaut n'apparaîtrait qu'au premier déplacement.
+        // Le cas s'est produit en essai, avec quatre heures d'écart.
+        Duration ecart = Duration.between(signedAt, LocalDateTime.now(java.time.ZoneOffset.UTC)).abs();
         return ecart.compareTo(FENETRE) <= 0;
     }
 }
