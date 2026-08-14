@@ -77,6 +77,28 @@ public class User extends AuditableEntity {
     @Column(name = "two_factor_secret", length = 255)
     private String twoFactorSecret;
 
+    /**
+     * Code PIN de l'application mobile, haché comme un mot de passe.
+     *
+     * <p>Il déverrouille l'appareil enrôlé ; il n'identifie personne. L'utilisateur
+     * se désigne à la connexion, et le PIN reste un secret — sans quoi il devrait
+     * être unique dans tout le laboratoire, et quatre chiffres ne laissent que dix
+     * mille combinaisons.</p>
+     */
+    @Column(name = "pin_hash", length = 255)
+    private String pinHash;
+
+    /** Tentatives infructueuses consécutives, remises à zéro au succès. */
+    @Column(name = "pin_failed_attempts", nullable = false)
+    private short pinFailedAttempts = 0;
+
+    /**
+     * Verrouillage temporaire du PIN. Un code court est attaquable par force
+     * brute si rien ne freine les essais.
+     */
+    @Column(name = "pin_locked_until")
+    private LocalDateTime pinLockedUntil;
+
     /** Indique si l'utilisateur est actuellement connecté. */
     @Column(name = "is_connect", nullable = false)
     private boolean isConnect = false;
