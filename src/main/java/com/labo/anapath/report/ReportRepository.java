@@ -24,6 +24,22 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
 
     List<Report> findByTestOrder_IdIn(Collection<UUID> testOrderIds);
 
+    /**
+     * Retrouve le compte-rendu à partir du code de sa demande d'examen.
+     *
+     * <p>Pivot du parcours mobile : au comptoir, on tient un bon d'examen et on
+     * en lit le code — saisi ou scanné. Le code porte une contrainte d'unicité,
+     * la relation au compte-rendu est un 1-1, donc au plus un résultat.</p>
+     *
+     * <p>La comparaison est insensible à la casse mais reste <strong>exacte</strong>.
+     * Le préfixe des codes est un paramètre du laboratoire, et V61 rappelle que
+     * les codes déjà émis ne sont pas renommés quand il change : « 26-0003 » et
+     * « ABCD26-0003 » peuvent coexister. Un rapprochement approximatif sur le
+     * suffixe désignerait alors le mauvais dossier — inacceptable pour un acte
+     * qui remet des résultats médicaux ou en valide un.</p>
+     */
+    Optional<Report> findByTestOrder_CodeIgnoreCase(String code);
+
     @Query(value = """
             SELECT r.* FROM reports r
             WHERE r.deleted_at IS NULL

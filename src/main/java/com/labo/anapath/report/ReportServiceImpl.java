@@ -90,6 +90,23 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
+    public ReportDetailDto findDetailByTestOrderCode(String code, UUID branchId) {
+        String recherche = code == null ? "" : code.trim();
+        if (recherche.isEmpty()) {
+            throw new ResourceNotFoundException("Aucun code de demande d'examen fourni.");
+        }
+        // On délègue à findDetailById : le cloisonnement par branche, le journal
+        // et le nom du patient y sont déjà traités. Le code ne fait donc que
+        // désigner le dossier, sans ouvrir un second chemin de lecture qui
+        // divergerait du premier.
+        Report report = reportRepository.findByTestOrder_CodeIgnoreCase(recherche)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Aucun compte-rendu ne correspond au code « " + recherche + " »."));
+        return findDetailById(report.getId(), branchId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public ReportDetailDto findDetailById(UUID id, UUID branchId) {
         Report report = reportRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
@@ -687,6 +704,17 @@ public class ReportServiceImpl implements ReportService {
         report.setCallDate(LocalDateTime.now());
         report.setRetrieverName(dto.getSignatorName());
         report.setRetrieverSignature(dto.getSignature());
+        // Cohérence de statut, comme dans deliver() et markDelivered().
+        //
+        // Cette méthode posait `isDelivered` sans toucher au statut : le compte-rendu
+        // se disait remis tout en restant VALIDATED, et la demande d'examen ne bougeait
+        // pas du tout. Les listes, qui affichent `order.status`, montraient donc encore
+        // « Validé » pour un dossier signé et emporté. Recueillir la signature du
+        // récupérateur EST la remise — c'est le geste qui la constate.
+        report.setStatus(ReportStatus.DELIVERED);
+        if (report.getTestOrder() != null) {
+            report.getTestOrder().setStatus(com.labo.anapath.testorder.TestOrderStatus.DELIVERED);
+        }
         Report saved = reportRepository.save(report);
         logAction(id, "Signature enregistrée", userId);
         return reportMapper.toResponseDto(saved);
