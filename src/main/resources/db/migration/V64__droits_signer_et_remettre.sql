@@ -14,8 +14,14 @@
 -- la validation d'un diagnostic. Le menu mobile est piloté par ces permissions.
 --
 -- CE QUE FAIT CETTE MIGRATION
--- Elle n'ajoute aucune permission — les deux existent déjà. Elle les accorde à
--- tout rôle qui détient `edit-reports` aujourd'hui.
+-- Elle crée les deux permissions, puis les accorde à tout rôle qui détient
+-- `edit-reports` aujourd'hui.
+--
+-- Pourquoi les créer alors que V2 les sème déjà : V2 ne s'exécute jamais sur un
+-- environnement réel. Flyway y démarre à la ligne de base 50, le schéma venant
+-- de la reprise Laravel — vérifié en local, la table `permissions` ne contient
+-- que les slugs Laravel en `create/edit/delete/view`. On suit donc leur
+-- convention de nommage : libellé en minuscules séparé par des espaces.
 --
 -- POURQUOI CET ÉLARGISSEMENT D'ABORD
 -- Le code va commencer à exiger ces permissions. Sans cette reprise, tout rôle
@@ -30,6 +36,16 @@
 --
 -- Les permissions se résolvent par slug seul, comme le fait `@PreAuthorize` à
 -- l'exécution et comme le mappe l'entité Permission (id, name, slug, created_at).
+
+INSERT INTO permissions (id, name, slug, created_at, updated_at)
+SELECT gen_random_uuid(), v.name, v.slug, NOW(), NOW()
+FROM (VALUES
+        ('validate reports', 'validate-reports'),
+        ('deliver reports',  'deliver-reports')
+     ) AS v(name, slug)
+WHERE NOT EXISTS (
+    SELECT 1 FROM permissions p WHERE p.slug = v.slug
+);
 
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT DISTINCT rp.role_id, cible.id

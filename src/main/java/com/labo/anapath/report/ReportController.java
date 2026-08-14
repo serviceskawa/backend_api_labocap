@@ -166,9 +166,9 @@ public class ReportController {
      * <p>Pivot du parcours mobile : au comptoir on tient un bon d'examen, pas un
      * UUID. Le code est saisi à la main ou lu au scanner, puis résolu ici.</p>
      *
-     * <p>Placé <strong>avant</strong> {@code /{id}} : sans quoi Spring tenterait
-     * de convertir « by-code » en UUID et répondrait 400 au lieu d'atteindre
-     * cette méthode.</p>
+     * <p>Aucun conflit avec {@code /{id}} : ce motif compte deux segments après
+     * {@code /reports}, celui-là un seul. L'ordre de déclaration n'y joue rien —
+     * Spring apparie sur la forme du chemin, pas sur la position dans le fichier.</p>
      */
     @GetMapping("/by-code/{code}")
     @PreAuthorize("hasAuthority('view-reports')")
