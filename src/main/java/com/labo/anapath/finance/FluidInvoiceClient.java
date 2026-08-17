@@ -47,6 +47,55 @@ public class FluidInvoiceClient {
         return appeler("/invoices/credit-note", payload, idempotencyKey);
     }
 
+    /**
+     * Adresse du document normalisé chez l'éditeur.
+     *
+     * <p>Endpoint absent de la documentation, trouvé en sondant : il répond 422
+     * et non 404. On la conserve telle quelle sur la facture, comme référence
+     * d'audit — elle n'est pas ouvrable depuis un navigateur, qui n'enverrait
+     * pas la clé API.</p>
+     */
+    public String urlDocument(String fluidInvoiceId) {
+        return properties.getBaseUrl() + "/invoices/" + fluidInvoiceId + "/pdf";
+    }
+
+    /**
+     * Télécharge le document normalisé.
+     *
+     * <p>Passe par le serveur parce que l'accès est authentifié par la clé API,
+     * qui ne doit jamais atteindre le navigateur.</p>
+     */
+    public byte[] telechargerDocument(String fluidInvoiceId) {
+        if (!properties.isUsable()) {
+            throw new ExternalApiException(
+                    "FluidInvoice n'est pas configuré : renseignez app.fluidinvoice.api-key et activez app.fluidinvoice.enabled.");
+        }
+
+        HttpHeaders headers = entetes(null);
+        headers.setAccept(List.of(MediaType.APPLICATION_PDF, MediaType.APPLICATION_JSON));
+
+        String url = urlDocument(fluidInvoiceId);
+        try {
+            ResponseEntity<byte[]> reponse = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), byte[].class);
+
+            byte[] corps = reponse.getBody();
+            if (corps == null || corps.length == 0) {
+                throw new ExternalApiException("FluidInvoice a renvoyé un document vide.");
+            }
+            return corps;
+
+        } catch (RestClientResponseException e) {
+            // Cas courant tant que le compte est incomplet : ISSUER_ADDRESS_MISSING,
+            // « Adresse de l'émetteur manquante ». Le message de l'éditeur dit quoi
+            // faire, on le remonte plutôt que de le masquer.
+            throw new ExternalApiException(messageDErreur(e), e);
+        } catch (RestClientException e) {
+            log.error("FluidInvoice injoignable ({}): {}", url, e.getMessage());
+            throw new ExternalApiException("FluidInvoice est injoignable.", e);
+        }
+    }
+
     private FluidInvoiceResponseDto appeler(String chemin, FluidInvoiceRequestDto payload, String idempotencyKey) {
         if (!properties.isUsable()) {
             throw new ExternalApiException(

@@ -237,6 +237,27 @@ public class InvoiceController {
                 fluidInvoiceService.normaliser(id, principal.getBranchId())));
     }
 
+    /**
+     * Le document de la facture normalisée, relayé depuis FluidInvoice.
+     *
+     * <p>Le relais est nécessaire : l'adresse du document est authentifiée par
+     * la clé API, que le navigateur ne doit pas connaître.</p>
+     */
+    @GetMapping("/{id}/normalized-document")
+    @PreAuthorize("hasAuthority('view-invoices')")
+    public ResponseEntity<byte[]> normalizedDocument(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        InvoiceResponseDto invoice = invoiceService.findById(id, principal.getBranchId());
+        byte[] pdf = fluidInvoiceService.telechargerDocument(id, principal.getBranchId());
+        String filename = "Facture-normalisee-"
+                + (invoice.code() != null ? invoice.code() : id) + ".pdf";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_PDF_VALUE)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
+                .body(pdf);
+    }
+
     /** Crée la facture d'avoir contrepassant cette facture de vente. */
     @PostMapping("/{id}/credit-note")
     @PreAuthorize("hasAuthority('edit-invoices')")

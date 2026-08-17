@@ -68,6 +68,22 @@ public class FluidInvoiceServiceImpl implements FluidInvoiceService {
         return financeMapper.toInvoiceResponseDto(invoiceRepository.save(invoice));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] telechargerDocument(UUID invoiceId, UUID branchId) {
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Facture", invoiceId));
+
+        if (!branchId.equals(invoice.getBranchId())) {
+            throw new ResourceNotFoundException("Facture", invoiceId);
+        }
+        if (invoice.getFluidinvoiceId() == null) {
+            throw new InvalidOperationException(
+                    "Cette facture n'a pas été normalisée par FluidInvoice.");
+        }
+        return client.telechargerDocument(invoice.getFluidinvoiceId());
+    }
+
     // -------------------------------------------------------------------------
     // Construction de la charge utile
     // -------------------------------------------------------------------------
@@ -166,18 +182,16 @@ public class FluidInvoiceServiceImpl implements FluidInvoiceService {
     private void appliquer(Invoice invoice, FluidInvoiceResponseDto reponse) {
         invoice.setFluidinvoiceId(reponse.getId());
 
+        // L'API ne renvoie aucun lien — ni à la création, ni sur la fiche
+        // détaillée : sa réponse se limite à id, uid, status, type,
+        // integrity_hash et created_at (vérifié sur l'environnement de test).
+        // Le document vit en revanche derrière /v1/invoices/{id}/pdf, endpoint
+        // non documenté. On construit donc l'adresse à partir de l'identifiant
+        // rendu, en gardant la priorité à un lien explicite si l'éditeur venait
+        // à en publier un.
         String lien = reponse.documentUrl();
         if (lien == null) {
-            // Sans lien, le flow perd son bouton « voir la facture normalisée ».
-            // On refuse plutôt que d'enregistrer une normalisation muette : la
-            // transaction est annulée, la facture reste donc normalisable, et
-            // les clés reçues sont tracées par le client pour identifier le
-            // champ attendu. Rejouer n'émet pas un second document fiscal :
-            // la clé d'idempotence est dérivée de la facture, l'éditeur rend
-            // alors la même. Le champ reste à confirmer par l'éditeur — la
-            // documentation fournie ne décrit aucun lien dans sa réponse.
-            throw new InvalidOperationException(
-                    "FluidInvoice n'a pas renvoyé de lien vers le document normalisé.");
+            lien = client.urlDocument(reponse.getId());
         }
         invoice.setNormalizedUrl(lien);
 
