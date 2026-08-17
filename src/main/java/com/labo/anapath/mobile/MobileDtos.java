@@ -95,6 +95,35 @@ public final class MobileDtos {
             @NotNull UUID deviceId) {
     }
 
+    /**
+     * Tout ce qu'il faut remettre à un agent pour qu'il mette son téléphone en
+     * service : son code d'enrôlement et son code PIN.
+     *
+     * <p>Les deux n'existent en clair qu'ici, dans cette unique réponse — la base
+     * n'en garde que les empreintes. L'administrateur doit donc les transmettre
+     * aussitôt ; les retrouver plus tard est impossible, il faudra en régénérer.</p>
+     *
+     * <p>Le PIN est engendré par le serveur plutôt que choisi par l'agent :
+     * autrement, un appareil fraîchement enrôlé devrait ouvrir une session pour
+     * poser son code, alors qu'ouvrir une session exige déjà d'en avoir un.
+     * L'agent pourra le changer une fois connecté.</p>
+     */
+    public record AccesMobileResponse(
+            UUID userId,
+            String nomComplet,
+            String codeEnrolement,
+            LocalDateTime codeExpireLe,
+            String pin) {
+    }
+
+    /** État de l'accès mobile d'un utilisateur, pour l'écran d'administration. */
+    public record EtatAccesResponse(
+            UUID userId,
+            boolean acces,
+            boolean pinDefini,
+            List<DeviceResponse> appareils) {
+    }
+
     /** Création d'un code d'enrôlement par un administrateur. */
     public record EnrollmentCodeRequest(@NotNull UUID userId) {
     }

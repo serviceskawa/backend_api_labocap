@@ -29,6 +29,44 @@ public class MobileAuthController {
     private final MobileAuthService mobileAuthService;
 
     /**
+     * Ouvre l'accès mobile à un utilisateur, en un seul geste.
+     *
+     * <p>Accorde le droit, engendre son code PIN et son code d'enrôlement, et
+     * les renvoie en clair — <strong>la seule et unique fois</strong>. La base
+     * n'en garde que les empreintes : les retrouver plus tard est impossible,
+     * il faudra rouvrir l'accès pour en régénérer.</p>
+     */
+    @PostMapping("/access/{userId}")
+    @PreAuthorize("hasAuthority('edit-users')")
+    public ResponseEntity<ApiResponse<AccesMobileResponse>> ouvrirAcces(
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Accès mobile ouvert",
+                mobileAuthService.ouvrirAcces(userId, principal.getId(), principal.getBranchId())));
+    }
+
+    /** Ferme l'accès : retire le droit, efface le PIN, révoque les appareils. */
+    @DeleteMapping("/access/{userId}")
+    @PreAuthorize("hasAuthority('edit-users')")
+    public ResponseEntity<ApiResponse<Void>> fermerAcces(
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        mobileAuthService.fermerAcces(userId, principal.getId(), principal.getBranchId());
+        return ResponseEntity.ok(ApiResponse.success("Accès mobile fermé", null));
+    }
+
+    /** État de l'accès d'un utilisateur : droit, PIN posé, appareils enrôlés. */
+    @GetMapping("/access/{userId}")
+    @PreAuthorize("hasAuthority('view-users')")
+    public ResponseEntity<ApiResponse<EtatAccesResponse>> etatAcces(
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                mobileAuthService.etatAcces(userId, principal.getBranchId())));
+    }
+
+    /**
      * Délivre un code d'enrôlement pour un utilisateur.
      *
      * <p>Le code en clair n'est renvoyé qu'ici, une seule fois : la base n'en
