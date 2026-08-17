@@ -22,6 +22,13 @@ public record ReportDetailDto(
         boolean isDelivered,
         boolean isCalled,
         String receiverName,
+        /**
+         * Nom de la personne ayant emporté le compte-rendu, tel que le pavé de
+         * signature l'enregistre. Distinct de {@code receiverName}, alimenté par
+         * la fiche : c'est celui-ci que la remise au comptoir écrit, et donc
+         * celui qu'il faut montrer pour dire qui est reparti avec le dossier.
+         */
+        String retrieverName,
         LocalDateTime signatureDate,
         LocalDateTime deliveryDate,
         LocalDateTime callDate,

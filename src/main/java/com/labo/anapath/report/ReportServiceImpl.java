@@ -147,6 +147,7 @@ public class ReportServiceImpl implements ReportService {
                 report.getStatus(),
                 report.isDelivered(), report.isCalled(),
                 report.getReceiverName(),
+                report.getRetrieverName(),
                 report.getSignatureDate(), report.getDeliveryDate(), report.getCallDate(),
                 report.getSignatory1() != null ? report.getSignatory1().getId() : null,
                 report.getSignatory1() != null ? report.getSignatory1().getFirstname() + " " + report.getSignatory1().getLastname() : null,
