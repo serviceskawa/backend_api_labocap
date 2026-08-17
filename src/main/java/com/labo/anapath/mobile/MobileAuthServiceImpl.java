@@ -64,6 +64,91 @@ public class MobileAuthServiceImpl implements MobileAuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final JwtProperties jwtProperties;
     private final CustomUserDetailsService userDetailsService;
+    private final com.labo.anapath.auth.AuthService authService;
+    private final com.labo.anapath.role.PermissionRepository permissionRepository;
+
+    @Override
+    @Transactional
+    public AccesMobileResponse ouvrirAcces(UUID userId, UUID auteurId, UUID branchId) {
+        User user = userRepository.findByIdAndBranchId(userId, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", userId));
+
+        var droit = permissionRepository.findBySlug(PERMISSION_MOBILE)
+                .orElseThrow(() -> new com.labo.anapath.common.exception.InvalidOperationException(
+                        "La permission « " + PERMISSION_MOBILE + " » est absente de cette base. "
+                                + "La migration V65 n'a probablement pas été appliquée."));
+
+        // Permission directe et non ajoutée à un rôle : l'accès se donne
+        // nommément, c'est l'exigence posée dès le départ. Un rôle l'ouvrirait
+        // à tous ceux qui le portent, d'un coup et sans qu'on l'ait voulu.
+        boolean deja = user.getDirectPermissions().stream()
+                .anyMatch(p -> p.getId().equals(droit.getId()));
+        if (!deja) {
+            user.getDirectPermissions().add(droit);
+        }
+
+        // Le PIN naît ici, avec l'accès. Le faire choisir par l'agent supposerait
+        // qu'il ouvre d'abord une session — or ouvrir une session exige déjà d'en
+        // avoir un. Il pourra le changer une fois connecté.
+        String pin = genererPin();
+        user.setPinHash(passwordEncoder.encode(pin));
+        user.setPinFailedAttempts((short) 0);
+        user.setPinLockedUntil(null);
+        userRepository.save(user);
+
+        String code = genererCode();
+        LocalDateTime expiration = LocalDateTime.now().plusHours(HEURES_VALIDITE_CODE);
+        codeRepository.save(new MobileEnrollmentCode(
+                user.getId(), passwordEncoder.encode(code), expiration, auteurId));
+
+        log.info("Accès mobile ouvert pour userId={} par userId={}", userId, auteurId);
+        // Seul instant où ces deux secrets existent en clair.
+        return new AccesMobileResponse(
+                user.getId(),
+                user.getFirstname() + " " + user.getLastname(),
+                code, expiration, pin);
+    }
+
+    @Override
+    @Transactional
+    public void fermerAcces(UUID userId, UUID auteurId, UUID branchId) {
+        User user = userRepository.findByIdAndBranchId(userId, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", userId));
+
+        // Les trois d'un coup. Retirer le seul droit laisserait un appareil
+        // enrôlé et un PIN valides : la session suivante serait refusée, certes,
+        // mais le téléphone garderait de quoi signer et il suffirait de rendre le
+        // droit pour que tout reparte, à l'insu de qui l'a fermé.
+        user.getDirectPermissions().removeIf(p -> PERMISSION_MOBILE.equals(p.getSlug()));
+        user.setPinHash(null);
+        user.setPinFailedAttempts((short) 0);
+        user.setPinLockedUntil(null);
+        userRepository.save(user);
+
+        LocalDateTime maintenant = LocalDateTime.now();
+        for (MobileDevice appareil : deviceRepository.findByUserIdOrderByEnrolledAtDesc(userId)) {
+            if (appareil.estActif()) {
+                appareil.setRevokedAt(maintenant);
+                appareil.setRevokedBy(auteurId);
+                deviceRepository.save(appareil);
+            }
+        }
+
+        log.warn("Accès mobile fermé pour userId={} par userId={}", userId, auteurId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public EtatAccesResponse etatAcces(UUID userId, UUID branchId) {
+        User user = userRepository.findByIdAndBranchId(userId, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", userId));
+
+        return new EtatAccesResponse(
+                userId,
+                aLaPermissionMobile(userId),
+                user.getPinHash() != null,
+                DeviceResponse.de(deviceRepository.findByUserIdOrderByEnrolledAtDesc(userId)));
+    }
 
     @Override
     @Transactional
@@ -164,13 +249,65 @@ public class MobileAuthServiceImpl implements MobileAuthService {
 
         log.info("Connexion mobile réussie : deviceId={} userId={}", appareil.getId(), user.getId());
         return new MobileLoginResponse(
-                jwtTokenProvider.generateToken(principal),
+                jwtTokenProvider.generateToken(principal, appareil.getId()),
                 jwtTokenProvider.generateRefreshToken(user.getId()),
                 jwtProperties.getExpirationMs() / 1000,
                 user.getId(),
                 user.getFirstname() + " " + user.getLastname(),
                 user.getBranchId(),
                 permissions);
+    }
+
+    /**
+     * Renouvelle la session sans redemander le PIN.
+     *
+     * <p>Délègue à {@code AuthService.refresh}, qui valide le jeton, vérifie son
+     * type, refuse ceux déjà révoqués et met le jeton consommé en liste noire.
+     * Réécrire cette rotation ici aurait signifié la maintenir en double, et
+     * qu'un correctif de sécurité appliqué d'un côté manque de l'autre.</p>
+     *
+     * <p>Seul l'emballage change : le web renvoie ses jetons par cookies
+     * HttpOnly, l'application les reçoit dans le corps.</p>
+     */
+    @Override
+    @Transactional
+    public MobileLoginResponse rafraichir(MobileRefreshRequest requete) {
+        var reponse = authService.refresh(requete.refreshToken());
+
+        UUID userId = jwtTokenProvider.extractUserId(reponse.accessToken());
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UnauthorizedException("Session invalide."));
+
+        // L'appareil est revalidé à chaque renouvellement, et le jeton reconduit
+        // reporte sa provenance. Sans cela, il perdrait la revendication posée à
+        // la connexion, et avec elle l'obligation de signer les validations : il
+        // aurait suffi d'attendre un renouvellement pour s'en affranchir.
+        MobileDevice appareil = deviceRepository.findByIdAndRevokedAtIsNull(requete.deviceId())
+                .orElseThrow(() -> new UnauthorizedException("Appareil inconnu ou révoqué."));
+        if (!appareil.getUserId().equals(userId)) {
+            throw new UnauthorizedException("Cet appareil n'appartient pas au titulaire de la session.");
+        }
+        appareil.setLastSeenAt(LocalDateTime.now());
+        deviceRepository.save(appareil);
+
+        // Le droit d'employer l'application est revérifié à chaque renouvellement :
+        // le retirer à quelqu'un doit le mettre dehors au plus tard à l'expiration
+        // du jeton courant, sans attendre qu'il se déconnecte de lui-même.
+        if (!aLaPermissionMobile(userId)) {
+            throw new UnauthorizedException("Cet utilisateur n'a plus accès à l'application mobile.");
+        }
+
+        UserPrincipal principal = (UserPrincipal) userDetailsService.loadUserById(userId);
+        return new MobileLoginResponse(
+                // Réémis avec la revendication d'appareil : celui d'AuthService
+                // ne la porte pas, puisqu'il sert aussi le web.
+                jwtTokenProvider.generateToken(principal, appareil.getId()),
+                reponse.refreshToken(),
+                jwtProperties.getExpirationMs() / 1000,
+                userId,
+                user.getFirstname() + " " + user.getLastname(),
+                user.getBranchId(),
+                principal.getAuthorities().stream().map(a -> a.getAuthority()).toList());
     }
 
     @Override
@@ -248,6 +385,25 @@ public class MobileAuthServiceImpl implements MobileAuthService {
         boolean enDirect = user.getDirectPermissions().stream()
                 .anyMatch(p -> PERMISSION_MOBILE.equals(p.getSlug()));
         return parRole || enDirect;
+    }
+
+    /**
+     * Code PIN à six chiffres, tiré au hasard.
+     *
+     * <p>Six et non quatre : dix mille combinaisons se parcourent vite, et ce
+     * code protège des comptes rendus médicaux. Six en donne un million, ce qui,
+     * avec le gel après cinq échecs, met une attaque hors de portée.</p>
+     *
+     * <p>Aucune règle d'exclusion — ni suites, ni répétitions. Le tirage est
+     * uniforme et l'agent ne le choisit pas : écarter « 123456 » ne ferait que
+     * réduire l'espace pour un gain nul.</p>
+     */
+    private String genererPin() {
+        StringBuilder sb = new StringBuilder(6);
+        for (int i = 0; i < 6; i++) {
+            sb.append(ALEA.nextInt(10));
+        }
+        return sb.toString();
     }
 
     /**

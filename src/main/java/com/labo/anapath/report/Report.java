@@ -121,6 +121,25 @@ public class Report extends AuditableEntity {
     @Column(name = "signature_date")
     private LocalDateTime signatureDate;
 
+    /**
+     * Appareil enrôlé ayant signé la validation, {@code null} depuis le web.
+     *
+     * <p>Une validation faite au poste de travail ne repose que sur une session
+     * ouverte ; celle-ci s'adosse à une clé privée qui ne quitte jamais l'enclave
+     * sécurisée d'un téléphone identifié. Les deux doivent se distinguer dans la
+     * trace — c'est tout l'objet de la manœuvre.</p>
+     */
+    @Column(name = "signing_device_id")
+    private UUID signingDeviceId;
+
+    /** Signature de l'appareil sur le condensé de l'acte, vérifiée à la réception. */
+    @Column(name = "device_signature", columnDefinition = "TEXT")
+    private String deviceSignature;
+
+    /** Instant signé par l'appareil — celui du geste, non celui de l'enregistrement. */
+    @Column(name = "device_signed_at")
+    private LocalDateTime deviceSignedAt;
+
     /** Date et heure de livraison du compte-rendu (posée lors du passage au statut DELIVERED). */
     @Column(name = "delivery_date")
     private LocalDateTime deliveryDate;
