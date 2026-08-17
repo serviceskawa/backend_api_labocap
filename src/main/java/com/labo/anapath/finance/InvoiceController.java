@@ -35,6 +35,7 @@ public class InvoiceController {
     private final InvoiceService invoiceService;
     private final InvoiceRepository invoiceRepository;
     private final MecefService mecefService;
+    private final FluidInvoiceService fluidInvoiceService;
     private final InvoicePdfService invoicePdfService;
 
     @GetMapping
@@ -219,6 +220,31 @@ public class InvoiceController {
             @AuthenticationPrincipal UserPrincipal principal) {
         mecefService.cancelInvoice(id, dto.getUid(), principal.getBranchId());
         return ResponseEntity.ok(ApiResponse.success("Annulation MECeF effectuée", null));
+    }
+
+    /**
+     * Normalise la facture auprès de la DGI via FluidInvoice.
+     *
+     * <p>Renvoie la facture enrichie de son code MECeF et du lien vers le
+     * document normalisé, que le client ouvre dans un nouvel onglet.</p>
+     */
+    @PostMapping("/{id}/normalize")
+    @PreAuthorize("hasAuthority('edit-invoices')")
+    public ResponseEntity<ApiResponse<InvoiceResponseDto>> normalize(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success("Facture normalisée",
+                fluidInvoiceService.normaliser(id, principal.getBranchId())));
+    }
+
+    /** Crée la facture d'avoir contrepassant cette facture de vente. */
+    @PostMapping("/{id}/credit-note")
+    @PreAuthorize("hasAuthority('edit-invoices')")
+    public ResponseEntity<ApiResponse<InvoiceResponseDto>> createCreditNote(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success("Facture d'avoir créée",
+                invoiceService.createCreditNote(id, principal.getBranchId())));
     }
 
     @GetMapping("/check-code")

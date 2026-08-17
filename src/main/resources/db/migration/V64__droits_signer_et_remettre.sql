@@ -37,8 +37,8 @@
 -- Les permissions se résolvent par slug seul, comme le fait `@PreAuthorize` à
 -- l'exécution et comme le mappe l'entité Permission (id, name, slug, created_at).
 
-INSERT INTO permissions (id, name, slug, created_at, updated_at)
-SELECT gen_random_uuid(), v.name, v.slug, NOW(), NOW()
+INSERT INTO permissions (id, name, slug, created_at)
+SELECT gen_random_uuid(), v.name, v.slug, NOW()
 FROM (VALUES
         ('validate reports', 'validate-reports'),
         ('deliver reports',  'deliver-reports')

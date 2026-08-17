@@ -94,8 +94,8 @@ CREATE INDEX IF NOT EXISTS idx_enrollment_codes_vivants
 --
 -- Convention de nommage reprise de la base Laravel : libellé en minuscules
 -- séparé par des espaces (cf. « edit reports » / « edit-reports »).
-INSERT INTO permissions (id, name, slug, created_at, updated_at)
-SELECT gen_random_uuid(), 'use mobile app', 'use-mobile-app', NOW(), NOW()
+INSERT INTO permissions (id, name, slug, created_at)
+SELECT gen_random_uuid(), 'use mobile app', 'use-mobile-app', NOW()
 WHERE NOT EXISTS (
     SELECT 1 FROM permissions p WHERE p.slug = 'use-mobile-app'
 );
