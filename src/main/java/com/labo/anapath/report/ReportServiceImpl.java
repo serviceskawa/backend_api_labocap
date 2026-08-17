@@ -90,6 +90,23 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     @Transactional(readOnly = true)
+    public ReportDetailDto findDetailByTestOrderCode(String code, UUID branchId) {
+        String recherche = code == null ? "" : code.trim();
+        if (recherche.isEmpty()) {
+            throw new ResourceNotFoundException("Aucun code de demande d'examen fourni.");
+        }
+        // On délègue à findDetailById : le cloisonnement par branche, le journal
+        // et le nom du patient y sont déjà traités. Le code ne fait donc que
+        // désigner le dossier, sans ouvrir un second chemin de lecture qui
+        // divergerait du premier.
+        Report report = reportRepository.findByTestOrder_CodeIgnoreCase(recherche)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Aucun compte-rendu ne correspond au code « " + recherche + " »."));
+        return findDetailById(report.getId(), branchId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public ReportDetailDto findDetailById(UUID id, UUID branchId) {
         Report report = reportRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
@@ -149,9 +166,9 @@ public class ReportServiceImpl implements ReportService {
         if (!isCreate) {
             report = reportRepository.findById(dto.getReportId())
                     .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", dto.getReportId()));
-            if (report.getStatus() == ReportStatus.DELIVERED) {
-                throw new InvalidOperationException("Impossible de modifier un rapport livré.");
-            }
+            // Un compte-rendu livré reste modifiable : voir la note sur
+            // `update` ci-dessous — la livraison est un fait matériel, pas un
+            // scellé éditorial, et les compléments arrivent après la remise.
         } else {
             report = new Report();
             report.setBranchId(branchId);
@@ -196,6 +213,7 @@ public class ReportServiceImpl implements ReportService {
         }
 
         if ("VALIDATED".equalsIgnoreCase(dto.getStatus())) {
+            exigerLeDroitDeValider(report.getStatus());
             report.setStatus(ReportStatus.VALIDATED);
             report.setSignatureDate(LocalDateTime.now());
             report.setDeliveryDate(LocalDateTime.now());
@@ -371,7 +389,19 @@ public class ReportServiceImpl implements ReportService {
 
     /**
      * Met à jour le contenu textuel et le commentaire d'un compte-rendu.
-     * Un CR au statut DELIVERED ne peut plus être modifié.
+     *
+     * <p>Un compte-rendu livré <b>reste modifiable</b>. Le verrou posé ici
+     * n'existait pas dans Laravel, où la remise du résultat était un simple
+     * drapeau {@code is_delivered} — orthogonal au statut, qui ne connaissait
+     * que 0 (en attente) et 1 (terminé). La réécriture a fait de DELIVERED une
+     * valeur du statut, fusionnant deux notions distinctes : dès lors, livrer
+     * un résultat le scellait définitivement.</p>
+     *
+     * <p>Or un complément arrive par nature <i>après</i> la remise — c'est
+     * précisément ce que servent {@code description_supplementaire} et la case
+     * « Complémentaire ». Le verrou rendait cette fonction inatteignable au
+     * moment même où elle devient utile, et bloquait la correction de dossiers
+     * déjà sortis.</p>
      *
      * @param id  identifiant UUID du CR
      * @param dto nouvelles données
@@ -382,9 +412,12 @@ public class ReportServiceImpl implements ReportService {
     public ReportResponseDto update(UUID id, ReportRequestDto dto, UUID userId, UUID branchId) {
         Report report = reportRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
-        if (report.getStatus() == ReportStatus.DELIVERED) {
-            throw new InvalidOperationException("Impossible de modifier un compte-rendu déjà livré.");
-        }
+
+        // Un compte-rendu est signé dès qu'un médecin y est apposé et que la
+        // validation a posé la date. L'empreinte est prise AVANT toute écriture :
+        // au-delà, l'état d'origine est perdu et la comparaison impossible.
+        boolean etaitSigne = report.getSignatureDate() != null && report.getSignatory1() != null;
+        EmpreinteCompteRendu empreinte = etaitSigne ? EmpreinteCompteRendu.de(report) : null;
 
         // -------------------------------------------------------------------
         // Réplique EXACTE de ReportController@store (Laravel) : un unique
@@ -441,6 +474,7 @@ public class ReportServiceImpl implements ReportService {
 
         // Statut piloté par le select (Laravel : $request->status == 1 / == 0)
         if ("VALIDATED".equalsIgnoreCase(dto.getStatus())) {
+            exigerLeDroitDeValider(report.getStatus());
             report.setStatus(ReportStatus.VALIDATED);
             report.setDeliveryDate(LocalDateTime.now());
         } else if ("DRAFT".equalsIgnoreCase(dto.getStatus())) {
@@ -471,7 +505,106 @@ public class ReportServiceImpl implements ReportService {
         }
         logAction(saved.getId(), "Mettre à jour", userId);
 
+        if (empreinte != null) {
+            List<String> champsModifies = empreinte.champsModifies(saved);
+            if (!champsModifies.isEmpty()) {
+                tracerModificationApresSignature(saved, champsModifies, userId);
+            }
+        }
+
         return reportMapper.toResponseDto(saved);
+    }
+
+    /** Libellé de l'action portée au journal ; sert aussi de critère de relecture. */
+    static final String ACTION_APRES_SIGNATURE = "Modification après signature";
+
+    /** Sépare le récit de la liste des champs dans la description journalisée. */
+    private static final String MARQUEUR_CHAMPS = "Champs : ";
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional(readOnly = true)
+    public List<ModificationApresSignatureDto> getModificationsApresSignature(UUID reportId) {
+        return logReportRepository
+                .findByReportIdAndActionOrderByCreatedAtAsc(reportId, ACTION_APRES_SIGNATURE)
+                .stream()
+                .map(trace -> new ModificationApresSignatureDto(
+                        trace.getUser() != null ? trace.getUser().getId() : null,
+                        trace.getUser() != null
+                                ? (trace.getUser().getFirstname() + " "
+                                    + trace.getUser().getLastname()).trim()
+                                : "Utilisateur supprimé",
+                        trace.getCreatedAt(),
+                        champsDepuisDescription(trace.getDescription())))
+                .toList();
+    }
+
+    /**
+     * Extrait la liste des champs de la description journalisée.
+     *
+     * <p>Le marqueur peut manquer sur une entrée écrite par une version
+     * antérieure : on rend alors la description entière plutôt que rien, quitte
+     * à être verbeux — une trace lisible vaut mieux qu'une case vide.</p>
+     */
+    private static String champsDepuisDescription(String description) {
+        if (description == null) {
+            return "";
+        }
+        int position = description.indexOf(MARQUEUR_CHAMPS);
+        return position >= 0
+                ? description.substring(position + MARQUEUR_CHAMPS.length())
+                : description;
+    }
+
+    /**
+     * Consigne une modification survenue après signature et en avertit les
+     * administrateurs.
+     *
+     * <p>Un compte-rendu signé engage le médecin qui l'a signé. Le modifier
+     * ensuite reste possible — les compléments arrivent après la remise du
+     * résultat — mais ne doit pas passer inaperçu : l'action est portée au
+     * journal avec le détail des champs touchés et l'auteur, puis signalée aux
+     * adresses configurées sous {@code admin_mails}.</p>
+     *
+     * <p>L'échec d'un envoi n'annule pas la modification : la trace en base est
+     * la garantie, le courriel n'en est que le rappel. {@code EmailServiceImpl}
+     * absorbe déjà ses propres erreurs ; on protège ici la résolution des
+     * destinataires, qui dépend d'un paramétrage pouvant manquer.</p>
+     */
+    private void tracerModificationApresSignature(Report report, List<String> champs, UUID userId) {
+        User auteur = userRepository.findById(userId).orElse(null);
+        String nomAuteur = auteur != null
+                ? (auteur.getFirstname() + " " + auteur.getLastname()).trim()
+                : "Utilisateur inconnu";
+        String listeChamps = String.join(", ", champs);
+
+        LogReport trace = new LogReport();
+        trace.setBranchId(report.getBranchId());
+        trace.setReport(report);
+        trace.setUser(auteur);
+        trace.setAction(ACTION_APRES_SIGNATURE);
+        trace.setDescription("Modifié par " + nomAuteur + " après signature. "
+                + MARQUEUR_CHAMPS + listeChamps);
+        logReportRepository.save(trace);
+
+        log.warn("Compte-rendu {} modifié après signature par {} — champs: {}",
+                report.getCode(), nomAuteur, listeChamps);
+
+        try {
+            String nomLabo = notificationSettings.labName(report.getBranchId());
+            String codeDemande = report.getTestOrder() != null ? report.getTestOrder().getCode() : "";
+            String signataire = report.getSignatory1() != null
+                    ? (report.getSignatory1().getFirstname() + " "
+                        + report.getSignatory1().getLastname()).trim()
+                    : "";
+            for (String destinataire : notificationSettings.adminEmails(report.getBranchId())) {
+                emailService.sendPostSignatureChangeAlert(destinataire, report.getCode(),
+                        codeDemande, signataire, nomAuteur, listeChamps, nomLabo);
+            }
+        } catch (Exception e) {
+            log.error("Alerte de modification après signature non envoyée pour {}: {}",
+                    report.getCode(), e.getMessage());
+        }
     }
 
     /**
@@ -573,9 +706,61 @@ public class ReportServiceImpl implements ReportService {
         report.setCallDate(LocalDateTime.now());
         report.setRetrieverName(dto.getSignatorName());
         report.setRetrieverSignature(dto.getSignature());
+        // Cohérence de statut, comme dans deliver() et markDelivered().
+        //
+        // Cette méthode posait `isDelivered` sans toucher au statut : le compte-rendu
+        // se disait remis tout en restant VALIDATED, et la demande d'examen ne bougeait
+        // pas du tout. Les listes, qui affichent `order.status`, montraient donc encore
+        // « Validé » pour un dossier signé et emporté. Recueillir la signature du
+        // récupérateur EST la remise — c'est le geste qui la constate.
+        report.setStatus(ReportStatus.DELIVERED);
+        if (report.getTestOrder() != null) {
+            report.getTestOrder().setStatus(com.labo.anapath.testorder.TestOrderStatus.DELIVERED);
+        }
         Report saved = reportRepository.save(report);
         logAction(id, "Signature enregistrée", userId);
         return reportMapper.toResponseDto(saved);
+    }
+
+    /**
+     * Exige le droit {@code validate-reports} pour faire passer un compte-rendu
+     * à l'état validé.
+     *
+     * <h4>Pourquoi la garde est ici et pas seulement sur {@code /validate}</h4>
+     *
+     * <p>Le point d'entrée {@code POST /reports/{id}/validate} n'est appelé par
+     * personne : l'interface web fait passer le statut à VALIDATED en
+     * <strong>enregistrant</strong> le compte-rendu, avec {@code status} dans le
+     * corps. Poser la permission sur le seul point d'entrée dédié laissait donc
+     * la vraie porte grande ouverte, et la séparation n'aurait vécu que sur le
+     * papier.</p>
+     *
+     * <p>La vérification ne se déclenche qu'à la <em>transition</em> : rouvrir et
+     * réenregistrer un compte-rendu déjà validé ne la rejoue pas. Sans cela, un
+     * agent d'accueil ne pourrait plus corriger une coquille sur un dossier
+     * validé — ce qu'il a le droit de faire, et qui n'est pas un acte médical.</p>
+     *
+     * <p>La lecture passe par le contexte de sécurité plutôt que par un
+     * paramètre : la signature de ces méthodes est partagée avec le reste du
+     * service, et l'y faire entrer imposerait de la modifier partout pour un
+     * besoin qui ne concerne que cette branche.</p>
+     */
+    private void exigerLeDroitDeValider(ReportStatus statutActuel) {
+        if (statutActuel == ReportStatus.VALIDATED || statutActuel == ReportStatus.DELIVERED) {
+            return;
+        }
+        var authentification = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        boolean autorise = authentification != null && authentification.getAuthorities().stream()
+                .anyMatch(a -> "validate-reports".equals(a.getAuthority()));
+        if (!autorise) {
+            // AccessDeniedException et non UnauthorizedException : l'utilisateur est
+            // bien authentifié, il lui manque un droit. C'est un 403, et c'est ce que
+            // lève @PreAuthorize ailleurs — un 401 ferait tenter au client un
+            // rafraîchissement de jeton, voire une déconnexion, pour rien.
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Valider un compte-rendu engage un diagnostic et requiert le droit « validate-reports ».");
+        }
     }
 
     /**

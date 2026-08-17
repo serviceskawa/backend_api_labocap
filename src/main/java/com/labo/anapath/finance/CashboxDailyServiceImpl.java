@@ -123,21 +123,64 @@ public class CashboxDailyServiceImpl implements CashboxDailyService {
         return toDto(cashboxDailyRepository.save(daily));
     }
 
+    /**
+     * Encaissements de la session que l'on s'apprête à fermer.
+     *
+     * <p>Le point de départ est l'ouverture de <b>cette</b> session. Sans
+     * {@code sessionId}, on retombe sur « la dernière session ouverte », ce qui
+     * était l'unique comportement jusqu'ici et fausse le total dès qu'une
+     * session ancienne traîne : en fermant celle du jour, la référence bascule
+     * sur une session oubliée depuis des jours et le total couvre toute cette
+     * période. Un caissier ayant encaissé 876 000 se voyait proposer plus de
+     * deux millions.</p>
+     *
+     * <p>La date retenue est restituée dans le DTO : la période doit être
+     * lisible à l'écran, faute de quoi un écart reste indéchiffrable.</p>
+     */
     @Override
     @Transactional(readOnly = true)
-    public CashboxDailySummaryDto getDailySummary(UUID branchId) {
-        LocalDateTime sinceDate = cashboxDailyRepository
-                .findFirstByBranchIdAndStatusOrderByUpdatedAtDesc(branchId, 1)
-                .map(d -> d.getUpdatedAt() != null ? d.getUpdatedAt() : d.getCreatedAt())
-                .orElse(LocalDate.now().atStartOfDay());
+    public CashboxDailySummaryDto getDailySummary(UUID branchId, UUID sessionId) {
+        CashboxDaily session = (sessionId != null
+                ? cashboxDailyRepository.findById(sessionId)
+                        .filter(d -> branchId.equals(d.getBranchId()))
+                : cashboxDailyRepository.findFirstByBranchIdAndStatusOrderByUpdatedAtDesc(branchId, 1))
+                .orElse(null);
 
-        BigDecimal especes = orZero(cashboxDailyRepository.sumCreditByPaymentMethod(branchId, "ESPECES", sinceDate));
-        BigDecimal mobileMoney = orZero(cashboxDailyRepository.sumCreditByPaymentMethod(branchId, "MOBILEMONEY", sinceDate));
-        BigDecimal cheques = orZero(cashboxDailyRepository.sumCreditByPaymentMethod(branchId, "CHEQUES", sinceDate));
-        BigDecimal virement = orZero(cashboxDailyRepository.sumCreditByPaymentMethod(branchId, "VIREMENT", sinceDate));
+        LocalDateTime sinceDate = session != null
+                ? (session.getUpdatedAt() != null ? session.getUpdatedAt() : session.getCreatedAt())
+                : LocalDate.now().atStartOfDay();
+
+        // Borne haute : l'ouverture de la session suivante, s'il y en a une.
+        //
+        // Une session couvre l'intervalle qui la sépare de la suivante, ni plus
+        // ni moins. Sans cette borne, une session du 07/08 restée ouverte
+        // comptait l'argent encaissé après l'ouverture de celle du 10/08 — que
+        // la fermeture de cette dernière comptera une seconde fois.
+        //
+        // `null` quand la session fermée est la dernière : la fenêtre court alors
+        // jusqu'à maintenant, ce qui est le cas courant.
+        LocalDateTime untilDate = session == null ? null
+                : cashboxDailyRepository
+                        .findFirstByBranchIdAndCreatedAtGreaterThanOrderByCreatedAtAsc(
+                                branchId, session.getCreatedAt())
+                        .map(d -> d.getUpdatedAt() != null ? d.getUpdatedAt() : d.getCreatedAt())
+                        .orElse(null);
+
+        BigDecimal especes = orZero(cashboxDailyRepository.sumCreditByPaymentMethod(branchId, "ESPECES", sinceDate, untilDate));
+        BigDecimal mobileMoney = orZero(cashboxDailyRepository.sumCreditByPaymentMethod(branchId, "MOBILEMONEY", sinceDate, untilDate));
+        BigDecimal cheques = orZero(cashboxDailyRepository.sumCreditByPaymentMethod(branchId, "CHEQUES", sinceDate, untilDate));
+        BigDecimal virement = orZero(cashboxDailyRepository.sumCreditByPaymentMethod(branchId, "VIREMENT", sinceDate, untilDate));
         BigDecimal total = especes.add(mobileMoney).add(cheques).add(virement);
 
-        return new CashboxDailySummaryDto(especes, mobileMoney, cheques, virement, total);
+        // Mêmes critères, même fenêtre : le nombre doit décrire exactement les
+        // règlements que le montant additionne.
+        long nbEspeces = cashboxDailyRepository.countCreditByPaymentMethod(branchId, "ESPECES", sinceDate, untilDate);
+        long nbMobileMoney = cashboxDailyRepository.countCreditByPaymentMethod(branchId, "MOBILEMONEY", sinceDate, untilDate);
+        long nbCheques = cashboxDailyRepository.countCreditByPaymentMethod(branchId, "CHEQUES", sinceDate, untilDate);
+        long nbVirement = cashboxDailyRepository.countCreditByPaymentMethod(branchId, "VIREMENT", sinceDate, untilDate);
+
+        return new CashboxDailySummaryDto(especes, mobileMoney, cheques, virement, total,
+                nbEspeces, nbMobileMoney, nbCheques, nbVirement, sinceDate);
     }
 
     @Override

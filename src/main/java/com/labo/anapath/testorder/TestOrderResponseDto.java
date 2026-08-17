@@ -76,5 +76,16 @@ public record TestOrderResponseDto(
         /** Référence de l'examen (examen de référence Immuno : code ou texte libre). */
         String testAffiliate,
         /** Option d'envoi des résultats : false = Appel, true = SMS (colonne `option`). */
-        Boolean option
+        Boolean option,
+        /**
+         * Nom de la personne à qui le bon a été affecté, ou {@code null} s'il ne
+         * l'est pas encore.
+         * <p>
+         * Renseigné par chargement groupé dans {@code findAll}, non par le
+         * mapper : l'information vit dans une table d'association, pas sur le
+         * bon lui-même. Un bon pouvant figurer dans plusieurs affectations, c'est
+         * la plus récente qui est retenue.
+         * </p>
+         */
+        String assignedUserName
 ) {}

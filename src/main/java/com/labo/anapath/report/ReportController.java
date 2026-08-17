@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -159,6 +160,25 @@ public class ReportController {
                 reportService.getPerformanceStats(principal.getBranchId(), doctorId, month, year)));
     }
 
+    /**
+     * Retrouve un compte-rendu par le code de sa demande d'examen.
+     *
+     * <p>Pivot du parcours mobile : au comptoir on tient un bon d'examen, pas un
+     * UUID. Le code est saisi à la main ou lu au scanner, puis résolu ici.</p>
+     *
+     * <p>Aucun conflit avec {@code /{id}} : ce motif compte deux segments après
+     * {@code /reports}, celui-là un seul. L'ordre de déclaration n'y joue rien —
+     * Spring apparie sur la forme du chemin, pas sur la position dans le fichier.</p>
+     */
+    @GetMapping("/by-code/{code}")
+    @PreAuthorize("hasAuthority('view-reports')")
+    public ResponseEntity<ApiResponse<ReportDetailDto>> findByTestOrderCode(
+            @PathVariable String code,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                reportService.findDetailByTestOrderCode(code, principal.getBranchId())));
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('view-reports')")
     public ResponseEntity<ApiResponse<ReportDetailDto>> findById(
@@ -207,8 +227,10 @@ public class ReportController {
      * @param principal principal Spring Security (fournit l'userId pour le log)
      * @return le CR validé
      */
+    // Acte médical : il engage un diagnostic, et se distingue donc de la simple
+    // correction d'un compte-rendu. Voir V64 pour la reprise des droits existants.
     @PostMapping("/{id}/validate")
-    @PreAuthorize("hasAuthority('edit-reports')")
+    @PreAuthorize("hasAuthority('validate-reports')")
     public ResponseEntity<ApiResponse<ReportResponseDto>> validate(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -224,8 +246,9 @@ public class ReportController {
      * @param principal    principal Spring Security (fournit l'userId pour le log)
      * @return le CR passé au statut DELIVERED
      */
+    // Geste de guichet : constater une remise, non rédiger ni valider.
     @PostMapping("/{id}/deliver")
-    @PreAuthorize("hasAuthority('edit-reports')")
+    @PreAuthorize("hasAuthority('deliver-reports')")
     public ResponseEntity<ApiResponse<ReportResponseDto>> deliver(
             @PathVariable UUID id,
             @RequestParam String receiverName,
@@ -235,7 +258,7 @@ public class ReportController {
     }
 
     @PatchMapping("/{id}/delivered-patient")
-    @PreAuthorize("hasAuthority('edit-reports')")
+    @PreAuthorize("hasAuthority('deliver-reports')")
     public ResponseEntity<ApiResponse<ReportResponseDto>> markDelivered(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -244,7 +267,7 @@ public class ReportController {
     }
 
     @PatchMapping("/{id}/informed-patient")
-    @PreAuthorize("hasAuthority('edit-reports')")
+    @PreAuthorize("hasAuthority('deliver-reports')")
     public ResponseEntity<ApiResponse<ReportResponseDto>> markInformed(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -252,8 +275,10 @@ public class ReportController {
                 reportService.markInformed(id, principal.getId())));
     }
 
+    // Signature du récupérateur au comptoir : c'est ce point d'entrée que
+    // l'application mobile utilisera pour le retrait.
     @PostMapping("/{id}/store-signature")
-    @PreAuthorize("hasAuthority('edit-reports')")
+    @PreAuthorize("hasAuthority('deliver-reports')")
     public ResponseEntity<ApiResponse<ReportResponseDto>> storeSignature(
             @PathVariable UUID id,
             @Valid @RequestBody StoreSignatureRequestDto dto,
@@ -329,5 +354,24 @@ public class ReportController {
             @PathVariable UUID id, @PathVariable UUID templateId) {
         return ResponseEntity.ok(ApiResponse.success("Modèle associé au compte-rendu",
                 reportService.setTemplate(id, templateId)));
+    }
+
+    /**
+     * Modifications apportées au compte-rendu après sa signature.
+     *
+     * <p>Route distincte de l'historique complet : celui-ci mêle impressions et
+     * enregistrements ordinaires, quand la mise en exergue ne doit montrer que
+     * ce qui engage la signature d'un médecin.</p>
+     *
+     * <p>Ouverte à {@code view-reports} : constater qu'un dossier a bougé après
+     * signature relève de la lecture, pas de l'administration — un médecin doit
+     * pouvoir le voir sur un compte-rendu qu'il consulte.</p>
+     */
+    @GetMapping("/{id}/modifications-apres-signature")
+    @PreAuthorize("hasAnyAuthority('view-reports', 'edit-reports')")
+    public ResponseEntity<ApiResponse<List<ModificationApresSignatureDto>>> modificationsApresSignature(
+            @PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success(
+                reportService.getModificationsApresSignature(id)));
     }
 }

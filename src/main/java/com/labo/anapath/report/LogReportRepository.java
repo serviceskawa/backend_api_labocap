@@ -27,6 +27,19 @@ public interface LogReportRepository extends JpaRepository<LogReport, UUID> {
     List<LogReport> findByReportIdOrderByCreatedAtDesc(UUID reportId);
 
     /**
+     * Modifications survenues après signature, de la plus ancienne à la plus
+     * récente — l'ordre de lecture d'un historique.
+     *
+     * <p>Requête séparée plutôt qu'un filtre sur l'historique complet : celui-ci
+     * contient une entrée par impression et par enregistrement, et la mise en
+     * exergue ne doit remonter que ce qui engage une signature.</p>
+     *
+     * @param reportId identifiant UUID du compte-rendu
+     * @param action   libellé exact recherché (cf. {@code ReportServiceImpl})
+     */
+    List<LogReport> findByReportIdAndActionOrderByCreatedAtAsc(UUID reportId, String action);
+
+    /**
      * Retourne l'historique global paginé d'une branche (la plus récente d'abord).
      *
      * @param branchId identifiant de la branche

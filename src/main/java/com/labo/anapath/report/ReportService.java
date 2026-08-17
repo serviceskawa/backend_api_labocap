@@ -17,6 +17,15 @@ public interface ReportService {
 
     ReportDetailDto findDetailById(UUID id, UUID branchId);
 
+    /**
+     * Même détail que {@link #findDetailById}, mais désigné par le code de la
+     * demande d'examen plutôt que par l'identifiant du compte-rendu.
+     *
+     * <p>Au comptoir on tient un bon, pas un UUID : c'est ce point d'entrée que
+     * l'application mobile appelle après saisie ou scan du code.</p>
+     */
+    ReportDetailDto findDetailByTestOrderCode(String code, UUID branchId);
+
     ReportResponseDto create(ReportRequestDto dto, UUID branchId);
 
     ReportResponseDto createOrUpdate(ReportRequestDto dto, UUID branchId);
@@ -68,4 +77,13 @@ public interface ReportService {
 
     ReportPerformanceDto getPerformanceStats(
             UUID branchId, String doctorId, Integer month, Integer year);
+
+    /**
+     * Modifications apportées au compte-rendu après sa signature.
+     *
+     * @param reportId identifiant UUID du compte-rendu
+     * @return liste chronologique, vide si le compte-rendu n'a pas bougé depuis
+     *         sa signature — le cas de l'immense majorité des dossiers
+     */
+    List<ModificationApresSignatureDto> getModificationsApresSignature(UUID reportId);
 }

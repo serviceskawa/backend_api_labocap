@@ -83,9 +83,23 @@ public class InvoicePdfServiceImpl implements InvoicePdfService {
         // Titre du document et libellé du bloc « facture de vente / d'avoir ».
         ctx.setVariable("docTitle", isAvoir ? "Facture d'avoir" : "Facture de vente");
 
-        // Logo du laboratoire (réglage `logo`, base64), affiché sur la ligne d'en-tête.
+        // Logo du laboratoire. Le réglage `logo` contient un CHEMIN de fichier
+        // (« adminassets/images/…png ») et non une base64 : la condition
+        // `startsWith("data:")` échouait donc toujours, et l'en-tête sortait nu.
+        // On retombe sur la ressource embarquée, comme le fait le compte rendu.
         String logo = settingAppRepository.findByKey("logo").map(SettingApp::getValue).orElse("");
-        ctx.setVariable("logo", logo != null && logo.startsWith("data:") ? logo : "");
+        ctx.setVariable("logo",
+                logo != null && logo.startsWith("data:") ? logo : loadImageDataUri("pdf-assets/logo_caap.png"));
+
+        // Nom du laboratoire, à droite du logo. Écrit en dur, comme Laravel le fait
+        // dans pdf/layouts.blade.php : le réglage `app_name` vaut « CAAP », le sigle
+        // court destiné à l'onglet du navigateur, pas la raison sociale.
+        ctx.setVariable("labName", "CENTRE ADECHINA ANATOMIE PATHOLOGIQUE");
+        ctx.setVariable("labSubtitle", "Laboratoire d'Anatomie Pathologique");
+
+        // Tampon « PAYÉ », apposé sous la signature quand la facture est réglée.
+        ctx.setVariable("paidStamp", Boolean.TRUE.equals(invoice.getPaid())
+                ? loadImageDataUri("pdf-assets/paid_img.png") : "");
 
         ctx.setVariable("code", invoice.getCode() != null ? invoice.getCode() : "");
         ctx.setVariable("codeStatus", Boolean.TRUE.equals(invoice.getPaid()) ? "[Payé]" : "[En attente]");
@@ -138,8 +152,16 @@ public class InvoicePdfServiceImpl implements InvoicePdfService {
             var creator = userRepository.findById(invoice.getCreatedBy()).orElse(null);
             if (creator != null) {
                 operatorName = (creator.getFirstname() + " " + creator.getLastname()).trim();
-                if (creator.getSignature() != null && creator.getSignature().startsWith("data:")) {
-                    signatureImage = creator.getSignature();
+                String sig = creator.getSignature();
+                if (sig != null && !sig.isBlank()) {
+                    // La reprise a conservé des NOMS de fichiers, pas des base64 :
+                    // on les résout dans les ressources embarquées, où ils vivent
+                    // aussi pour le compte rendu. Le cachet du secrétariat est
+                    // l'une de ces « signatures » — d'où son absence jusqu'ici.
+                    signatureImage = sig.startsWith("data:")
+                            ? sig
+                            : loadImageDataUri("pdf-assets/signatures/"
+                                    + sig.substring(sig.lastIndexOf('/') + 1));
                 }
             }
         }
@@ -173,30 +195,13 @@ public class InvoicePdfServiceImpl implements InvoicePdfService {
     /**
      * Embarque Nunito dans le PDF.
      *
-     * <p>OpenHTMLToPDF ne connaît que les 14 polices de base du format PDF : sans cet
-     * enregistrement, la famille déclarée dans la feuille de style est ignorée et le
-     * document est rendu en Helvetica, avec d'autres métriques et d'autres retours à la
-     * ligne que la page imprimée par le navigateur côté Laravel.</p>
+     * <p>Délègue à {@link com.labo.anapath.common.pdf.PdfFonts} : le dispositif
+     * était ici et n'y servait qu'à la facture, tandis que l'état de caisse et
+     * la fiche de paie l'oubliaient et sortaient en Helvetica sans que rien ne
+     * le signale. Mutualisé pour que cet oubli ne se reproduise plus.</p>
      */
     private void registerNunito(PdfRendererBuilder builder) {
-        registerFont(builder, "pdf-assets/fonts/Nunito-Regular.ttf", 400);
-        registerFont(builder, "pdf-assets/fonts/Nunito-SemiBold.ttf", 600);
-        registerFont(builder, "pdf-assets/fonts/Nunito-Bold.ttf", 700);
-    }
-
-    private void registerFont(PdfRendererBuilder builder, String classpathLocation, int weight) {
-        ClassPathResource resource = new ClassPathResource(classpathLocation);
-        if (!resource.exists()) {
-            log.warn("Police PDF absente ({}) : rendu en police de substitution.", classpathLocation);
-            return;
-        }
-        builder.useFont(() -> {
-            try {
-                return resource.getInputStream();
-            } catch (Exception e) {
-                throw new IllegalStateException("Lecture de la police " + classpathLocation + " impossible", e);
-            }
-        }, "Nunito", weight, BaseRendererBuilder.FontStyle.NORMAL, true);
+        com.labo.anapath.common.pdf.PdfFonts.enregistrerNunito(builder);
     }
 
     /**

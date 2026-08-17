@@ -92,6 +92,10 @@ public class CashboxDailyPdfServiceImpl implements CashboxDailyPdfService {
 
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             PdfRendererBuilder builder = new PdfRendererBuilder();
+            // Sans cet enregistrement, la famille déclarée dans le gabarit est
+            // ignorée en silence et l'état sort en Helvetica — alors que le
+            // legacy l'imprimait en Nunito, police du thème d'administration.
+            com.labo.anapath.common.pdf.PdfFonts.enregistrerNunito(builder);
             builder.withHtmlContent(html, null);
             builder.toStream(out);
             builder.run();

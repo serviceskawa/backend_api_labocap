@@ -43,6 +43,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -66,6 +67,8 @@ class TestOrderServiceImplTest {
     @Mock private com.labo.anapath.setting.SettingAppRepository settingAppRepository;
     @Mock private FileStorageService fileStorageService;
     @Mock private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    // Ajouté au service pour rendre le nom de la personne affectée dans la liste.
+    @Mock private TestOrderAssignmentDetailRepository assignmentDetailRepository;
 
     @InjectMocks
     private TestOrderServiceImpl testOrderService;
@@ -97,7 +100,9 @@ class TestOrderServiceImplTest {
                 null, null, null, null,
                 null, null, null, null,
                 null, null, List.of(), BRANCH_ID, LocalDateTime.now(),
-                null, null, false, null, null);
+                // reportId, reportStatus, reportIsDelivered, invoiceId, archive,
+                // testAffiliate, option, assignedUserName.
+                null, null, false, null, null, null, null, null);
     }
 
     @Test
@@ -181,6 +186,50 @@ class TestOrderServiceImplTest {
         PageResponse<TestOrderResponseDto> result = testOrderService.findAll(0, 20, new TestOrderFilterDto(), BRANCH_ID);
 
         assertThat(result.content()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("findAll - porte le nom de la personne affectée, ou null si le bon ne l'est pas")
+    void findAll_exposeLeNomDeLaPersonneAffectee() {
+        TestOrder affecte = buildOrder(TestOrderStatus.PENDING);
+        affecte.setId(UUID.randomUUID());
+        TestOrder libre = buildOrder(TestOrderStatus.PENDING);
+        libre.setId(UUID.randomUUID());
+
+        when(testOrderRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(affecte, libre)));
+        when(testOrderMapper.toResponseDto(any())).thenReturn(buildResponseDto());
+        // Le dépôt ne rend une ligne que pour les bons effectivement affectés :
+        // l'absence dans la correspondance vaut « non affecté ».
+        when(assignmentDetailRepository.findAssignedUserNames(anyList()))
+                .thenReturn(List.<Object[]>of(new Object[]{affecte.getId(), "Takin Romulus"}));
+
+        PageResponse<TestOrderResponseDto> result =
+                testOrderService.findAll(0, 20, new TestOrderFilterDto(), BRANCH_ID);
+
+        assertThat(result.content()).hasSize(2);
+        assertThat(result.content().get(0).assignedUserName()).isEqualTo("Takin Romulus");
+        assertThat(result.content().get(1).assignedUserName()).isNull();
+    }
+
+    @Test
+    @DisplayName("findAll - un nom vide en base est traité comme une absence d'affectation")
+    void findAll_nomVideEstTraiteCommeAbsent() {
+        TestOrder order = buildOrder(TestOrderStatus.PENDING);
+        order.setId(UUID.randomUUID());
+
+        when(testOrderRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(order)));
+        when(testOrderMapper.toResponseDto(any())).thenReturn(buildResponseDto());
+        // Un utilisateur sans prénom ni nom rendrait une chaîne d'espaces : la
+        // colonne afficherait un blanc au lieu du tiret d'absence.
+        when(assignmentDetailRepository.findAssignedUserNames(anyList()))
+                .thenReturn(List.<Object[]>of(new Object[]{order.getId(), "   "}));
+
+        PageResponse<TestOrderResponseDto> result =
+                testOrderService.findAll(0, 20, new TestOrderFilterDto(), BRANCH_ID);
+
+        assertThat(result.content().get(0).assignedUserName()).isNull();
     }
 
     @Test
@@ -283,19 +332,56 @@ class TestOrderServiceImplTest {
         verify(testOrderRepository).save(order);
     }
 
+    /**
+     * Remplace un test qui bloquait sur le statut VALIDATED — règle sans
+     * équivalent dans Laravel, où seule une facture payée fige les lignes.
+     */
     @Test
-    @DisplayName("update - bon VALIDÉ → InvalidOperationException")
-    void update_validatedOrder_throwsInvalidOperation() {
+    @DisplayName("update - facture payée → InvalidOperationException")
+    void update_facturePayee_throwsInvalidOperation() {
         TestOrder order = buildOrder(TestOrderStatus.VALIDATED);
+        // `buildOrder` ne pose pas d'identifiant, or le service cherche la
+        // facture par `order.getId()` : sans cela le stub ne correspondrait pas.
+        order.setId(ORDER_ID);
         TestOrderRequestDto dto = new TestOrderRequestDto();
         dto.setPrelevementDate(LocalDate.now());
         dto.setPatientId(PATIENT_ID);
 
+        com.labo.anapath.finance.Invoice facture = new com.labo.anapath.finance.Invoice();
+        facture.setPaid(true);
+
         when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
+        when(invoiceRepository.findByTestOrderId(ORDER_ID)).thenReturn(Optional.of(facture));
 
         assertThatThrownBy(() -> testOrderService.update(ORDER_ID, dto, BRANCH_ID))
                 .isInstanceOf(InvalidOperationException.class)
-                .hasMessageContaining("validé");
+                .hasMessageContaining("payée");
+    }
+
+    @Test
+    @DisplayName("update - bon validé, facture impayée → modification autorisée")
+    void update_bonValideFactureImpayee_estAutorise() {
+        TestOrder order = buildOrder(TestOrderStatus.VALIDATED);
+        // `buildOrder` ne pose pas d'identifiant, or le service cherche la
+        // facture par `order.getId()` : sans cela le stub ne correspondrait pas.
+        order.setId(ORDER_ID);
+        TestOrderRequestDto dto = new TestOrderRequestDto();
+        dto.setPrelevementDate(LocalDate.now());
+        dto.setPatientId(PATIENT_ID);
+        dto.setReferenceHopital("REF-COMPLEMENT");
+
+        com.labo.anapath.finance.Invoice facture = new com.labo.anapath.finance.Invoice();
+        facture.setPaid(false);
+
+        when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
+        when(invoiceRepository.findByTestOrderId(ORDER_ID)).thenReturn(Optional.of(facture));
+        when(testOrderRepository.save(any())).thenReturn(order);
+        when(testOrderMapper.toResponseDto(order)).thenReturn(buildResponseDto());
+
+        testOrderService.update(ORDER_ID, dto, BRANCH_ID);
+
+        assertThat(order.getReferenceHopital()).isEqualTo("REF-COMPLEMENT");
+        verify(testOrderRepository).save(order);
     }
 
     @Test

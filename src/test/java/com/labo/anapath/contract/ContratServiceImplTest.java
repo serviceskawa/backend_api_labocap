@@ -26,6 +26,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -66,12 +67,13 @@ class ContratServiceImplTest {
         ContratResponseDto mockDto = new ContratResponseDto(
                 CONTRACT_ID, null, null, null, null, null, null, null,
                 10, LocalDate.now(), null, "ACTIF", true, false,
-                new ArrayList<>(), BRANCH_ID, null);
+                // branchId, createdAt, updatedAt, usedTestsCount, invoice.
+                new ArrayList<>(), BRANCH_ID, null, null, null, null);
 
         when(contratRepository.findById(CONTRACT_ID)).thenReturn(Optional.of(contrat));
         when(invoiceRepository.findFirstByContratIdOrderByCreatedAtDesc(CONTRACT_ID))
                 .thenReturn(Optional.empty());
-        when(invoiceRepository.findByBranchIdAndCodeNotNullAndYear(any(), any(), any()))
+        when(invoiceRepository.findByBranchIdAndCodeNotNullAndYear(any(), anyInt(), any()))
                 .thenReturn(new ArrayList<>());
         when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(contratRepository.save(any())).thenReturn(contrat);
@@ -150,7 +152,8 @@ class ContratServiceImplTest {
         ContratResponseDto mockDto = new ContratResponseDto(
                 CONTRACT_ID, null, null, null, null, null, null, null,
                 10, LocalDate.now(), null, "INACTIF", true, true,
-                new ArrayList<>(), BRANCH_ID, null);
+                // branchId, createdAt, updatedAt, usedTestsCount, invoice.
+                new ArrayList<>(), BRANCH_ID, null, null, null, null);
 
         when(contratRepository.findById(CONTRACT_ID)).thenReturn(Optional.of(contrat));
         when(contratRepository.save(any())).thenReturn(contrat);

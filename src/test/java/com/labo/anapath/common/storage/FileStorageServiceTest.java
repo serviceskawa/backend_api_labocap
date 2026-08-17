@@ -21,7 +21,7 @@ class FileStorageServiceTest {
 
     @BeforeEach
     void setup() {
-        service = new FileStorageServiceImpl(tempDir.toString());
+        service = new FileStorageServiceImpl(tempDir.toString(), StoredFilesFixture.enClair());
     }
 
     @Test

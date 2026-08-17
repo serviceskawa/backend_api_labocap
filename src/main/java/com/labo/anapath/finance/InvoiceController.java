@@ -61,13 +61,34 @@ public class InvoiceController {
         return ResponseEntity.ok(ApiResponse.success(Map.of("totalToday", totalToday)));
     }
 
+    /**
+     * Rapport des factures, sur un mois ou sur une période libre.
+     * <p>
+     * Les deux formes cohabitent à dessein. {@code startDate}/{@code endDate}
+     * priment et rendent une ventilation par mois ; à défaut, le couple
+     * {@code year}/{@code month} historique rend un rapport mono-mois. Garder
+     * l'ancienne forme évite de casser un appelant qui la pratique encore, et de
+     * rendre une ventilation d'une seule ligne là où un total suffit.
+     * </p>
+     *
+     * @param startDate premier jour de la période, inclus (ISO {@code AAAA-MM-JJ})
+     * @param endDate   dernier jour de la période, inclus
+     */
     @GetMapping("/reports")
     @PreAuthorize("hasAuthority('view-invoices')")
     public ResponseEntity<ApiResponse<InvoiceReportDto>> getReports(
             @RequestParam(required = false) Integer year,
             @RequestParam(required = false) Integer month,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @AuthenticationPrincipal UserPrincipal principal) {
-        InvoiceReportDto report = invoiceService.getReports(principal.getBranchId(), year, month);
+
+        InvoiceReportDto report = (startDate != null && endDate != null)
+                ? invoiceService.getReportsForPeriod(principal.getBranchId(), startDate, endDate)
+                : invoiceService.getReports(principal.getBranchId(), year, month);
+
         return ResponseEntity.ok(ApiResponse.success(report));
     }
 

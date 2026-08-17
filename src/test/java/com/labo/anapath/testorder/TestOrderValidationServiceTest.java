@@ -106,7 +106,9 @@ class TestOrderValidationServiceTest {
                 null, null, null, null,
                 null, null, null, null,
                 null, null, Collections.emptyList(), BRANCH_ID, null,
-                null, null, false, null, null);
+                // reportId, reportStatus, reportIsDelivered, invoiceId, archive,
+                // testAffiliate, option, assignedUserName.
+                null, null, false, null, null, null, null, null);
     }
 
     // --- AC3 ---
@@ -151,8 +153,6 @@ class TestOrderValidationServiceTest {
     @DisplayName("updateStatus - race condition sur le code unique → DuplicateResourceException CODE_GENERATION_CONFLICT")
     void updateStatus_race_condition_throws_CODE_GENERATION_CONFLICT() {
         when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
-        when(testOrderRepository.findByBranchIdAndCodeNotNullAndYear(eq(BRANCH_ID), anyInt(), any()))
-                .thenReturn(Collections.emptyList());
         // Aucun préfixe configuré dans setting_apps → code « aa-0001 » (format Laravel)
         when(settingAppRepository.findByKeyAndBranchId(anyString(), eq(BRANCH_ID)))
                 .thenReturn(Optional.empty());
@@ -170,8 +170,6 @@ class TestOrderValidationServiceTest {
     @DisplayName("updateStatus - génère code et passe à VALIDATED (contrat individuel)")
     void updateStatus_generates_code_sets_validated() {
         when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
-        when(testOrderRepository.findByBranchIdAndCodeNotNullAndYear(eq(BRANCH_ID), anyInt(), any()))
-                .thenReturn(Collections.emptyList());
         when(settingRepository.findFirstByBranchIdOrderByCreatedAtAscIdAsc(eq(BRANCH_ID)))
                 .thenReturn(Optional.empty());
         when(testOrderRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -226,8 +224,6 @@ class TestOrderValidationServiceTest {
     @DisplayName("updateStatus - crée un Report si aucun n'existe")
     void updateStatus_creates_report_when_none_exists() {
         when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
-        when(testOrderRepository.findByBranchIdAndCodeNotNullAndYear(any(), anyInt(), any()))
-                .thenReturn(Collections.emptyList());
         when(settingRepository.findFirstByBranchIdOrderByCreatedAtAscIdAsc(eq(BRANCH_ID)))
                 .thenReturn(Optional.empty());
         when(testOrderRepository.saveAndFlush(any())).thenAnswer(inv -> {
@@ -288,8 +284,6 @@ class TestOrderValidationServiceTest {
     @DisplayName("updateStatus - contrat individuel → crée une Invoice")
     void updateStatus_individual_contract_creates_invoice() {
         when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
-        when(testOrderRepository.findByBranchIdAndCodeNotNullAndYear(any(), anyInt(), any()))
-                .thenReturn(Collections.emptyList());
         when(settingRepository.findFirstByBranchIdOrderByCreatedAtAscIdAsc(eq(BRANCH_ID)))
                 .thenReturn(Optional.empty());
         when(testOrderRepository.saveAndFlush(any())).thenAnswer(inv -> {

@@ -40,10 +40,23 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      # Port d'écoute de l'application DANS le conteneur (server.port=${PORT}).
+      # Repris tel quel par le mapping et le healthcheck plus bas : ces trois
+      # emplacements doivent rester alignés, sous peine d'un conteneur déclaré
+      # sain mais injoignable.
+      PORT: ${APP_PORT:-7001}
       # La base est jointe par le nom de service "db" sur le réseau interne
       DB_URL: jdbc:postgresql://db:${DB_PORT:-5432}/${DB_NAME:-labo_anapath}
       DB_USERNAME: ${DB_USERNAME:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant dans .env}
+      # Sauvegarde : `pg_dump` s'adresse au serveur par le réseau, comme
+      # l'application. DB_HOST vaut le nom du service, pas localhost.
+      # Spring lit `app.backup.*` : le préfixe APP_ est nécessaire, une
+      # variable nommée BACKUP_DIR ne serait jamais reliée à la propriété.
+      APP_BACKUP_DIR: /var/lib/labo/backups
+      APP_BACKUP_COMMAND: pg_dump -h db -p ${DB_PORT:-5432} -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-labo_anapath}
+      APP_BACKUP_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant dans .env}
+      APP_BACKUP_KEEP: ${BACKUP_KEEP:-30}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant dans .env}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
       JWT_REFRESH: ${JWT_REFRESH:-604800000}
@@ -53,11 +66,34 @@ services:
       # à false UNIQUEMENT sur un serveur servi en HTTP clair (sinon le navigateur
       # rejette le cookie et l'utilisateur est renvoyé sur /login).
       APP_COOKIE_SECURE: ${APP_COOKIE_SECURE:-true}
+      # Domaine des cookies d'authentification. Vide par défaut : le cookie est
+      # alors host-only, donc réservé au domaine de l'API.
+      #
+      # ⚠ À renseigner dès que le front n'est PAS sur le même hôte que l'API.
+      # Avec l'API sur api.exemple.fr et le front sur app.exemple.fr, le cookie
+      # posé par l'API n'atteint jamais le front : sa garde de routes ne voit
+      # aucun jeton et renvoie sur /login en boucle, alors que la connexion a
+      # réussi. Poser « .exemple.fr », avec le point initial.
+      #
+      # Inutile en développement : localhost:3001 et localhost:8080 partagent
+      # déjà leurs cookies, les ports n'entrant pas dans leur portée — ce qui
+      # rend le défaut invisible hors production.
+      APP_COOKIE_DOMAIN: ${APP_COOKIE_DOMAIN:-}
       # DEV UNIQUEMENT : affiche le code OTP 2FA en clair dans les logs quand
       # l'envoi d'e-mails est indisponible. NE JAMAIS activer en production.
       APP_OTP_LOG_PLAINTEXT: ${APP_OTP_LOG_PLAINTEXT:-false}
       # Stockage des fichiers dans le conteneur → volume persistant "storage"
       STORAGE_PATH: /var/lib/labo/storage
+      # Chiffrement des fichiers stockés. Ce qu'il protège : un volume emporté,
+      # un disque de serveur éteint, une sauvegarde de fichiers dérobée. Ce
+      # qu'il ne protège pas : un serveur en fonctionnement, où la clé se lit
+      # dans l'environnement comme l'application le fait.
+      #
+      # ⚠ La clé n'a PAS de valeur par défaut, et c'est voulu. Une clé de
+      # repli ferait démarrer un serveur mal configuré en chiffrant avec une
+      # clé publique — pire que pas de chiffrement, puisqu'on le croirait actif.
+      STORAGE_ENCRYPTION_ENABLED: ${STORAGE_ENCRYPTION_ENABLED:-false}
+      STORAGE_ENCRYPTION_KEY: ${STORAGE_ENCRYPTION_KEY:-}
       # SMTP
       MAIL_HOST: ${MAIL_HOST:-smtp.mailtrap.io}
       MAIL_PORT: ${MAIL_PORT:-2525}
@@ -67,15 +103,22 @@ services:
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Labo AnaPath}
     volumes:
       - storage:/var/lib/labo/storage
+      # Les sauvegardes doivent survivre au redéploiement : sans volume,
+      # elles vivaient dans la couche éphémère du conteneur.
+      - backups:/var/lib/labo/backups
     ports:
-      - "${API_PORT:-8080}:8080"
+      # hôte:conteneur — API_PORT règle le port publié, APP_PORT celui écouté.
+      # Publié sur 127.0.0.1 uniquement : l'accès public passe par le reverse
+      # proxy nginx (api.caap.bj) ; le port n'est pas exposé sur Internet.
+      - "127.0.0.1:${API_PORT:-7001}:${APP_PORT:-7001}"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:${APP_PORT:-7001}/actuator/health | grep -q UP || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 60s
 
 volumes:
+  backups:
   db-data:
   storage:
