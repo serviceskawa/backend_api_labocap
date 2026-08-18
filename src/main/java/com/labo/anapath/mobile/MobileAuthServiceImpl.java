@@ -390,17 +390,19 @@ public class MobileAuthServiceImpl implements MobileAuthService {
     /**
      * Code PIN à six chiffres, tiré au hasard.
      *
-     * <p>Six et non quatre : dix mille combinaisons se parcourent vite, et ce
-     * code protège des comptes rendus médicaux. Six en donne un million, ce qui,
-     * avec le gel après cinq échecs, met une attaque hors de portée.</p>
+     * <p>Quatre chiffres, à la demande du laboratoire : c'est ce qu'un agent
+     * saisit sans hésiter entre deux patients. Dix mille combinaisons seulement,
+     * mais le gel après cinq échecs limite à vingt tentatives par heure — il
+     * faudrait des semaines pour parcourir l'espace —, et il faut de surcroît
+     * posséder le téléphone enrôlé. Le code seul n'ouvre rien.</p>
      *
      * <p>Aucune règle d'exclusion — ni suites, ni répétitions. Le tirage est
      * uniforme et l'agent ne le choisit pas : écarter « 123456 » ne ferait que
      * réduire l'espace pour un gain nul.</p>
      */
     private String genererPin() {
-        StringBuilder sb = new StringBuilder(6);
-        for (int i = 0; i < 6; i++) {
+        StringBuilder sb = new StringBuilder(4);
+        for (int i = 0; i < 4; i++) {
             sb.append(ALEA.nextInt(10));
         }
         return sb.toString();
