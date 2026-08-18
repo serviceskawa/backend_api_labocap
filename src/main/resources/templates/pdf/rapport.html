@@ -81,6 +81,22 @@
         table.sign td { vertical-align: bottom; font-size: 13px; width: 50%; text-align: left; }
         .sign-name { font-weight: bold; }
         .sign-space { min-height: 45px; }
+        /* La signature tient dans l'espace qui lui est réservé.
+           Le gabarit ne posait qu'une largeur : la hauteur suivait le rapport
+           d'aspect du fichier de chaque médecin. Mesuré dans le PDF produit, une
+           signature carrée sortait à 63,8 pt de haut pour 33,75 réservés — elle
+           gonflait le bloc de trente points et le faisait basculer en page
+           suivante là où une signature en bandeau tenait. La pagination du
+           compte rendu dépendait donc du fichier téléversé, ce que rien
+           n'indiquait. Le plafond la rend identique pour tous les signataires. */
+        .sign-space img { max-width: 85px; max-height: 45px; }
+        /* La signature tient dans l'espace qui lui est réservé.
+           Le gabarit ne posait qu'une largeur : la hauteur suivait le rapport
+           d'aspect du fichier téléversé par chaque médecin, si bien que la
+           pagination du compte rendu dépendait de la forme de sa signature. Une
+           signature carrée gonflait le bloc de 64 pt et le faisait basculer en
+           page suivante là où une signature en bandeau tenait. Le plafond rend
+           la hauteur du bloc identique pour tous les signataires. */
         /* Pied de page : placé dans la marge basse de CHAQUE page (position: running). */
         .page-footer {
             position: running(pagefooter);
@@ -181,7 +197,7 @@
                 <td>
                     <th:block th:if="${!#strings.isEmpty(signator)}">
                         <div class="sign-space">
-                            <img th:if="${!#strings.isEmpty(signature1Img)}" width="85" th:src="${signature1Img}" alt=""/>
+                            <img th:if="${!#strings.isEmpty(signature1Img)}" th:src="${signature1Img}" alt=""/>
                         </div>
                         <span th:text="${signator}"></span>
                     </th:block>
