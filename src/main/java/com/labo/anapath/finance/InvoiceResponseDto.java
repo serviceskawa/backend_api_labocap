@@ -28,6 +28,8 @@ public record InvoiceResponseDto(
         String payment,
         String codeMecef,
         String codeNormalise,
+        /** Lien FluidInvoice du document normalisé. Non nul ⇒ facture normalisée. */
+        String normalizedUrl,
         String qrcode,
         String referenceCode,
         InvoiceRefundDto refund,

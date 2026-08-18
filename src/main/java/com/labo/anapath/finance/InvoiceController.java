@@ -35,6 +35,7 @@ public class InvoiceController {
     private final InvoiceService invoiceService;
     private final InvoiceRepository invoiceRepository;
     private final MecefService mecefService;
+    private final FluidInvoiceService fluidInvoiceService;
     private final InvoicePdfService invoicePdfService;
 
     @GetMapping
@@ -219,6 +220,52 @@ public class InvoiceController {
             @AuthenticationPrincipal UserPrincipal principal) {
         mecefService.cancelInvoice(id, dto.getUid(), principal.getBranchId());
         return ResponseEntity.ok(ApiResponse.success("Annulation MECeF effectuée", null));
+    }
+
+    /**
+     * Normalise la facture auprès de la DGI via FluidInvoice.
+     *
+     * <p>Renvoie la facture enrichie de son code MECeF et du lien vers le
+     * document normalisé, que le client ouvre dans un nouvel onglet.</p>
+     */
+    @PostMapping("/{id}/normalize")
+    @PreAuthorize("hasAuthority('edit-invoices')")
+    public ResponseEntity<ApiResponse<InvoiceResponseDto>> normalize(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success("Facture normalisée",
+                fluidInvoiceService.normaliser(id, principal.getBranchId())));
+    }
+
+    /**
+     * Le document de la facture normalisée, relayé depuis FluidInvoice.
+     *
+     * <p>Le relais est nécessaire : l'adresse du document est authentifiée par
+     * la clé API, que le navigateur ne doit pas connaître.</p>
+     */
+    @GetMapping("/{id}/normalized-document")
+    @PreAuthorize("hasAuthority('view-invoices')")
+    public ResponseEntity<byte[]> normalizedDocument(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        InvoiceResponseDto invoice = invoiceService.findById(id, principal.getBranchId());
+        byte[] pdf = fluidInvoiceService.telechargerDocument(id, principal.getBranchId());
+        String filename = "Facture-normalisee-"
+                + (invoice.code() != null ? invoice.code() : id) + ".pdf";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_PDF_VALUE)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
+                .body(pdf);
+    }
+
+    /** Crée la facture d'avoir contrepassant cette facture de vente. */
+    @PostMapping("/{id}/credit-note")
+    @PreAuthorize("hasAuthority('edit-invoices')")
+    public ResponseEntity<ApiResponse<InvoiceResponseDto>> createCreditNote(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success("Facture d'avoir créée",
+                invoiceService.createCreditNote(id, principal.getBranchId())));
     }
 
     @GetMapping("/check-code")

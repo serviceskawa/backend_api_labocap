@@ -421,4 +421,12 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
     List<Object[]> findMonthlyStatsRaw(
             @Param("branchId") UUID branchId,
             @Param("year") int year);
+
+    /**
+     * L'avoir rattaché à une facture de vente, s'il existe.
+     *
+     * <p>Sert de garde à la création d'un avoir : une vente n'en porte qu'un, un
+     * second serait un doublon comptable.</p>
+     */
+    Optional<Invoice> findFirstByReferenceId(UUID referenceId);
 }

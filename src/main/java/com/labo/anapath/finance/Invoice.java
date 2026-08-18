@@ -147,4 +147,18 @@ public class Invoice extends AuditableEntity {
     /** Code de normalisation manuelle (saisi par l'agent quand MECeF est désactivé). */
     @Column(name = "code_normalise", length = 100)
     private String codeNormalise;
+
+    /**
+     * Lien FluidInvoice vers le document de la facture normalisée.
+     *
+     * <p>Sa présence vaut preuve de normalisation : c'est elle qui fait
+     * disparaître le bouton « normaliser » au profit de « voir la facture
+     * normalisée ». NULL tant que la facture n'a pas été normalisée.</p>
+     */
+    @Column(name = "normalized_url", columnDefinition = "TEXT")
+    private String normalizedUrl;
+
+    /** Identifiant interne FluidInvoice, référence d'origine des avoirs. */
+    @Column(name = "fluidinvoice_id", length = 36)
+    private String fluidinvoiceId;
 }

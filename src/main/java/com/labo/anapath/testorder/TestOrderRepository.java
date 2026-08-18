@@ -160,14 +160,28 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
     // Dashboard — stats docteurs
     // -------------------------------------------------------------------------
 
+    /**
+     * Parité Laravel (`HomeController@index`, boucle `getUsersByRole('docteur')`) :
+     * le tableau part de la LISTE DES DOCTEURS, pas des demandes. Un docteur sans
+     * aucune demande affectée doit donc apparaître avec 0/0, et un utilisateur qui
+     * n'a pas le rôle docteur ne doit pas apparaître même s'il porte des demandes.
+     * Partir de `test_orders` inversait les deux règles.
+     *
+     * « Traité » = compte rendu VALIDATED **ou** DELIVERED, comme le
+     * `whereIn('status', ['VALIDATED', 'DELIVERED'])` de Laravel : ne compter que
+     * VALIDATED perdait les comptes rendus déjà remis au patient.
+     */
     @Query(value = """
             SELECT u.id::text as id, CONCAT(u.lastname, ' ', u.firstname) as doctor,
                    COUNT(DISTINCT t.id) as assigne,
-                   COUNT(DISTINCT CASE WHEN r.status IN ('VALIDATED','DELIVERED') THEN t.id END) as traite
-            FROM test_orders t
-            JOIN users u ON u.id = t.attribuate_doctor_id
-            LEFT JOIN reports r ON r.test_order_id = t.id
-            WHERE t.branch_id = :branchId AND t.deleted_at IS NULL AND u.deleted_at IS NULL
+                   COUNT(DISTINCT CASE WHEN r.status IN ('VALIDATED', 'DELIVERED') THEN t.id END) as traite
+            FROM users u
+            JOIN user_roles ur ON ur.user_id = u.id
+            JOIN roles ro ON ro.id = ur.role_id AND ro.slug = 'docteur'
+            LEFT JOIN test_orders t ON t.attribuate_doctor_id = u.id
+                 AND t.branch_id = :branchId AND t.deleted_at IS NULL
+            LEFT JOIN reports r ON r.test_order_id = t.id AND r.deleted_at IS NULL
+            WHERE u.branch_id = :branchId AND u.deleted_at IS NULL
             GROUP BY u.id, u.lastname, u.firstname
             ORDER BY assigne DESC
             """, nativeQuery = true)
@@ -175,6 +189,15 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
 
     // -------------------------------------------------------------------------
     // Dashboard — stats mensuelles
+    //
+    // Parité Laravel : `HomeController@index` filtre avec
+    // `whereMonth('test_orders.created_at', $mois_souhaite)`, c'est-à-dire sur le
+    // NUMÉRO DU MOIS SEUL, sans l'année. Un août agrège donc tous les mois d'août
+    // de la base, toutes années confondues. On reproduit ce comportement à
+    // l'identique : filtrer aussi sur l'année vidait le bloc « STATISTIQUE
+    // MENSUELLE » du tableau de bord dès qu'aucune demande n'était enregistrée
+    // dans le mois courant de l'année en cours, alors que l'application Laravel
+    // de référence affiche des chiffres.
     // -------------------------------------------------------------------------
 
     @Query(value = """
@@ -182,11 +205,10 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             FROM test_orders t
             JOIN detail_test_orders dto ON dto.test_order_id = t.id
             WHERE t.branch_id = :branchId AND EXTRACT(MONTH FROM t.created_at) = :month
-              AND EXTRACT(YEAR FROM t.created_at) = :year AND t.deleted_at IS NULL
+              AND t.deleted_at IS NULL
             """, nativeQuery = true)
     long countByBranchIdAndMonth(@Param("branchId") UUID branchId,
-                                  @Param("month") int month,
-                                  @Param("year") int year);
+                                  @Param("month") int month);
 
     @Query(value = """
             SELECT COALESCE(SUM(lt.price), 0)
@@ -194,55 +216,50 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             JOIN detail_test_orders dto ON dto.test_order_id = t.id
             JOIN lab_tests lt ON dto.lab_test_id = lt.id
             WHERE t.branch_id = :branchId AND EXTRACT(MONTH FROM t.created_at) = :month
-              AND EXTRACT(YEAR FROM t.created_at) = :year AND t.deleted_at IS NULL
+              AND t.deleted_at IS NULL
             """, nativeQuery = true)
     BigDecimal sumPriceByBranchIdAndMonth(@Param("branchId") UUID branchId,
-                                           @Param("month") int month,
-                                           @Param("year") int year);
+                                           @Param("month") int month);
 
     @Query(value = """
             SELECT COUNT(DISTINCT t.patient_id)
             FROM test_orders t
             WHERE t.branch_id = :branchId AND EXTRACT(MONTH FROM t.created_at) = :month
-              AND EXTRACT(YEAR FROM t.created_at) = :year AND t.deleted_at IS NULL
+              AND t.deleted_at IS NULL
             """, nativeQuery = true)
     long countPatientsByBranchIdAndMonth(@Param("branchId") UUID branchId,
-                                          @Param("month") int month,
-                                          @Param("year") int year);
+                                          @Param("month") int month);
 
     @Query(value = """
             SELECT h.name as nom, COUNT(DISTINCT t.patient_id) as totalPatients
             FROM test_orders t JOIN hospitals h ON t.hospital_id = h.id
             WHERE t.branch_id = :branchId AND EXTRACT(MONTH FROM t.created_at) = :month
-              AND EXTRACT(YEAR FROM t.created_at) = :year AND t.deleted_at IS NULL AND h.deleted_at IS NULL
+              AND t.deleted_at IS NULL AND h.deleted_at IS NULL
             GROUP BY h.id, h.name ORDER BY totalPatients DESC
             """, nativeQuery = true)
     List<DashboardProjection.ByItem> countByHospitalAndMonth(@Param("branchId") UUID branchId,
-                                                       @Param("month") int month,
-                                                       @Param("year") int year);
+                                                       @Param("month") int month);
 
     @Query(value = """
             SELECT d.name as nom, COUNT(DISTINCT t.patient_id) as totalPatients
             FROM test_orders t JOIN doctors d ON t.doctor_id = d.id
             WHERE t.branch_id = :branchId AND EXTRACT(MONTH FROM t.created_at) = :month
-              AND EXTRACT(YEAR FROM t.created_at) = :year AND t.deleted_at IS NULL AND d.deleted_at IS NULL
+              AND t.deleted_at IS NULL AND d.deleted_at IS NULL
             GROUP BY d.id, d.name HAVING COUNT(DISTINCT t.patient_id) > 5
             ORDER BY totalPatients DESC
             """, nativeQuery = true)
     List<DashboardProjection.ByItem> countByDoctorAndMonth(@Param("branchId") UUID branchId,
-                                                     @Param("month") int month,
-                                                     @Param("year") int year);
+                                                     @Param("month") int month);
 
     @Query(value = """
             SELECT tp.title as nom, COUNT(DISTINCT t.patient_id) as totalPatients
             FROM test_orders t JOIN type_orders tp ON t.type_order_id = tp.id
             WHERE t.branch_id = :branchId AND EXTRACT(MONTH FROM t.created_at) = :month
-              AND EXTRACT(YEAR FROM t.created_at) = :year AND t.deleted_at IS NULL
+              AND t.deleted_at IS NULL
             GROUP BY tp.id, tp.title ORDER BY totalPatients DESC
             """, nativeQuery = true)
     List<DashboardProjection.ByItem> countByTypeOrderAndMonth(@Param("branchId") UUID branchId,
-                                                        @Param("month") int month,
-                                                        @Param("year") int year);
+                                                        @Param("month") int month);
 
     // -------------------------------------------------------------------------
     // Dashboard pathologiste — bons affectés via attribuate_doctor_id

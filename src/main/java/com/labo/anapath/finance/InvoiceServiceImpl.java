@@ -525,4 +525,88 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
         return result;
     }
+
+    @Override
+    @Transactional
+    public InvoiceResponseDto createCreditNote(UUID invoiceId, UUID branchId) {
+        Invoice vente = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Facture", invoiceId));
+
+        if (!branchId.equals(vente.getBranchId())) {
+            throw new ResourceNotFoundException("Facture", invoiceId);
+        }
+        // Un avoir contrepasse une vente. En contrepasser un autre n'a pas de
+        // sens comptable et produirait une chaîne de références sans fin.
+        if (vente.getStatusInvoice() == 1) {
+            throw new InvalidOperationException(
+                    "Une facture d'avoir ne peut pas faire l'objet d'un avoir.");
+        }
+        // L'avoir étant unique par vente, le second serait un doublon comptable.
+        invoiceRepository.findFirstByReferenceId(vente.getId()).ifPresent(existant -> {
+            throw new InvalidOperationException(
+                    "Cette facture a déjà un avoir : " + existant.getCode() + ".");
+        });
+
+        Invoice avoir = new Invoice();
+        avoir.setBranchId(vente.getBranchId());
+        // Calque de RefundServiceImpl : l'avoir est daté du jour, pas de la vente.
+        avoir.setDate(LocalDate.now());
+        avoir.setClientName(vente.getClientName());
+        avoir.setClientAddress(vente.getClientAddress());
+        avoir.setTotal(vente.getTotal());
+        avoir.setStatusInvoice(1);
+        avoir.setReference(vente);
+        avoir.setCode(generateCodeAvoir(vente.getBranchId()));
+        avoir.setStatus(InvoiceStatus.PENDING);
+        avoir.setPaid(false);
+
+        Invoice saved = invoiceRepository.save(avoir);
+
+        // Les lignes sont recopiées à l'identique : l'avoir annule la vente, il
+        // en reprend donc le détail. Sans elles, il n'aurait aucune ligne à
+        // présenter à la DGI lors de sa normalisation.
+        if (vente.getDetails() != null) {
+            for (InvoiceDetail source : vente.getDetails()) {
+                InvoiceDetail ligne = new InvoiceDetail();
+                ligne.setInvoice(saved);
+                ligne.setLabTest(source.getLabTest());
+                ligne.setTestName(source.getTestName());
+                ligne.setPrice(source.getPrice());
+                ligne.setDiscount(source.getDiscount());
+                ligne.setQuantity(source.getQuantity());
+                ligne.setUnitPrice(source.getUnitPrice());
+                ligne.setTotal(source.getTotal());
+                invoiceDetailRepository.save(ligne);
+            }
+        }
+
+        log.info("Avoir {} créé pour la facture {}", saved.getCode(), vente.getCode());
+        return financeMapper.toInvoiceResponseDto(
+                invoiceRepository.findById(saved.getId()).orElse(saved));
+    }
+
+    /**
+     * Numérotation des avoirs, reprise du helper Laravel
+     * {@code generateCodeFactureAvoir} — préfixe « FA », millésime sur deux
+     * chiffres, séquence sur quatre. Identique à {@code RefundServiceImpl}, dont
+     * les avoirs partagent la même suite.
+     */
+    private String generateCodeAvoir(UUID branchId) {
+        int year = LocalDate.now().getYear();
+        List<Invoice> invoices = invoiceRepository.findByBranchIdAndCodeNotNullAndYear(
+                branchId, year, PageRequest.of(0, 1));
+        String seq = "0001";
+        if (!invoices.isEmpty()) {
+            String lastCode = invoices.get(0).getCode();
+            if (lastCode != null && lastCode.length() >= 4) {
+                try {
+                    int lastSeq = Integer.parseInt(lastCode.substring(lastCode.length() - 4));
+                    seq = String.format("%04d", lastSeq + 1);
+                } catch (NumberFormatException ignored) {
+                    // Code hérité de Laravel hors format : la séquence repart à 0001.
+                }
+            }
+        }
+        return "FA" + (year % 100) + seq;
+    }
 }

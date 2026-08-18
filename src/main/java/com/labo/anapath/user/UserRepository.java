@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -98,15 +99,25 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("SELECT COUNT(u) > 0 FROM User u JOIN u.roles r WHERE u.id = :userId AND r.slug = 'super-admin'")
     boolean isSuperAdmin(@Param("userId") UUID userId);
 
-    // Dashboard — utilisateurs connectés
+    /**
+     * Dashboard — utilisateurs connectés.
+     *
+     * Parité Laravel : {@code users->where('is_connect', 1)->whereDate('updated_at', today)}.
+     * Le drapeau {@code is_connect} n'est pas fiable seul — il reste à vrai quand
+     * une session se termine sans déconnexion explicite (17 comptes le portent
+     * en base pour 2 réellement actifs du jour) : sans la condition de date, le
+     * tableau listait des utilisateurs déconnectés depuis des mois.
+     */
     @Query(value = """
             SELECT u.id::text as id, u.lastname as lastname, u.firstname as firstname, u.email as email
             FROM users u
             WHERE u.branch_id = :branchId AND u.is_connect = true
+              AND DATE(u.updated_at) = :today
               AND u.deleted_at IS NULL
             ORDER BY u.updated_at DESC
             """, nativeQuery = true)
-    List<DashboardProjection.ConnectedUser> findConnectedUsersByBranchId(@Param("branchId") UUID branchId);
+    List<DashboardProjection.ConnectedUser> findConnectedUsersByBranchId(@Param("branchId") UUID branchId,
+                                                                        @Param("today") LocalDate today);
 
     /**
      * Les signataires possibles d'un compte rendu : les porteurs du rôle « docteur ».

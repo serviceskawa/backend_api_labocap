@@ -47,7 +47,7 @@ public interface FinanceMapper {
                 dto.contratId(), dto.contratName(),
                 dto.clientName(), dto.clientAddress(), dto.clientContact(), dto.date(), dto.subtotal(),
                 dto.total(), dto.paid(), dto.status(), dto.statusInvoice(), dto.payment(),
-                dto.codeMecef(), dto.codeNormalise(), dto.qrcode(), dto.referenceCode(),
+                dto.codeMecef(), dto.codeNormalise(), dto.normalizedUrl(), dto.qrcode(), dto.referenceCode(),
                 refund,
                 dto.dueDate(), dto.branchId(), dto.createdAt(), dto.details()
         );
@@ -64,7 +64,7 @@ public interface FinanceMapper {
                 dto.contratId(), dto.contratName(),
                 dto.clientName(), dto.clientAddress(), dto.clientContact(), dto.date(), dto.subtotal(),
                 dto.total(), dto.paid(), dto.status(), dto.statusInvoice(), dto.payment(),
-                dto.codeMecef(), dto.codeNormalise(), qrcode, dto.referenceCode(),
+                dto.codeMecef(), dto.codeNormalise(), dto.normalizedUrl(), qrcode, dto.referenceCode(),
                 dto.refund(),
                 dto.dueDate(), dto.branchId(), dto.createdAt(), dto.details()
         );

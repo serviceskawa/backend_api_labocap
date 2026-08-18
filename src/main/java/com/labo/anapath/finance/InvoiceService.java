@@ -88,4 +88,22 @@ public interface InvoiceService {
      * @return liste ordonnée des statistiques mensuelles
      */
     List<InvoiceMonthlyStatsDto> getMonthlyStats(UUID branchId, Integer year);
+
+    /**
+     * Crée la facture d'avoir d'une facture de vente.
+     *
+     * <p>L'avoir est l'opération inverse de la vente. Il s'enregistre seul :
+     * la facture d'origine reste intacte, ni annulée ni modifiée — c'est
+     * l'existence de l'avoir qui porte l'annulation comptable.</p>
+     *
+     * <p>Second chemin de création, à côté de celui du circuit de remboursement
+     * ({@code RefundServiceImpl.updateStatus}), qui produit le même avoir quand
+     * une demande passe à « Aprouvé ». Les deux aboutissent à une facture de
+     * {@code statusInvoice = 1} référençant la vente.</p>
+     *
+     * @param invoiceId facture de vente à contrepasser
+     * @param branchId  branche de l'utilisateur
+     * @return l'avoir créé
+     */
+    InvoiceResponseDto createCreditNote(UUID invoiceId, UUID branchId);
 }
