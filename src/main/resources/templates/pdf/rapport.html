@@ -65,7 +65,19 @@
         table.infos td { width: 25%; }
         hr.sep { margin-top: 15px; border: none; border-top: 1px solid #0070C1; }
         .content { font-size: 13px; }
-        table.sign { width: 100%; margin-top: 40px; }
+        /* Le bloc de signature ne se coupe pas.
+           Mesuré dans le PDF produit : sans cette règle, un compte rendu dont le
+           texte s'arrête près du bas de page laissait « Signé électroniquement
+           par : » sur une feuille et le nom du signataire sur la suivante. Une
+           mention d'attribution séparée de la personne qu'elle désigne n'a pas
+           sa place sur un document médical.
+
+           La marge haute est ramenée de 40 à 24 px pour la même raison. Le
+           moteur la compte pour décider si le bloc tient, puis l'abandonne en
+           tête de page suivante — vérifié : la signature repartie y est tracée
+           dès le haut du cadre. Ces points ne servaient donc qu'à provoquer le
+           renvoi qu'ils ne compensaient pas. */
+        table.sign { width: 100%; margin-top: 24px; page-break-inside: avoid; }
         table.sign td { vertical-align: bottom; font-size: 13px; width: 50%; text-align: left; }
         .sign-name { font-weight: bold; }
         .sign-space { min-height: 45px; }
