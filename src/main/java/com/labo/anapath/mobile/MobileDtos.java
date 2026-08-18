@@ -137,7 +137,7 @@ public final class MobileDtos {
 
     /** Pose ou remplacement du PIN par son porteur. */
     public record PinRequest(
-            @NotBlank @Pattern(regexp = "\\d{4,8}", message = "Le code PIN doit comporter de 4 à 8 chiffres.")
+            @NotBlank @Pattern(regexp = "\\d{4}", message = "Le code PIN comporte quatre chiffres.")
             String pin) {
     }
 
