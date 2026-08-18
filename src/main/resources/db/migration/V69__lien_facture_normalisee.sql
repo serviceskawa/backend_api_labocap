@@ -1,5 +1,16 @@
 -- Lien du document de la facture normalisée (FluidInvoice).
 --
+-- RENUMÉROTÉE DE V67 EN V69
+-- Deux branches ont créé un V67 en parallèle — celle-ci et la signature
+-- d'appareil du socle mobile — et Flyway refuse de démarrer sur un doublon de
+-- version : « Found more than one migration with version 67 ». Le serveur
+-- repartait en boucle sans jamais s'ouvrir.
+--
+-- C'est celle-ci qui bouge, et non l'autre : la signature d'appareil (V67) et
+-- le droit d'images (V68) sont déjà appliqués sur les environnements, alors que
+-- ce fichier n'a jamais pu l'être. Renuméroter une migration déjà passée aurait
+-- laissé une ligne orpheline dans l'historique de Flyway.
+--
 -- CONTEXTE
 -- La normalisation passait jusqu'ici par une saisie manuelle : l'agent recopiait
 -- le code MECeF/DGI à 24 caractères dans la page facture, puis « Terminer la
