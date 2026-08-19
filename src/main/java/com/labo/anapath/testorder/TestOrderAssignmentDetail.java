@@ -29,6 +29,20 @@ public class TestOrderAssignmentDetail extends AuditableEntity {
     @Column(name = "test_order_code", length = 50)
     private String testOrderCode;
 
+    /**
+     * Étiquettes physiques des prélèvements affectés — « L1 », « L2 »…
+     *
+     * <p>Une demande regroupe parfois plusieurs prélèvements, et ils ne partent
+     * pas toujours tous ensemble. Sans elles, l'affectation dit « la demande
+     * 26-0188 » là où la paillasse manipule « L1 et L2 de 26-0188 » ; c'est la
+     * seconde formulation qui permet de retrouver un tube.</p>
+     *
+     * <p>Stockées en JSON plutôt qu'en table : elles ne sont jamais lues seules,
+     * et une jointure de plus à chaque lecture ne servirait personne.</p>
+     */
+    @Column(name = "labels", columnDefinition = "TEXT")
+    private String labels;
+
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 }

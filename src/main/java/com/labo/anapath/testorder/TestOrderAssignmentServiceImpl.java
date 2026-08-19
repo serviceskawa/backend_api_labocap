@@ -31,6 +31,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
     private final UserRepository userRepository;
     private final BranchRepository branchRepository;
     private final TestPathologyMacroRepository macroRepository;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     @Override
     @Transactional
@@ -80,6 +81,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
             detail.setTestOrder(order);
             detail.setTestOrderCode(order.getCode());
             detail.setNote(dto.getNote());
+            detail.setLabels(encoderEtiquettes(dto.getLabels()));
             detailRepository.save(detail);
         } else {
             detail = detailRepository.findByTestOrderId(dto.getTestOrderId())
@@ -100,7 +102,8 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
             macroRepository.save(macro);
         }
 
-        return new AssignmentDetailResponseDto(detail.getId(), order.getId(), order.getCode(), detail.getNote());
+        return new AssignmentDetailResponseDto(detail.getId(), order.getId(), order.getCode(),
+                decoderEtiquettes(detail.getLabels()), detail.getNote());
     }
 
     @Override
@@ -114,6 +117,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
                         d.getId(),
                         d.getTestOrder() != null ? d.getTestOrder().getId() : null,
                         d.getTestOrderCode(),
+                        decoderEtiquettes(d.getLabels()),
                         d.getNote()))
                 .toList();
         return new AssignmentPrintDto(
@@ -164,5 +168,44 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
                 userName, a.getDate(), a.getNote(),
                 a.getDetails().size(), detailCodes,
                 a.getBranchId(), a.getCreatedAt());
+    }
+
+    /**
+     * Sérialise les étiquettes, ou rien du tout.
+     *
+     * <p>Une liste vide est enregistrée comme nulle plutôt que comme « [] » :
+     * les deux se lisent pareil, et un nul distingue à l'œil, en base, une
+     * affectation sans étiquette d'une affectation antérieure à leur
+     * existence.</p>
+     */
+    private String encoderEtiquettes(List<String> etiquettes) {
+        if (etiquettes == null || etiquettes.isEmpty()) return null;
+        List<String> propres = etiquettes.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(String::trim)
+                .filter(e -> !e.isEmpty())
+                .distinct()
+                .toList();
+        if (propres.isEmpty()) return null;
+        try {
+            return objectMapper.writeValueAsString(propres);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new com.labo.anapath.common.exception.BusinessException(
+                    "Les étiquettes n'ont pas pu être enregistrées.");
+        }
+    }
+
+    /**
+     * Relit les étiquettes. Un contenu illisible rend une liste vide plutôt que
+     * de faire échouer la lecture de toute l'affectation.
+     */
+    @SuppressWarnings("unchecked")
+    private List<String> decoderEtiquettes(String brut) {
+        if (brut == null || brut.isBlank()) return List.of();
+        try {
+            return objectMapper.readValue(brut, List.class);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            return List.of();
+        }
     }
 }

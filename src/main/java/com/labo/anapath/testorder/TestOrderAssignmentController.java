@@ -29,7 +29,7 @@ public class TestOrderAssignmentController {
     private final TestOrderAssignmentService assignmentService;
 
     @GetMapping
-    @PreAuthorize("hasAuthority('view-reports')")
+    @PreAuthorize("hasAuthority('view-test-order-assignments')")
     public ResponseEntity<ApiResponse<PageResponse<AssignmentResponseDto>>> findAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -39,7 +39,7 @@ public class TestOrderAssignmentController {
     }
 
     @GetMapping("/immuno")
-    @PreAuthorize("hasAuthority('view-reports')")
+    @PreAuthorize("hasAuthority('view-test-order-assignments')")
     public ResponseEntity<ApiResponse<PageResponse<AssignmentResponseDto>>> findAllImmuno(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -49,7 +49,7 @@ public class TestOrderAssignmentController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('edit-reports')")
+    @PreAuthorize("hasAuthority('manage-test-order-assignments')")
     public ResponseEntity<ApiResponse<AssignmentResponseDto>> create(
             @Valid @RequestBody AssignmentRequestDto dto,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -58,7 +58,7 @@ public class TestOrderAssignmentController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAuthority('edit-reports')")
+    @PreAuthorize("hasAuthority('manage-test-order-assignments')")
     public ResponseEntity<ApiResponse<AssignmentResponseDto>> update(
             @PathVariable UUID id,
             @Valid @RequestBody AssignmentRequestDto dto) {
@@ -66,7 +66,7 @@ public class TestOrderAssignmentController {
     }
 
     @PostMapping("/{id}/details")
-    @PreAuthorize("hasAuthority('edit-reports')")
+    @PreAuthorize("hasAuthority('manage-test-order-assignments')")
     public ResponseEntity<ApiResponse<AssignmentDetailResponseDto>> addDetail(
             @PathVariable UUID id,
             @Valid @RequestBody AssignmentDetailRequestDto dto) {
@@ -75,13 +75,13 @@ public class TestOrderAssignmentController {
     }
 
     @GetMapping("/{id}/print")
-    @PreAuthorize("hasAuthority('view-reports')")
+    @PreAuthorize("hasAuthority('view-test-order-assignments')")
     public ResponseEntity<ApiResponse<AssignmentPrintDto>> getPrintData(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(assignmentService.getPrintData(id)));
     }
 
     @DeleteMapping("/details/{detailId}")
-    @PreAuthorize("hasAuthority('edit-reports')")
+    @PreAuthorize("hasAuthority('manage-test-order-assignments')")
     public ResponseEntity<ApiResponse<Void>> deleteDetail(@PathVariable UUID detailId) {
         assignmentService.deleteDetail(detailId);
         return ResponseEntity.ok(ApiResponse.success("Détail supprimé", null));
