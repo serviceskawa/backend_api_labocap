@@ -108,6 +108,19 @@ public class TestOrder extends AuditableEntity {
     @Column(name = "files_name", columnDefinition = "TEXT")
     private String filesName;
 
+    /**
+     * Dates d'ajout des pièces jointes, alignées index par index sur
+     * {@link #filesName}.
+     *
+     * <p>Une liste parallèle plutôt qu'une table : les images sont déjà
+     * stockées comme une liste JSON de noms, et déplacer cela obligerait à
+     * réécrire l'envoi, la suppression et la lecture des deux côtés. Vide pour
+     * les images antérieures — leur date n'existe nulle part et ne s'invente
+     * pas.</p>
+     */
+    @Column(name = "files_added_at", columnDefinition = "TEXT")
+    private String filesAddedAt;
+
     /** Option tarifaire spécifique négociée avec le contrat. */
     @Column(name = "option")
     private Boolean option;
