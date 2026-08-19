@@ -24,6 +24,11 @@ public record RoleResponseDto(
         String slug,
         String description,
         Boolean isAssignable,
+        /**
+         * Rôle structurant : le serveur en refuse la suppression. Exposé pour
+         * que l'interface masque le bouton plutôt que de mener à un refus.
+         */
+        Boolean isProtected,
         List<PermissionResponseDto> permissions,
         String createdByName,
         LocalDateTime createdAt
