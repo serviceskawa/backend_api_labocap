@@ -54,4 +54,20 @@ public interface TwoFaService {
      * @throws com.labo.anapath.common.exception.InvalidCodeException si le code est invalide ou si la 2FA n'est pas activée
      */
     void disable(UUID userId, String code);
+
+    /**
+     * Vérifie un code d'application d'authentification à la connexion, et le
+     * consomme.
+     *
+     * <p>Distincte de {@link #verifyAndEnable} : celle-ci sert à la mise en
+     * place, une fois, et n'a pas à se prémunir du rejeu — le compte n'est pas
+     * encore protégé. Celle-ci sert à chaque connexion, et un code reste
+     * valable toute sa fenêtre de trente secondes. Sans consommation, six
+     * chiffres lus par-dessus une épaule ouvrent une seconde session avant
+     * d'expirer.</p>
+     *
+     * @return {@code false} si l'utilisateur n'a pas d'application, si le code
+     *         ne correspond à aucun pas de la fenêtre, ou s'il a déjà servi
+     */
+    boolean verifierCodeApplication(java.util.UUID userId, String code);
 }

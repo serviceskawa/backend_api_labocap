@@ -74,6 +74,17 @@ public class User extends AuditableEntity {
     private boolean twoFactorEnabled = false;
 
     /** Secret TOTP utilisé pour la génération des codes 2FA. */
+    /**
+     * Dernier pas de temps TOTP accepté, pour interdire le rejeu.
+     *
+     * <p>Un code reste valable toute sa fenêtre de trente secondes : sans cette
+     * borne, six chiffres lus par-dessus une épaule ouvrent une seconde session
+     * avant d'expirer. Le code envoyé par courriel, lui, est supprimé dès qu'il
+     * a servi.</p>
+     */
+    @Column(name = "two_factor_last_step")
+    private Long twoFactorLastStep;
+
     @Column(name = "two_factor_secret", length = 255)
     private String twoFactorSecret;
 

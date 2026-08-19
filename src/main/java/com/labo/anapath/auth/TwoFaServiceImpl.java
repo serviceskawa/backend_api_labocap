@@ -11,6 +11,7 @@ import com.labo.anapath.user.UserRepository;
 import com.warrenstrange.googleauth.GoogleAuthenticator;
 import com.warrenstrange.googleauth.GoogleAuthenticatorKey;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +35,7 @@ import java.util.UUID;
  * </p>
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class TwoFaServiceImpl implements TwoFaService {
 
@@ -87,6 +89,62 @@ public class TwoFaServiceImpl implements TwoFaService {
         }
         user.setTwoFactorEnabled(true);
         userRepository.save(user);
+    }
+
+    /** Durée d'un pas TOTP, en secondes. Celle de la RFC 6238, et de tous les clients. */
+    private static final long PAS_SECONDES = 30;
+
+    /**
+     * Tolérance d'horloge, en pas, de part et d'autre de l'instant courant.
+     *
+     * <p>Un téléphone dérive de quelques secondes ; refuser un code d'un pas
+     * voisin ferait échouer des saisies correctes sans rien protéger de plus.
+     * C'est aussi la tolérance par défaut de la bibliothèque.</p>
+     */
+    private static final int TOLERANCE_PAS = 1;
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional
+    public boolean verifierCodeApplication(UUID userId, String code) {
+        User user = loadUser(userId);
+        if (!user.isTwoFactorEnabled() || user.getTwoFactorSecret() == null) {
+            return false;
+        }
+
+        final int saisi;
+        try {
+            saisi = parseCode(code);
+        } catch (Exception e) {
+            return false;
+        }
+
+        long pasCourant = System.currentTimeMillis() / 1000 / PAS_SECONDES;
+
+        // On parcourt la fenêtre du plus récent au plus ancien : un code saisi
+        // à l'instant appartient presque toujours au pas courant, et l'ordre
+        // évite d'attribuer par erreur un pas ancien à un code ambigu.
+        for (int decalage = TOLERANCE_PAS; decalage >= -TOLERANCE_PAS; decalage--) {
+            long pas = pasCourant + decalage;
+            if (!googleAuthenticator.authorize(
+                    user.getTwoFactorSecret(), saisi, pas * PAS_SECONDES * 1000)) {
+                continue;
+            }
+
+            // Le pas doit être strictement postérieur au dernier accepté. Un
+            // code déjà servi, ou antérieur, est refusé même s'il est
+            // arithmétiquement juste.
+            Long dernier = user.getTwoFactorLastStep();
+            if (dernier != null && pas <= dernier) {
+                log.warn("Rejeu d'un code d'application refusé pour l'utilisateur {}", userId);
+                return false;
+            }
+
+            user.setTwoFactorLastStep(pas);
+            userRepository.save(user);
+            return true;
+        }
+        return false;
     }
 
     /**

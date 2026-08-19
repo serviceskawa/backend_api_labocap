@@ -68,6 +68,7 @@ public class AuthServiceImpl implements AuthService {
     private final GoogleAuthenticator googleAuthenticator;
     private final PasswordEncoder passwordEncoder;
     private final TwoFaRepository twoFaRepository;
+    private final TwoFaService twoFaService;
     private final com.labo.anapath.common.email.EmailService emailService;
     private final BranchRepository branchRepository;
 
@@ -116,10 +117,23 @@ public class AuthServiceImpl implements AuthService {
             // `challenge()` échange contre les jetons définitifs une fois le
             // code vérifié. Il n'existe plus de chemin de connexion sans OTP.
             String tempToken = jwtTokenProvider.generateTempToken(userPrincipal.getId());
-            sendAndStoreOtp(user);
-            log.info("Code de connexion envoyé à : {}", maskEmail(request.getEmail()));
+
+            // Qui a une application d'authentification lit son code sur son
+            // téléphone : lui envoyer un courriel à chaque connexion serait un
+            // message inutile de plus, et un second code valable en circulation.
+            // Le courriel reste à un clic — `resend2FA` — si le téléphone
+            // manque, de sorte que personne ne peut se retrouver enfermé dehors.
+            final String canal;
+            if (user.isTwoFactorEnabled() && user.getTwoFactorSecret() != null) {
+                canal = "APP";
+                log.info("Connexion par application attendue pour : {}", maskEmail(request.getEmail()));
+            } else {
+                canal = "EMAIL";
+                sendAndStoreOtp(user);
+                log.info("Code de connexion envoyé à : {}", maskEmail(request.getEmail()));
+            }
             return LoginResponse.requires2fa(
-                    tempToken, JwtTokenProvider.TEMP_TOKEN_VALIDITY_MS / 1000);
+                    tempToken, JwtTokenProvider.TEMP_TOKEN_VALIDITY_MS / 1000, canal);
         } catch (DisabledException ex) {
             log.warn("Échec de connexion (compte désactivé) pour: {}", maskEmail(request.getEmail()));
             throw new UnauthorizedException("Identifiants invalides.");
@@ -389,22 +403,33 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UnauthorizedException("Utilisateur introuvable."));
 
-        TwoFa twoFa = twoFaRepository.findByUserId(userId)
-                .orElseThrow(() -> new InvalidCodeException("Code invalide ou expiré."));
+        // Les deux canaux sont acceptés, sans que l'utilisateur ait à dire
+        // lequel il emploie : six chiffres sont six chiffres. C'est ce qui rend
+        // l'enfermement impossible — téléphone perdu, on demande un code par
+        // courriel ; boîte inaccessible, on lit l'application.
+        //
+        // L'application est essayée en premier : c'est la voie normale d'un
+        // utilisateur équipé, et le plus souvent aucun code n'a été envoyé.
+        boolean parApplication = twoFaService.verifierCodeApplication(userId, request.getCode());
 
-        // Vérifier l'expiration (10 minutes)
-        if (twoFa.getCreatedAt().plusMinutes(10).isBefore(LocalDateTime.now())) {
+        if (!parApplication) {
+            TwoFa twoFa = twoFaRepository.findByUserId(userId)
+                    .orElseThrow(() -> new InvalidCodeException("Code invalide ou expiré."));
+
+            // Vérifier l'expiration (10 minutes)
+            if (twoFa.getCreatedAt().plusMinutes(10).isBefore(LocalDateTime.now())) {
+                twoFaRepository.deleteByUserId(userId);
+                throw new InvalidCodeException("Code expiré. Veuillez en demander un nouveau.");
+            }
+
+            // Vérifier le code (comparaison bcrypt)
+            if (!passwordEncoder.matches(request.getCode().trim(), twoFa.getCode())) {
+                throw new InvalidCodeException("Code invalide.");
+            }
+
+            // Supprimer le code utilisé
             twoFaRepository.deleteByUserId(userId);
-            throw new InvalidCodeException("Code expiré. Veuillez en demander un nouveau.");
         }
-
-        // Vérifier le code (comparaison bcrypt)
-        if (!passwordEncoder.matches(request.getCode().trim(), twoFa.getCode())) {
-            throw new InvalidCodeException("Code invalide.");
-        }
-
-        // Supprimer le code utilisé
-        twoFaRepository.deleteByUserId(userId);
 
         // Blacklister le tempToken
         String tempJti = jwtTokenProvider.extractJti(tempToken);
