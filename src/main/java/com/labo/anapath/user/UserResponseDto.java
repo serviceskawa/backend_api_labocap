@@ -41,5 +41,14 @@ public record UserResponseDto(
         List<RoleResponseDto> roles,
         List<BranchResponseDto> branches,
         String signature,
-        List<PermissionResponseDto> directPermissions
+        List<PermissionResponseDto> directPermissions,
+        /**
+         * L'utilisateur reçoit-il ses codes de connexion depuis une application
+         * d'authentification ?
+         *
+         * <p>Exposé pour que le profil sache quoi proposer — activer ou
+         * retirer. Le secret lui-même ne sort jamais d'ici : il n'est montré
+         * qu'une fois, à la mise en place.</p>
+         */
+        boolean twoFactorEnabled
 ) {}

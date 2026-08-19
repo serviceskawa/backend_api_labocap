@@ -29,7 +29,19 @@ public record LoginResponse(
         Long expiresIn,
         UserResponseDto user,
         Boolean requires2fa,
-        String tempToken
+        String tempToken,
+        /**
+         * Canal par lequel le code est attendu : {@code "APP"} quand
+         * l'utilisateur a une application d'authentification, {@code "EMAIL"}
+         * sinon.
+         *
+         * <p>Le client en a besoin pour se formuler correctement : annoncer un
+         * « code envoyé à v…@caap.bj » à quelqu'un qui n'a rien reçu le ferait
+         * attendre un courriel qui ne viendra pas, puis appeler l'assistance.
+         * Les deux canaux restent acceptés à la vérification — ce champ ne dit
+         * pas ce qui est exigé, seulement ce qui a été fait.</p>
+         */
+        String otpCanal
 ) {
     /** Masqué du JSON — transmis via cookie HttpOnly côté {@link com.labo.anapath.auth.AuthController}. */
     @JsonIgnore
@@ -50,7 +62,7 @@ public record LoginResponse(
      * @param user         informations de l'utilisateur connecté
      */
     public LoginResponse(String accessToken, String refreshToken, Long expiresIn, UserResponseDto user) {
-        this(accessToken, refreshToken, expiresIn, user, null, null);
+        this(accessToken, refreshToken, expiresIn, user, null, null, null);
     }
 
     /**
@@ -62,7 +74,7 @@ public record LoginResponse(
      *                  tant que le code n'a pas expiré
      * @return réponse avec {@code requires2fa = true}, le token temporaire et sa durée de vie
      */
-    public static LoginResponse requires2fa(String tempToken, long expiresIn) {
-        return new LoginResponse(null, null, expiresIn, null, true, tempToken);
+    public static LoginResponse requires2fa(String tempToken, long expiresIn, String otpCanal) {
+        return new LoginResponse(null, null, expiresIn, null, true, tempToken, otpCanal);
     }
 }
