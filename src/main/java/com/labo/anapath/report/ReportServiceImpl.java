@@ -148,6 +148,9 @@ public class ReportServiceImpl implements ReportService {
                 report.isDelivered(), report.isCalled(),
                 report.getReceiverName(),
                 report.getRetrieverName(),
+                report.getRetrieverRelation(),
+                report.getRetrieverSignature(),
+                report.getTestOrder() != null ? report.getTestOrder().getCreatedAt() : null,
                 report.getSignatureDate(), report.getDeliveryDate(), report.getCallDate(),
                 report.getSignatory1() != null ? report.getSignatory1().getId() : null,
                 report.getSignatory1() != null ? report.getSignatory1().getFirstname() + " " + report.getSignatory1().getLastname() : null,
@@ -779,6 +782,7 @@ public class ReportServiceImpl implements ReportService {
         report.setCalled(true);
         report.setCallDate(LocalDateTime.now());
         report.setRetrieverName(dto.getSignatorName());
+        report.setRetrieverRelation(dto.getRelation());
         report.setRetrieverSignature(dto.getSignature());
         // Cohérence de statut, comme dans deliver() et markDelivered().
         //

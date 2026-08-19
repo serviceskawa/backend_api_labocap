@@ -29,6 +29,22 @@ public record ReportDetailDto(
          * celui qu'il faut montrer pour dire qui est reparti avec le dossier.
          */
         String retrieverName,
+        /**
+         * À quel titre le compte rendu a été emporté. Nul pour les remises
+         * antérieures à la colonne, et pour celles où l'agent n'a rien saisi.
+         */
+        String retrieverRelation,
+        /**
+         * Image PNG de la signature recueillie à la remise, en base64 préfixé
+         * de son type. Elle était enregistrée sans jamais être relue : sans
+         * elle, la preuve de remise existait en base sans être consultable.
+         */
+        String retrieverSignature,
+        /**
+         * Date d'enregistrement de la demande d'examen — le premier jalon du
+         * suivi d'un dossier, antérieur au compte rendu lui-même.
+         */
+        LocalDateTime demandeCreatedAt,
         LocalDateTime signatureDate,
         LocalDateTime deliveryDate,
         LocalDateTime callDate,

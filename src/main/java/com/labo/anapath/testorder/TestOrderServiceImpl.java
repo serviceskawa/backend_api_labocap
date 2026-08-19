@@ -928,15 +928,22 @@ public class TestOrderServiceImpl implements TestOrderService {
         // sinon un lot mixte laisserait des images à moitié rangées.
         assertJpegOrPng(files);
         java.util.List<String> existing = parseFilesName(order.getFilesName());
+        java.util.List<String> dates = parseFilesName(order.getFilesAddedAt());
+        // Les images déjà présentes n'ont pas de date : on comble la liste pour
+        // que les index restent alignés, sans prétendre savoir quand elles sont
+        // arrivées.
+        while (dates.size() < existing.size()) dates.add("");
         for (org.springframework.web.multipart.MultipartFile file : files) {
             try {
                 existing.add(fileStorageService.store(file));
+                dates.add(java.time.LocalDateTime.now().toString());
             } catch (java.io.IOException e) {
                 throw new com.labo.anapath.common.exception.BusinessException("Erreur lors du stockage du fichier: " + file.getOriginalFilename());
             }
         }
         try {
             order.setFilesName(objectMapper.writeValueAsString(existing));
+            order.setFilesAddedAt(objectMapper.writeValueAsString(dates));
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new com.labo.anapath.common.exception.BusinessException("Erreur de sérialisation JSON");
         }
@@ -965,9 +972,17 @@ public class TestOrderServiceImpl implements TestOrderService {
         TestOrder order = testOrderRepository.findByIdAndBranchId(id, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", id));
         java.util.List<String> filenames = parseFilesName(order.getFilesName());
+        java.util.List<String> dates = parseFilesName(order.getFilesAddedAt());
         java.util.List<ImageDto> result = new java.util.ArrayList<>();
         for (int i = 0; i < filenames.size(); i++) {
-            result.add(new ImageDto(i, filenames.get(i), fileStorageService.getUrl(filenames.get(i))));
+            // Les images antérieures à la colonne des dates n'en ont pas : la
+            // liste est plus courte, et l'absence se dit par un nul plutôt que
+            // par une date inventée.
+            String ajoutee = i < dates.size() ? dates.get(i) : null;
+            result.add(new ImageDto(i, filenames.get(i),
+                    fileStorageService.getUrl(filenames.get(i)),
+                    ajoutee == null || ajoutee.isBlank()
+                            ? null : java.time.LocalDateTime.parse(ajoutee)));
         }
         return result;
     }
@@ -987,8 +1002,11 @@ public class TestOrderServiceImpl implements TestOrderService {
             log.warn("Impossible de supprimer le fichier physique à l'index {}: {}", index, e.getMessage());
         }
         filenames.remove(index);
+        java.util.List<String> dates = parseFilesName(order.getFilesAddedAt());
+        if (index < dates.size()) dates.remove(index);
         try {
             order.setFilesName(objectMapper.writeValueAsString(filenames));
+            order.setFilesAddedAt(objectMapper.writeValueAsString(dates));
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new com.labo.anapath.common.exception.BusinessException("Erreur de sérialisation JSON");
         }
