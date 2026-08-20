@@ -52,6 +52,7 @@ public class ReportServiceImpl implements ReportService {
     private final com.labo.anapath.mobile.MobileDeviceRepository mobileDeviceRepository;
     private final com.labo.anapath.mobile.SignatureAppareil signatureAppareil;
     private final com.labo.anapath.mobile.ProvenanceRequete provenanceRequete;
+    private final com.labo.anapath.testorder.TestOrderAssignmentDetailRepository assignmentDetailRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -134,7 +135,10 @@ public class ReportServiceImpl implements ReportService {
                 detail.retrieverRelation(),
                 detail.retrieverSignature(),
                 detail.demandeCreatedAt(),
-                detail.deliveryDate());
+                detail.deliveryDate(),
+                detail.assignedToName(),
+                detail.assignmentCode(),
+                detail.assignmentDate());
     }
 
     @Override
@@ -160,6 +164,8 @@ public class ReportServiceImpl implements ReportService {
             var p = report.getTestOrder().getPatient();
             patientName = NomComplet.de(p.getLastname(), p.getFirstname());
         }
+
+        Affectation affectation = affectationDe(report);
 
         return new ReportDetailDto(
                 report.getId(), report.getCode(),
@@ -190,7 +196,34 @@ public class ReportServiceImpl implements ReportService {
                 report.getTags().stream().map(Tag::getName).toList(),
                 report.getTags().stream().map(Tag::getId).toList(),
                 logDtos,
+                affectation.nom(), affectation.code(), affectation.date(),
                 report.getCreatedAt(), report.getUpdatedAt());
+    }
+
+    /** Ce que le suivi montre d'une affectation : chez qui, sous quel code, quand. */
+    private record Affectation(String nom, String code, java.time.LocalDate date) {
+        static final Affectation AUCUNE = new Affectation(null, null, null);
+    }
+
+    /**
+     * L'affectation d'une demande, si elle en a une.
+     *
+     * <p>Lecture tolérante : une demande non encore affectée est le cas normal
+     * au comptoir, pas une anomalie. Elle rend des nuls, que l'écran traduit en
+     * « pas encore affectée » plutôt qu'en erreur.</p>
+     */
+    private Affectation affectationDe(Report report) {
+        if (report.getTestOrder() == null) return Affectation.AUCUNE;
+        return assignmentDetailRepository.findByTestOrderId(report.getTestOrder().getId())
+                .map(com.labo.anapath.testorder.TestOrderAssignmentDetail::getTestOrderAssignment)
+                .filter(java.util.Objects::nonNull)
+                .map(a -> new Affectation(
+                        a.getUser() == null ? null
+                                : NomComplet.de(a.getUser().getLastname(),
+                                                a.getUser().getFirstname()),
+                        a.getCode(),
+                        a.getDate()))
+                .orElse(Affectation.AUCUNE);
     }
 
     @Override
