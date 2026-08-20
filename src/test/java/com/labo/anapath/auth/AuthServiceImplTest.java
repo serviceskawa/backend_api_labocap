@@ -76,6 +76,14 @@ class AuthServiceImplTest {
     @Mock
     private EmailService emailService;
 
+    /**
+     * La connexion consulte l'application d'authentification avant de se
+     * rabattre sur le code envoyé par courriel. Sans ce mock, le challenge
+     * échoue sur un service nul.
+     */
+    @Mock
+    private TwoFaService twoFaService;
+
     @InjectMocks
     private AuthServiceImpl authService;
 
@@ -119,7 +127,7 @@ class AuthServiceImplTest {
         when(jwtProperties.getExpirationMs()).thenReturn(86_400_000L);
         when(userMapper.toResponseDto(user)).thenReturn(
                 new UserResponseDto(USER_ID, "Admin", "Test", "admin@test.com", null, null, null, true,
-                        BRANCH_ID, LocalDateTime.now(), null, null, null, List.of()));
+                        BRANCH_ID, LocalDateTime.now(), null, null, null, List.of(), false));
 
         LoginRequest request = new LoginRequest();
         request.setEmail("admin@test.com");
@@ -228,7 +236,7 @@ class AuthServiceImplTest {
         when(jwtProperties.getExpirationMs()).thenReturn(86_400_000L);
         when(userMapper.toResponseDto(user)).thenReturn(
                 new UserResponseDto(USER_ID, "Admin", "Test", "admin@test.com", null, null, null, true,
-                        BRANCH_ID, LocalDateTime.now(), null, null, null, List.of()));
+                        BRANCH_ID, LocalDateTime.now(), null, null, null, List.of(), false));
 
         TwoFactorVerifyRequest request = new TwoFactorVerifyRequest();
         request.setTempToken("temp-token");
