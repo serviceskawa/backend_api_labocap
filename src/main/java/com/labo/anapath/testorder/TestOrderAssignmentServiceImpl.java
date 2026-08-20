@@ -34,6 +34,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
     private final BranchRepository branchRepository;
     private final TestPathologyMacroRepository macroRepository;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final SampleLabelRepository labelRepository;
 
     @Override
     @Transactional
@@ -84,6 +85,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
             detail.setTestOrderCode(order.getCode());
             detail.setNote(dto.getNote());
             detail.setLabels(encoderEtiquettes(dto.getLabels()));
+            enrichirLeCatalogue(assignment.getBranchId(), dto.getLabels());
             detailRepository.save(detail);
         } else {
             detail = detailRepository.findByTestOrderId(dto.getTestOrderId())
@@ -170,6 +172,37 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
                 userName, a.getDate(), a.getNote(),
                 a.getDetails().size(), detailCodes,
                 a.getBranchId(), a.getCreatedAt());
+    }
+
+    /**
+     * Fait entrer au catalogue les étiquettes qu'on vient d'employer.
+     *
+     * <p>Le vocabulaire du laboratoire se constitue ainsi par l'usage, plutôt
+     * que d'être décidé d'avance : chaque site marque ses contenants à sa
+     * façon, et une liste figée dans le code n'aurait convenu à personne.</p>
+     *
+     * <p>La casse est ignorée à la comparaison — « L1 » et « l1 » désignent le
+     * même contenant — mais la première graphie employée est celle qui reste,
+     * puisque c'est elle que le laboratoire écrit sur ses étiquettes.</p>
+     */
+    private void enrichirLeCatalogue(UUID branchId, List<String> etiquettes) {
+        if (branchId == null || etiquettes == null) return;
+        for (String brute : etiquettes) {
+            if (brute == null) continue;
+            String valeur = brute.trim();
+            if (valeur.isEmpty() || valeur.length() > 40) continue;
+            if (labelRepository.chercher(branchId, valeur).isPresent()) continue;
+            labelRepository.save(new SampleLabel(branchId, valeur));
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> etiquettesConnues(UUID branchId) {
+        return labelRepository.findByBranchIdOrderByValueAsc(branchId).stream()
+                .map(SampleLabel::getValue)
+                .toList();
     }
 
     /**

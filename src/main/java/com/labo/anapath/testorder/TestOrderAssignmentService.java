@@ -19,4 +19,12 @@ public interface TestOrderAssignmentService {
     AssignmentResponseDto update(UUID id, AssignmentRequestDto dto);
 
     void deleteDetail(UUID detailId);
+
+    /**
+     * Le vocabulaire d'étiquettes déjà employé par la branche.
+     *
+     * <p>Proposé à la saisie pour éviter qu'une même étiquette soit réécrite —
+     * ou réécrite autrement — d'une affectation à l'autre.</p>
+     */
+    java.util.List<String> etiquettesConnues(java.util.UUID branchId);
 }

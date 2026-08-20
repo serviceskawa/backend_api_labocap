@@ -28,6 +28,21 @@ public class TestOrderAssignmentController {
 
     private final TestOrderAssignmentService assignmentService;
 
+    /**
+     * Les étiquettes déjà employées par la branche, pour les reproposer.
+     *
+     * <p>Sous la permission de lecture des affectations : c'est le même écran
+     * qui s'en sert, et le vocabulaire de marquage n'a pas de sensibilité
+     * propre.</p>
+     */
+    @GetMapping("/labels")
+    @PreAuthorize("hasAuthority('view-test-order-assignments')")
+    public ResponseEntity<ApiResponse<java.util.List<String>>> etiquettes(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                assignmentService.etiquettesConnues(principal.getBranchId())));
+    }
+
     @GetMapping
     @PreAuthorize("hasAuthority('view-test-order-assignments')")
     public ResponseEntity<ApiResponse<PageResponse<AssignmentResponseDto>>> findAll(
