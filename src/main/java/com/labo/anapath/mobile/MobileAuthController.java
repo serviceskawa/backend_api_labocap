@@ -56,14 +56,27 @@ public class MobileAuthController {
         return ResponseEntity.ok(ApiResponse.success("Accès mobile fermé", null));
     }
 
-    /** État de l'accès d'un utilisateur : droit, PIN posé, appareils enrôlés. */
+    /**
+     * État de l'accès d'un utilisateur : droit, PIN posé, appareils enrôlés.
+     *
+     * <p>Le code d'enrôlement n'accompagne l'état que pour qui peut en créer un.
+     * Consulter la fiche relève de {@code view-users} ; en repartir avec de quoi
+     * enrôler un téléphone relève de {@code edit-users}, et confondre les deux
+     * élargirait l'accès mobile à tout lecteur d'annuaire.</p>
+     */
     @GetMapping("/access/{userId}")
     @PreAuthorize("hasAuthority('view-users')")
     public ResponseEntity<ApiResponse<EtatAccesResponse>> etatAcces(
             @PathVariable UUID userId,
             @AuthenticationPrincipal UserPrincipal principal) {
-        return ResponseEntity.ok(ApiResponse.success(
-                mobileAuthService.etatAcces(userId, principal.getBranchId())));
+        EtatAccesResponse etat = mobileAuthService.etatAcces(userId, principal.getBranchId());
+        boolean peutEnroler = principal.getAuthorities().stream()
+                .anyMatch(a -> "edit-users".equals(a.getAuthority()));
+        if (!peutEnroler) {
+            etat = new EtatAccesResponse(etat.userId(), etat.acces(), etat.pinDefini(),
+                    etat.appareils(), null, etat.codeCreeLe());
+        }
+        return ResponseEntity.ok(ApiResponse.success(etat));
     }
 
     /**

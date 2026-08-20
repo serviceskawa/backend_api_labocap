@@ -46,6 +46,19 @@ public class MobileEnrollmentCode {
     @Column(name = "expires_at")
     private LocalDateTime expiresAt;
 
+    /**
+     * Le code scellé, pour pouvoir remontrer le QR.
+     *
+     * <p>Chiffré (AES-256-GCM, clé applicative), jamais en clair : une copie de
+     * la base ne suffit pas à le lire. L'empreinte ci-dessus reste la référence
+     * qui valide un enrôlement ; cette colonne ne sert qu'à l'affichage.</p>
+     *
+     * <p>Nulle sans clé configurée, et pour les codes antérieurs : ils enrôlent
+     * encore, mais ne se réaffichent pas.</p>
+     */
+    @Column(name = "code_chiffre", length = 512)
+    private String codeChiffre;
+
     @Column(name = "revoked_at")
     private LocalDateTime revokedAt;
 

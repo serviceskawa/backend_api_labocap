@@ -138,7 +138,16 @@ public final class MobileDtos {
             UUID userId,
             boolean acces,
             boolean pinDefini,
-            List<DeviceResponse> appareils) {
+            List<DeviceResponse> appareils,
+            /**
+             * Le code d'enrôlement vivant, pour réafficher le QR.
+             *
+             * <p>Nul quand il n'y en a pas, quand aucune clé de chiffrement
+             * n'est configurée, ou pour un code délivré avant que la base ne le
+             * conserve : il enrôle encore, mais ne se réaffiche pas.</p>
+             */
+            String codeEnrolement,
+            LocalDateTime codeCreeLe) {
     }
 
     /** Création d'un code d'enrôlement par un administrateur. */

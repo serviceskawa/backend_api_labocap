@@ -65,6 +65,7 @@ public class MobileAuthServiceImpl implements MobileAuthService {
     private final CustomUserDetailsService userDetailsService;
     private final com.labo.anapath.auth.AuthService authService;
     private final com.labo.anapath.role.PermissionRepository permissionRepository;
+    private final com.labo.anapath.common.security.ChiffreurDeSecrets chiffreur;
 
     @Override
     @Transactional
@@ -97,8 +98,13 @@ public class MobileAuthServiceImpl implements MobileAuthService {
 
         revoquerLesCodesVivants(user.getId(), auteurId);
         String code = genererCode();
-        codeRepository.save(new MobileEnrollmentCode(
-                user.getId(), passwordEncoder.encode(code), null, auteurId));
+        MobileEnrollmentCode ligne = new MobileEnrollmentCode(
+                user.getId(), passwordEncoder.encode(code), null, auteurId);
+        // Scellé à côté de l'empreinte : celle-ci valide l'enrôlement, celui-là
+        // permet de remontrer le QR. Nul si aucune clé n'est configurée — on
+        // retombe alors sur le comportement d'avant, code affiché une fois.
+        ligne.setCodeChiffre(chiffreur.chiffrer(code));
+        codeRepository.save(ligne);
 
         log.info("Accès mobile ouvert pour userId={} par userId={}", userId, auteurId);
         // Seul instant où ces deux secrets existent en clair.
@@ -169,11 +175,19 @@ public class MobileAuthServiceImpl implements MobileAuthService {
         User user = userRepository.findByIdAndBranchId(userId, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", userId));
 
+        MobileEnrollmentCode vivant = codeRepository
+                .findByUserIdOrderByCreatedAtDesc(userId).stream()
+                .filter(MobileEnrollmentCode::estUtilisable)
+                .findFirst()
+                .orElse(null);
+
         return new EtatAccesResponse(
                 userId,
                 aLaPermissionMobile(userId),
                 user.getPinHash() != null,
-                DeviceResponse.de(deviceRepository.findByUserIdOrderByEnrolledAtDesc(userId)));
+                DeviceResponse.de(deviceRepository.findByUserIdOrderByEnrolledAtDesc(userId)),
+                vivant == null ? null : chiffreur.dechiffrer(vivant.getCodeChiffre()),
+                vivant == null ? null : vivant.getCreatedAt());
     }
 
     @Override
@@ -201,8 +215,13 @@ public class MobileAuthServiceImpl implements MobileAuthService {
         // Sans échéance : la validité tient désormais à la révocation. Un délai
         // de quelques heures obligeait à régénérer pour un agent qui installait
         // son téléphone le lendemain.
-        codeRepository.save(new MobileEnrollmentCode(
-                user.getId(), passwordEncoder.encode(code), null, auteurId));
+        MobileEnrollmentCode ligne = new MobileEnrollmentCode(
+                user.getId(), passwordEncoder.encode(code), null, auteurId);
+        // Scellé à côté de l'empreinte : celle-ci valide l'enrôlement, celui-là
+        // permet de remontrer le QR. Nul si aucune clé n'est configurée — on
+        // retombe alors sur le comportement d'avant, code affiché une fois.
+        ligne.setCodeChiffre(chiffreur.chiffrer(code));
+        codeRepository.save(ligne);
 
         log.info("Code d'enrôlement mobile créé pour userId={} par userId={}", user.getId(), auteurId);
         // Seul instant où le code existe en clair — la base n'en garde que l'empreinte.
