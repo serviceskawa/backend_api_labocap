@@ -29,6 +29,59 @@ public class TestOrderAssignmentController {
     private final TestOrderAssignmentService assignmentService;
 
     /**
+     * Verse une étiquette au catalogue, indépendamment de toute affectation.
+     *
+     * <p>Sous la permission d'écriture : enrichir le vocabulaire d'un
+     * laboratoire est un acte de composition, pas de lecture.</p>
+     */
+    @PostMapping("/labels")
+    @PreAuthorize("hasAuthority('manage-test-order-assignments')")
+    public ResponseEntity<ApiResponse<java.util.List<String>>> ajouterEtiquette(
+            @RequestBody java.util.Map<String, String> corps,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                assignmentService.ajouterAuCatalogue(
+                        principal.getBranchId(), corps.get("value"))));
+    }
+
+    /**
+     * Le catalogue tel qu'on l'administre : identifiants et usages compris.
+     *
+     * <p>Distinct de {@code /labels}, qui ne sert que des chaînes aux
+     * sélecteurs. Sous la permission d'écriture : cet écran n'existe que pour
+     * modifier.</p>
+     */
+    @GetMapping("/labels/catalogue")
+    @PreAuthorize("hasAuthority('manage-test-order-assignments')")
+    public ResponseEntity<ApiResponse<java.util.List<EtiquetteDto>>> catalogue(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                assignmentService.catalogue(principal.getBranchId())));
+    }
+
+    /** Corrige le texte d'une étiquette, sans toucher aux affectations. */
+    @PutMapping("/labels/{id}")
+    @PreAuthorize("hasAuthority('manage-test-order-assignments')")
+    public ResponseEntity<ApiResponse<EtiquetteDto>> renommerEtiquette(
+            @PathVariable UUID id,
+            @RequestBody java.util.Map<String, String> corps,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                assignmentService.renommer(
+                        principal.getBranchId(), id, corps.get("value"))));
+    }
+
+    /** Retire une étiquette des propositions, sans effacer aucune trace. */
+    @DeleteMapping("/labels/{id}")
+    @PreAuthorize("hasAuthority('manage-test-order-assignments')")
+    public ResponseEntity<ApiResponse<Void>> retirerEtiquette(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        assignmentService.retirer(principal.getBranchId(), id);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    /**
      * Les étiquettes déjà employées par la branche, pour les reproposer.
      *
      * <p>Sous la permission de lecture des affectations : c'est le même écran
