@@ -216,8 +216,66 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
     /** {@inheritDoc} */
     @Override
     @Transactional(readOnly = true)
+    public List<EtiquetteDto> catalogue(UUID branchId) {
+        return labelRepository
+                .findByBranchIdAndDeletedAtIsNullOrderByValueAsc(branchId).stream()
+                .map(e -> new EtiquetteDto(e.getId(), e.getValue(),
+                        labelRepository.compterUsages(branchId, e.getValue())))
+                .toList();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional
+    public EtiquetteDto renommer(UUID branchId, UUID id, String valeur) {
+        String propre = valeur == null ? "" : valeur.trim();
+        if (propre.isEmpty() || propre.length() > 40) {
+            throw new com.labo.anapath.common.exception.BusinessException(
+                    "Une étiquette tient en 1 à 40 caractères.");
+        }
+        SampleLabel etiquette = etiquetteDeLaBranche(branchId, id);
+        labelRepository.chercher(branchId, propre)
+                .filter(autre -> !autre.getId().equals(id))
+                .ifPresent(autre -> {
+                    throw new com.labo.anapath.common.exception.BusinessException(
+                            "« " + propre + " » existe déjà dans le catalogue.");
+                });
+        etiquette.setValue(propre);
+        labelRepository.save(etiquette);
+        return new EtiquetteDto(etiquette.getId(), propre,
+                labelRepository.compterUsages(branchId, propre));
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional
+    public void retirer(UUID branchId, UUID id) {
+        SampleLabel etiquette = etiquetteDeLaBranche(branchId, id);
+        etiquette.setDeletedAt(java.time.LocalDateTime.now());
+        labelRepository.save(etiquette);
+    }
+
+    /**
+     * L'étiquette, à condition qu'elle appartienne à la branche qui la demande.
+     *
+     * <p>Sans cette vérification, un identifiant deviné suffirait à renommer le
+     * vocabulaire d'un autre site : la permission autorise à administrer son
+     * catalogue, pas celui du voisin.</p>
+     */
+    private SampleLabel etiquetteDeLaBranche(UUID branchId, UUID id) {
+        return labelRepository.findById(id)
+                .filter(e -> e.getDeletedAt() == null)
+                .filter(e -> e.getBranchId() != null
+                        && e.getBranchId().equals(branchId))
+                .orElseThrow(() -> new ResourceNotFoundException("SampleLabel", id));
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional(readOnly = true)
     public List<String> etiquettesConnues(UUID branchId) {
-        return labelRepository.findByBranchIdOrderByValueAsc(branchId).stream()
+        return labelRepository
+                .findByBranchIdAndDeletedAtIsNullOrderByValueAsc(branchId).stream()
                 .map(SampleLabel::getValue)
                 .toList();
     }

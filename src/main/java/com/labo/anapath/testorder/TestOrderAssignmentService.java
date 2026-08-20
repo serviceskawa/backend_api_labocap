@@ -40,4 +40,19 @@ public interface TestOrderAssignmentService {
      * @return le catalogue complet, étiquette comprise
      */
     java.util.List<String> ajouterAuCatalogue(java.util.UUID branchId, String valeur);
+
+    /** Le catalogue tel qu'on l'administre : identifiants et usages compris. */
+    java.util.List<EtiquetteDto> catalogue(java.util.UUID branchId);
+
+    /**
+     * Corrige le texte d'une étiquette.
+     *
+     * <p>Ne touche pas aux affectations déjà enregistrées : celles-ci
+     * consignent ce qui a été porté sur le contenant ce jour-là. Réécrire
+     * après coup falsifierait une trace.</p>
+     */
+    EtiquetteDto renommer(java.util.UUID branchId, java.util.UUID id, String valeur);
+
+    /** Retire une étiquette des propositions, sans effacer aucune trace. */
+    void retirer(java.util.UUID branchId, java.util.UUID id);
 }
