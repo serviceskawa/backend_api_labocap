@@ -59,6 +59,17 @@ public record ReportDetailDto(
         List<String> tagNames,
         List<UUID> tagIds,
         List<LogReportDto> logs,
+        /**
+         * À qui la demande a été affectée, et quand — nuls tant qu'elle ne l'a
+         * pas été.
+         *
+         * <p>Ce jalon manquait au suivi : entre l'enregistrement et le retrait,
+         * rien ne disait chez qui la demande était partie. C'est pourtant la
+         * question qu'on pose quand un dossier tarde.</p>
+         */
+        String assignedToName,
+        String assignmentCode,
+        java.time.LocalDate assignmentDate,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {

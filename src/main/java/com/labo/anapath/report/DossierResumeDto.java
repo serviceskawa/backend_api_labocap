@@ -38,6 +38,10 @@ public record DossierResumeDto(
         String retrieverRelation,
         String retrieverSignature,
         LocalDateTime demandeCreatedAt,
-        LocalDateTime deliveryDate
+        LocalDateTime deliveryDate,
+        /** À qui la demande a été affectée, et quand. Nuls avant l'affectation. */
+        String assignedToName,
+        String assignmentCode,
+        java.time.LocalDate assignmentDate
 ) {
 }
