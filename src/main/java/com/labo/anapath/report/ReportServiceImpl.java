@@ -1,5 +1,7 @@
 package com.labo.anapath.report;
 
+import com.labo.anapath.common.NomComplet;
+
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.email.EmailService;
 import com.labo.anapath.common.email.NotificationSettings;
@@ -124,14 +126,14 @@ public class ReportServiceImpl implements ReportService {
                 .map(l -> new ReportDetailDto.LogReportDto(
                         l.getAction(),
                         l.getDescription(),
-                        l.getUser() != null ? l.getUser().getFirstname() + " " + l.getUser().getLastname() : null,
+                        l.getUser() != null ? NomComplet.de(l.getUser().getLastname(), l.getUser().getFirstname()) : null,
                         l.getCreatedAt()))
                 .toList();
 
         String patientName = null;
         if (report.getTestOrder() != null && report.getTestOrder().getPatient() != null) {
             var p = report.getTestOrder().getPatient();
-            patientName = p.getFirstname() + " " + p.getLastname();
+            patientName = NomComplet.de(p.getLastname(), p.getFirstname());
         }
 
         return new ReportDetailDto(
@@ -153,13 +155,13 @@ public class ReportServiceImpl implements ReportService {
                 report.getTestOrder() != null ? report.getTestOrder().getCreatedAt() : null,
                 report.getSignatureDate(), report.getDeliveryDate(), report.getCallDate(),
                 report.getSignatory1() != null ? report.getSignatory1().getId() : null,
-                report.getSignatory1() != null ? report.getSignatory1().getFirstname() + " " + report.getSignatory1().getLastname() : null,
+                report.getSignatory1() != null ? NomComplet.de(report.getSignatory1().getLastname(), report.getSignatory1().getFirstname()) : null,
                 report.getSignatory2() != null ? report.getSignatory2().getId() : null,
-                report.getSignatory2() != null ? report.getSignatory2().getFirstname() + " " + report.getSignatory2().getLastname() : null,
+                report.getSignatory2() != null ? NomComplet.de(report.getSignatory2().getLastname(), report.getSignatory2().getFirstname()) : null,
                 report.getSignatory3() != null ? report.getSignatory3().getId() : null,
-                report.getSignatory3() != null ? report.getSignatory3().getFirstname() + " " + report.getSignatory3().getLastname() : null,
+                report.getSignatory3() != null ? NomComplet.de(report.getSignatory3().getLastname(), report.getSignatory3().getFirstname()) : null,
                 report.getReviewedBy() != null ? report.getReviewedBy().getId() : null,
-                report.getReviewedBy() != null ? report.getReviewedBy().getFirstname() + " " + report.getReviewedBy().getLastname() : null,
+                report.getReviewedBy() != null ? NomComplet.de(report.getReviewedBy().getLastname(), report.getReviewedBy().getFirstname()) : null,
                 report.getTags().stream().map(Tag::getName).toList(),
                 report.getTags().stream().map(Tag::getId).toList(),
                 logDtos,
@@ -298,7 +300,7 @@ public class ReportServiceImpl implements ReportService {
                             l.getDescription(),
                             l.getCreatedAt(),
                             user != null
-                                    ? (user.getFirstname() + " " + user.getLastname()).trim()
+                                    ? NomComplet.de(user.getLastname(), user.getFirstname())
                                     : null,
                             report != null ? report.getId() : null,
                             report != null ? report.getCode() : null,
@@ -387,7 +389,7 @@ public class ReportServiceImpl implements ReportService {
         if (reviewer.getEmail() == null || reviewer.getEmail().isBlank()) {
             return;
         }
-        String reviewerName = (reviewer.getFirstname() + " " + reviewer.getLastname()).trim();
+        String reviewerName = NomComplet.de(reviewer.getLastname(), reviewer.getFirstname());
         String reportTitle = report.getTitleReport() != null
                 ? report.getTitleReport().getName()
                 : report.getCode();
@@ -540,8 +542,7 @@ public class ReportServiceImpl implements ReportService {
                 .map(trace -> new ModificationApresSignatureDto(
                         trace.getUser() != null ? trace.getUser().getId() : null,
                         trace.getUser() != null
-                                ? (trace.getUser().getFirstname() + " "
-                                    + trace.getUser().getLastname()).trim()
+                                ? NomComplet.de(trace.getUser().getLastname(), trace.getUser().getFirstname())
                                 : "Utilisateur supprimé",
                         trace.getCreatedAt(),
                         champsDepuisDescription(trace.getDescription())))
@@ -583,7 +584,7 @@ public class ReportServiceImpl implements ReportService {
     private void tracerModificationApresSignature(Report report, List<String> champs, UUID userId) {
         User auteur = userRepository.findById(userId).orElse(null);
         String nomAuteur = auteur != null
-                ? (auteur.getFirstname() + " " + auteur.getLastname()).trim()
+                ? NomComplet.de(auteur.getLastname(), auteur.getFirstname())
                 : "Utilisateur inconnu";
         String listeChamps = String.join(", ", champs);
 
@@ -603,8 +604,7 @@ public class ReportServiceImpl implements ReportService {
             String nomLabo = notificationSettings.labName(report.getBranchId());
             String codeDemande = report.getTestOrder() != null ? report.getTestOrder().getCode() : "";
             String signataire = report.getSignatory1() != null
-                    ? (report.getSignatory1().getFirstname() + " "
-                        + report.getSignatory1().getLastname()).trim()
+                    ? NomComplet.de(report.getSignatory1().getLastname(), report.getSignatory1().getFirstname())
                     : "";
             for (String destinataire : notificationSettings.adminEmails(report.getBranchId())) {
                 emailService.sendPostSignatureChangeAlert(destinataire, report.getCode(),

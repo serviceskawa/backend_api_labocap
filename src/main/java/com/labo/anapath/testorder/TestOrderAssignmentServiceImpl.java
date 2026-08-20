@@ -1,5 +1,7 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.common.NomComplet;
+
 import com.labo.anapath.branch.Branch;
 import com.labo.anapath.branch.BranchRepository;
 import com.labo.anapath.common.dto.PageResponse;
@@ -156,7 +158,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
 
     private AssignmentResponseDto toDto(TestOrderAssignment a) {
         String userName = a.getUser() != null
-                ? a.getUser().getFirstname() + " " + a.getUser().getLastname()
+                ? NomComplet.de(a.getUser().getLastname(), a.getUser().getFirstname())
                 : null;
         java.util.List<String> detailCodes = a.getDetails().stream()
                 .map(TestOrderAssignmentDetail::getTestOrderCode)

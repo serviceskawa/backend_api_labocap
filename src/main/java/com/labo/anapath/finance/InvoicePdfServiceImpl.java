@@ -1,5 +1,7 @@
 package com.labo.anapath.finance;
 
+import com.labo.anapath.common.NomComplet;
+
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
@@ -113,7 +115,7 @@ public class InvoicePdfServiceImpl implements InvoicePdfService {
         // Client (dénormalisé sur la facture, repli sur le patient).
         String clientName = invoice.getClientName();
         if ((clientName == null || clientName.isBlank()) && invoice.getPatient() != null) {
-            clientName = (invoice.getPatient().getFirstname() + " " + invoice.getPatient().getLastname()).trim();
+            clientName = NomComplet.de(invoice.getPatient().getLastname(), invoice.getPatient().getFirstname());
         }
         ctx.setVariable("clientName", clientName != null ? clientName : "");
         // Adresse dénormalisée de la facture (la facture imprimée affiche `client_address`).
@@ -151,7 +153,7 @@ public class InvoicePdfServiceImpl implements InvoicePdfService {
         if (invoice.getCreatedBy() != null) {
             var creator = userRepository.findById(invoice.getCreatedBy()).orElse(null);
             if (creator != null) {
-                operatorName = (creator.getFirstname() + " " + creator.getLastname()).trim();
+                operatorName = NomComplet.de(creator.getLastname(), creator.getFirstname());
                 String sig = creator.getSignature();
                 if (sig != null && !sig.isBlank()) {
                     // La reprise a conservé des NOMS de fichiers, pas des base64 :

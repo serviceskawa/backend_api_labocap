@@ -1,5 +1,7 @@
 package com.labo.anapath.doc;
 
+import com.labo.anapath.common.NomComplet;
+
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.email.EmailService;
 import com.labo.anapath.common.email.NotificationSettings;
@@ -154,13 +156,13 @@ public class DocServiceImpl implements DocService {
         // Notifie par email tous les utilisateurs du rôle (réplique Laravel ShareDocEvent).
         String labName = notificationSettings.labName(branchId);
         String sharerName = doc.getUser() != null
-                ? (doc.getUser().getFirstname() + " " + doc.getUser().getLastname()).trim()
+                ? NomComplet.de(doc.getUser().getLastname(), doc.getUser().getFirstname())
                 : "";
         for (User user : role.getUsers()) {
             if (user.getEmail() == null || user.getEmail().isBlank()) {
                 continue;
             }
-            String recipientName = (user.getFirstname() + " " + user.getLastname()).trim();
+            String recipientName = NomComplet.de(user.getLastname(), user.getFirstname());
             emailService.sendShareDoc(user.getEmail(), recipientName, sharerName, doc.getTitle(), labName);
         }
         return docMapper.toResponseDto(doc);

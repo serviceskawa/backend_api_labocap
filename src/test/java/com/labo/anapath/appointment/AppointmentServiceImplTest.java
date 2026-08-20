@@ -97,8 +97,9 @@ class AppointmentServiceImplTest {
         List<AppointmentCalendarDto> result = service.getCalendar(BRANCH_ID);
 
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).title()).isEqualTo("RDV Marie CURIE");
-        assertThat(result.get(0).doctorName()).isEqualTo("Marie CURIE");
+        assertThat(result.get(0).title()).isEqualTo("RDV CURIE Marie");
+        // Nom puis prénoms, comme partout ailleurs depuis NomComplet.
+        assertThat(result.get(0).doctorName()).isEqualTo("CURIE Marie");
     }
 
     @Test

@@ -1,5 +1,7 @@
 package com.labo.anapath.role;
 
+import com.labo.anapath.common.NomComplet;
+
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.BusinessException;
 import com.labo.anapath.common.exception.DuplicateResourceException;
@@ -187,7 +189,7 @@ public class RoleServiceImpl implements RoleService {
             return null;
         }
         return userRepository.findById(createdBy)
-                .map(u -> (u.getFirstname() + " " + u.getLastname()).trim())
+                .map(u -> NomComplet.de(u.getLastname(), u.getFirstname()))
                 .orElse(null);
     }
 }

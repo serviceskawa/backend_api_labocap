@@ -18,8 +18,9 @@ import java.util.UUID;
 public record SignataireDto(UUID id, String nom, boolean actif) {
 
     static SignataireDto de(User u) {
-        String nom = ((u.getLastname() == null ? "" : u.getLastname()) + " "
-                + (u.getFirstname() == null ? "" : u.getFirstname())).trim();
-        return new SignataireDto(u.getId(), nom, u.isActive());
+        return new SignataireDto(
+                u.getId(),
+                com.labo.anapath.common.NomComplet.de(u.getLastname(), u.getFirstname()),
+                u.isActive());
     }
 }

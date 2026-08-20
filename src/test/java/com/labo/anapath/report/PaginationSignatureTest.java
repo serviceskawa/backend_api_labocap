@@ -143,8 +143,8 @@ class PaginationSignatureTest {
         ctx.setVariable("createdAt", "02/08/2026");
         ctx.setVariable("currentDate", "05/08/2026");
         ctx.setVariable("testAffiliate", "Histologie");
-        ctx.setVariable("patientFirstname", "Mesure");
-        ctx.setVariable("patientLastname", "Essai");
+        ctx.setVariable("patientFirstname", "PRENOMSDUPATIENT");
+        ctx.setVariable("patientLastname", "NOMDUPATIENT");
         ctx.setVariable("patientAge", "40");
         ctx.setVariable("patientAgeUnit", "ans");
         ctx.setVariable("patientGenre", "F");
@@ -399,5 +399,41 @@ class PaginationSignatureTest {
                     html.contains("width") ? "avec width" : "sans width",
                     pdf.length, brut.split("/Image", -1).length - 1);
         }
+    }
+
+    @Test
+    @DisplayName("Le nom et les prénoms sont sous les bons libellés")
+    void identiteSousLesBonsLibelles() throws Exception {
+        List<Trace> lues = traces(rendre(5));
+
+        // Les quatre cellules du tableau d'identité sont sur deux lignes ; on
+        // apparie chaque libellé à la valeur qui lui succède sur la sienne.
+        Trace libelleNom = lues.stream()
+                .filter(t -> t.texte().startsWith("Nom")).findFirst().orElseThrow();
+        Trace libellePrenoms = lues.stream()
+                .filter(t -> t.texte().startsWith("Prénoms")).findFirst().orElseThrow();
+
+        String surLigneDuNom = valeurSurLaLigne(lues, libelleNom.y());
+        String surLigneDesPrenoms = valeurSurLaLigne(lues, libellePrenoms.y());
+
+        // C'est le défaut signalé par le laboratoire : « Nom » portait le
+        // prénom, et « Prénoms » le nom. Les formulaires de saisie, eux,
+        // étiquettent `lastname` comme nom depuis toujours.
+        assertThat(surLigneDuNom)
+                .describedAs("la valeur écrite en face de « Nom : »")
+                .isEqualTo("NOMDUPATIENT");
+        assertThat(surLigneDesPrenoms)
+                .describedAs("la valeur écrite en face de « Prénoms : »")
+                .isEqualTo("PRENOMSDUPATIENT");
+    }
+
+    /** La valeur d'identité tracée sur la même ligne qu'un libellé donné. */
+    private String valeurSurLaLigne(List<Trace> lues, double y) {
+        return lues.stream()
+                .filter(t -> Math.abs(t.y() - y) < 2)
+                .map(Trace::texte)
+                .filter(t -> t.equals("NOMDUPATIENT") || t.equals("PRENOMSDUPATIENT"))
+                .findFirst()
+                .orElse("(rien)");
     }
 }
