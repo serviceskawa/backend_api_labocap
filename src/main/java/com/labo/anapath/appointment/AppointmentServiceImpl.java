@@ -1,5 +1,7 @@
 package com.labo.anapath.appointment;
 
+import com.labo.anapath.common.NomComplet;
+
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.consultation.Consultation;
 import com.labo.anapath.consultation.ConsultationMapper;
@@ -32,7 +34,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         return appointmentRepository.findByBranchId(branchId).stream()
                 .map(a -> {
                     String doctorName = a.getDoctorInterne() != null
-                            ? a.getDoctorInterne().getFirstname() + " " + a.getDoctorInterne().getLastname()
+                            ? NomComplet.de(a.getDoctorInterne().getLastname(), a.getDoctorInterne().getFirstname())
                             : "";
                     String title = a.getDoctorInterne() != null ? "RDV " + doctorName : "";
                     String className = toClassName(a.getPriority());

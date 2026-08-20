@@ -1,5 +1,7 @@
 package com.labo.anapath.mobile;
 
+import com.labo.anapath.common.NomComplet;
+
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.common.exception.UnauthorizedException;
 import com.labo.anapath.common.security.CustomUserDetailsService;
@@ -105,7 +107,7 @@ public class MobileAuthServiceImpl implements MobileAuthService {
         // Seul instant où ces deux secrets existent en clair.
         return new AccesMobileResponse(
                 user.getId(),
-                user.getFirstname() + " " + user.getLastname(),
+                NomComplet.de(user.getLastname(), user.getFirstname()),
                 code, expiration, pin);
     }
 
@@ -253,7 +255,7 @@ public class MobileAuthServiceImpl implements MobileAuthService {
                 jwtTokenProvider.generateRefreshToken(user.getId()),
                 jwtProperties.getExpirationMs() / 1000,
                 user.getId(),
-                user.getFirstname() + " " + user.getLastname(),
+                NomComplet.de(user.getLastname(), user.getFirstname()),
                 user.getBranchId(),
                 permissions);
     }
@@ -305,7 +307,7 @@ public class MobileAuthServiceImpl implements MobileAuthService {
                 reponse.refreshToken(),
                 jwtProperties.getExpirationMs() / 1000,
                 userId,
-                user.getFirstname() + " " + user.getLastname(),
+                NomComplet.de(user.getLastname(), user.getFirstname()),
                 user.getBranchId(),
                 principal.getAuthorities().stream().map(a -> a.getAuthority()).toList());
     }

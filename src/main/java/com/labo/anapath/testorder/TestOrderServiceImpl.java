@@ -1,5 +1,7 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.common.NomComplet;
+
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.BusinessException;
 import com.labo.anapath.common.exception.DuplicateResourceException;
@@ -567,7 +569,7 @@ public class TestOrderServiceImpl implements TestOrderService {
             invoice.setPatient(order.getPatient());
             invoice.setContrat(order.getContrat());
             invoice.setClientName(
-                    order.getPatient().getFirstname() + " " + order.getPatient().getLastname());
+                    NomComplet.de(order.getPatient().getLastname(), order.getPatient().getFirstname()));
             invoice.setClientAddress(order.getPatient().getAdresse());
             invoice.setSubtotal(order.getSubtotal());
             invoice.setDiscount(order.getDiscount());
@@ -579,7 +581,7 @@ public class TestOrderServiceImpl implements TestOrderService {
             // Laravel réécrit aussi l'identité du patient sur la facture existante.
             invoice.setPatient(order.getPatient());
             invoice.setClientName(
-                    order.getPatient().getFirstname() + " " + order.getPatient().getLastname());
+                    NomComplet.de(order.getPatient().getLastname(), order.getPatient().getFirstname()));
             invoice.setClientAddress(order.getPatient().getAdresse());
             invoice.setSubtotal(order.getSubtotal());
             invoice.setDiscount(order.getDiscount());

@@ -1,5 +1,7 @@
 package com.labo.anapath.support;
 
+import com.labo.anapath.common.NomComplet;
+
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.email.EmailService;
 import com.labo.anapath.common.email.NotificationSettings;
@@ -89,7 +91,7 @@ public class TicketServiceImpl implements TicketService {
         if (ticketNotifyEmail == null || ticketNotifyEmail.isBlank()) {
             return;
         }
-        String createdByName = (author.getFirstname() + " " + author.getLastname()).trim();
+        String createdByName = NomComplet.de(author.getLastname(), author.getFirstname());
         String labName = notificationSettings.labName(branchId);
         emailService.sendNewTicketAlert(ticketNotifyEmail, ticket.getTicketCode(), createdByName, labName);
     }
