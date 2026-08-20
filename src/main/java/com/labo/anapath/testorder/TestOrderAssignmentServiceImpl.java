@@ -90,6 +90,15 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
         } else {
             detail = detailRepository.findByTestOrderId(dto.getTestOrderId())
                     .orElseGet(TestOrderAssignmentDetail::new);
+            // Une demande déjà affectée voyait ses étiquettes ignorées : ni
+            // enregistrées sur la ligne, ni versées au catalogue. Or c'est
+            // précisément en la réaffectant qu'on précise quels prélèvements
+            // partent cette fois-ci.
+            if (dto.getLabels() != null && !dto.getLabels().isEmpty()) {
+                detail.setLabels(encoderEtiquettes(dto.getLabels()));
+                enrichirLeCatalogue(detail.getBranchId(), dto.getLabels());
+                detailRepository.save(detail);
+            }
         }
 
         Optional<TestPathologyMacro> existingMacro = macroRepository.findByTestOrderId(order.getId());
@@ -194,6 +203,14 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
             if (labelRepository.chercher(branchId, valeur).isPresent()) continue;
             labelRepository.save(new SampleLabel(branchId, valeur));
         }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional
+    public List<String> ajouterAuCatalogue(UUID branchId, String valeur) {
+        enrichirLeCatalogue(branchId, List.of(valeur == null ? "" : valeur));
+        return etiquettesConnues(branchId);
     }
 
     /** {@inheritDoc} */

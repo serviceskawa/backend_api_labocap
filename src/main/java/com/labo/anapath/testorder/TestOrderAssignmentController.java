@@ -35,6 +35,22 @@ public class TestOrderAssignmentController {
      * qui s'en sert, et le vocabulaire de marquage n'a pas de sensibilité
      * propre.</p>
      */
+    /**
+     * Verse une étiquette au catalogue, indépendamment de toute affectation.
+     *
+     * <p>Sous la permission d'écriture : enrichir le vocabulaire d'un
+     * laboratoire est un acte de composition, pas de lecture.</p>
+     */
+    @PostMapping("/labels")
+    @PreAuthorize("hasAuthority('manage-test-order-assignments')")
+    public ResponseEntity<ApiResponse<java.util.List<String>>> ajouterEtiquette(
+            @RequestBody java.util.Map<String, String> corps,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                assignmentService.ajouterAuCatalogue(
+                        principal.getBranchId(), corps.get("value"))));
+    }
+
     @GetMapping("/labels")
     @PreAuthorize("hasAuthority('view-test-order-assignments')")
     public ResponseEntity<ApiResponse<java.util.List<String>>> etiquettes(
