@@ -74,7 +74,24 @@ public final class MobileDtos {
              * l'agent travaillant toujours depuis le même site.
              */
             UUID branchId,
-            List<String> permissions) {
+            List<String> permissions,
+            /**
+             * Rôles de la personne, par leur slug — « laborantin »,
+             * « secretariat », « docteur »…
+             *
+             * <p>Les parcours de l'application sont spécifiés par métier, non par
+             * permission : « le flux du secrétariat », « le flux des
+             * laborantins ». Déduire le métier d'un ensemble de droits revenait
+             * à traduire la spécification dans une autre langue, et à faire
+             * dépendre l'affichage d'une distribution de permissions qui peut
+             * varier d'un laboratoire à l'autre — un technicien se retrouvait
+             * alors devant un accueil vide.</p>
+             *
+             * <p>Cela ne déplace aucune autorisation : le serveur continue de
+             * vérifier chaque appel contre les permissions. Le rôle dit ce qu'on
+             * montre ; la permission décide de ce qu'on peut faire.</p>
+             */
+            List<String> roles) {
     }
 
     /**
