@@ -257,7 +257,8 @@ public class MobileAuthServiceImpl implements MobileAuthService {
                 user.getId(),
                 NomComplet.de(user.getLastname(), user.getFirstname()),
                 user.getBranchId(),
-                permissions);
+                permissions,
+                rolesDe(user));
     }
 
     /**
@@ -309,7 +310,8 @@ public class MobileAuthServiceImpl implements MobileAuthService {
                 userId,
                 NomComplet.de(user.getLastname(), user.getFirstname()),
                 user.getBranchId(),
-                principal.getAuthorities().stream().map(a -> a.getAuthority()).toList());
+                principal.getAuthorities().stream().map(a -> a.getAuthority()).toList(),
+                rolesDe(user));
     }
 
     @Override
@@ -376,6 +378,20 @@ public class MobileAuthServiceImpl implements MobileAuthService {
      * d'un coup à quelques comptes les centaines de permissions directes déjà
      * enregistrées. Ce redressement-là mérite sa propre décision.</p>
      */
+    /**
+     * Les slugs des rôles d'une personne.
+     *
+     * <p>L'application choisit ses parcours d'après le métier, comme les
+     * spécifications les décrivent. Les autorisations, elles, restent
+     * gouvernées par les permissions et vérifiées à chaque appel.</p>
+     */
+    private List<String> rolesDe(User user) {
+        return user.getRoles().stream()
+                .map(r -> r.getSlug())
+                .filter(java.util.Objects::nonNull)
+                .toList();
+    }
+
     private boolean aLaPermissionMobile(UUID userId) {
         User user = userRepository.findById(userId).orElse(null);
         if (user == null) {
