@@ -22,6 +22,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -62,21 +63,22 @@ class TestOrderAssignmentServiceImplTest {
         TestOrderAssignment a = new TestOrderAssignment();
         a.setBranchId(BRANCH_ID);
         a.setUser(buildUser());
-        a.setCode("ASS26-0001");
+        a.setCode("AF26-0001");
         a.setDate(LocalDate.now());
         a.setDetails(new ArrayList<>());
         return a;
     }
 
     @Test
-    @DisplayName("create - génère code ASS format et persiste")
+    @DisplayName("create - génère un code AF de l'année et persiste")
     void createAssignment_generatesUniqueCode() {
         AssignmentRequestDto dto = new AssignmentRequestDto();
         dto.setUserId(USER_ID);
         dto.setDate(LocalDate.now());
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(buildUser()));
-        when(assignmentRepository.countByBranchId(BRANCH_ID)).thenReturn(0L);
+        when(assignmentRepository.findMaxSequenceForYear(eq(BRANCH_ID), any()))
+                .thenReturn(3);
         when(assignmentRepository.save(any())).thenAnswer(inv -> {
             TestOrderAssignment a = inv.getArgument(0);
             a.setDetails(new ArrayList<>());
@@ -88,7 +90,10 @@ class TestOrderAssignmentServiceImplTest {
         ArgumentCaptor<TestOrderAssignment> captor = ArgumentCaptor.forClass(TestOrderAssignment.class);
         verify(assignmentRepository).save(captor.capture());
 
-        assertThat(captor.getValue().getCode()).matches("ASS\\d{2}-\\d{4}");
+        // AF, comme les 250 affectations du laboratoire — et la séquence
+        // reprend après la dernière de l'année, pas après le total historique.
+        String annee = String.valueOf(java.time.LocalDate.now().getYear() % 100);
+        assertThat(captor.getValue().getCode()).isEqualTo("AF" + annee + "-0004");
         assertThat(result).isNotNull();
     }
 
@@ -170,5 +175,35 @@ class TestOrderAssignmentServiceImplTest {
         service.findAllImmuno(0, 20, BRANCH_ID);
 
         verify(assignmentRepository).findImmuno(any(), any());
+    }
+
+    @Test
+    @DisplayName("create - saute un numéro déjà attribué plutôt que de le rejouer")
+    void create_sauteUnCodeDejaPris() {
+        AssignmentRequestDto dto = new AssignmentRequestDto();
+        dto.setUserId(USER_ID);
+
+        String annee = String.valueOf(LocalDate.now().getYear() % 100);
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(buildUser()));
+        when(assignmentRepository.findMaxSequenceForYear(eq(BRANCH_ID), any()))
+                .thenReturn(7);
+        // Le 0008 a existé puis été supprimé : son numéro figure sur un
+        // bordereau, le réattribuer créerait deux affectations homonymes.
+        when(assignmentRepository.existsByCodeIncludingDeleted("AF" + annee + "-0008"))
+                .thenReturn(true);
+        when(assignmentRepository.existsByCodeIncludingDeleted("AF" + annee + "-0009"))
+                .thenReturn(false);
+        when(assignmentRepository.save(any())).thenAnswer(inv -> {
+            TestOrderAssignment a = inv.getArgument(0);
+            a.setDetails(new ArrayList<>());
+            return a;
+        });
+
+        service.create(dto, BRANCH_ID);
+
+        ArgumentCaptor<TestOrderAssignment> captor =
+                ArgumentCaptor.forClass(TestOrderAssignment.class);
+        verify(assignmentRepository).save(captor.capture());
+        assertThat(captor.getValue().getCode()).isEqualTo("AF" + annee + "-0009");
     }
 }

@@ -161,10 +161,36 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
         detailRepository.delete(detail);
     }
 
+    /**
+     * Le prochain code d'affectation : {@code AF{aa}-{seq4}}.
+     *
+     * <p>Le préfixe était {@code ASS}, hérité de la réplication du backend
+     * Laravel. C'était une erreur de transcription : les 250 affectations
+     * antérieures portent {@code AF}, depuis {@code AF23-0001}. Seules les
+     * quatre créées par ce backend s'en écartaient.</p>
+     *
+     * <p>La séquence se lit dans les codes de l'année en cours et non dans le
+     * nombre total d'affectations de la branche : ce compteur-là ne repartait
+     * jamais à zéro — la première de 2027 serait sortie en {@code AF27-0513} —
+     * et redescendait à chaque suppression, rejouant un numéro déjà attribué.
+     * La garde qui suit refuse en dernier ressort un code déjà pris.</p>
+     */
+    /** Le marquage du laboratoire, tel qu'il figure sur les bordereaux. */
+    private static final String PREFIXE_AFFECTATION = "AF";
+
     private String generateCode(UUID branchId) {
-        int year = LocalDate.now().getYear() % 100;
-        long count = assignmentRepository.countByBranchId(branchId) + 1;
-        return String.format("ASS%02d-%04d", year, count);
+        String anneeDuCode = String.valueOf(LocalDate.now().getYear() % 100);
+        int suivant = assignmentRepository
+                .findMaxSequenceForYear(branchId, anneeDuCode) + 1;
+        String code = PREFIXE_AFFECTATION + anneeDuCode
+                + String.format("-%04d", suivant);
+        int garde = 0;
+        while (assignmentRepository.existsByCodeIncludingDeleted(code) && garde < 10_000) {
+            suivant++;
+            garde++;
+            code = PREFIXE_AFFECTATION + anneeDuCode + String.format("-%04d", suivant);
+        }
+        return code;
     }
 
     private AssignmentResponseDto toDto(TestOrderAssignment a) {
