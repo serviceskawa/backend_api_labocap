@@ -51,9 +51,6 @@ public class MobileAuthServiceImpl implements MobileAuthService {
     /** Durée du gel. Assez long pour ruiner une attaque, assez court pour ne pas punir une méprise. */
     private static final int MINUTES_VERROU = 15;
 
-    /** Un code d'enrôlement se transmet et s'emploie dans la foulée. */
-    private static final int HEURES_VALIDITE_CODE = 24;
-
     /** Droit d'employer l'application, attribué utilisateur par utilisateur. */
     private static final String PERMISSION_MOBILE = "use-mobile-app";
 
@@ -98,17 +95,17 @@ public class MobileAuthServiceImpl implements MobileAuthService {
         user.setPinLockedUntil(null);
         userRepository.save(user);
 
+        revoquerLesCodesVivants(user.getId(), auteurId);
         String code = genererCode();
-        LocalDateTime expiration = LocalDateTime.now().plusHours(HEURES_VALIDITE_CODE);
         codeRepository.save(new MobileEnrollmentCode(
-                user.getId(), passwordEncoder.encode(code), expiration, auteurId));
+                user.getId(), passwordEncoder.encode(code), null, auteurId));
 
         log.info("Accès mobile ouvert pour userId={} par userId={}", userId, auteurId);
         // Seul instant où ces deux secrets existent en clair.
         return new AccesMobileResponse(
                 user.getId(),
                 NomComplet.de(user.getLastname(), user.getFirstname()),
-                code, expiration, pin);
+                code, null, pin);
     }
 
     @Override
@@ -136,7 +133,34 @@ public class MobileAuthServiceImpl implements MobileAuthService {
             }
         }
 
+        // Le code aussi. Un code désormais sans échéance qui survivrait à la
+        // fermeture de l'accès attendrait qu'on rende le droit pour enrôler de
+        // nouveau — c'est exactement ce que fermer doit empêcher.
+        revoquerLesCodesVivants(userId, auteurId);
+
         log.warn("Accès mobile fermé pour userId={} par userId={}", userId, auteurId);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional
+    public void revoquerCodeEnrolement(UUID userId, UUID auteurId, UUID branchId) {
+        // Le cloisonnement par branche vaut ici comme ailleurs : révoquer se
+        // fait sur les siens.
+        userRepository.findByIdAndBranchId(userId, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", userId));
+        revoquerLesCodesVivants(userId, auteurId);
+        log.warn("Code d'enrôlement révoqué pour userId={} par userId={}", userId, auteurId);
+    }
+
+    /** Éteint les codes encore valables d'un utilisateur. */
+    private void revoquerLesCodesVivants(UUID userId, UUID auteurId) {
+        for (MobileEnrollmentCode code : codeRepository.findByUserIdOrderByCreatedAtDesc(userId)) {
+            if (code.estUtilisable()) {
+                code.revoquer(auteurId);
+                codeRepository.save(code);
+            }
+        }
     }
 
     @Override
@@ -167,14 +191,22 @@ public class MobileAuthServiceImpl implements MobileAuthService {
                             + "Accordez-le avant d'enrôler un appareil.");
         }
 
+        // Un seul code vivant par personne. Sans cela, chaque régénération
+        // laisserait le précédent valable : les anciens QR distribués ou
+        // photographiés continueraient d'enrôler, et révoquer n'aurait plus de
+        // sens puisqu'il faudrait révoquer chacun d'eux.
+        revoquerLesCodesVivants(user.getId(), auteurId);
+
         String code = genererCode();
-        LocalDateTime expiration = LocalDateTime.now().plusHours(HEURES_VALIDITE_CODE);
+        // Sans échéance : la validité tient désormais à la révocation. Un délai
+        // de quelques heures obligeait à régénérer pour un agent qui installait
+        // son téléphone le lendemain.
         codeRepository.save(new MobileEnrollmentCode(
-                user.getId(), passwordEncoder.encode(code), expiration, auteurId));
+                user.getId(), passwordEncoder.encode(code), null, auteurId));
 
         log.info("Code d'enrôlement mobile créé pour userId={} par userId={}", user.getId(), auteurId);
         // Seul instant où le code existe en clair — la base n'en garde que l'empreinte.
-        return new EnrollmentCodeResponse(code, expiration);
+        return new EnrollmentCodeResponse(code, null);
     }
 
     @Override
@@ -184,7 +216,7 @@ public class MobileAuthServiceImpl implements MobileAuthService {
                 .orElseThrow(() -> new UnauthorizedException("Code d'enrôlement invalide."));
 
         MobileEnrollmentCode code = codeRepository
-                .findByUserIdAndUsedAtIsNullOrderByCreatedAtDesc(user.getId())
+                .findByUserIdOrderByCreatedAtDesc(user.getId())
                 .stream()
                 .filter(MobileEnrollmentCode::estUtilisable)
                 .filter(c -> passwordEncoder.matches(requete.code().trim(), c.getCodeHash()))
@@ -200,8 +232,10 @@ public class MobileAuthServiceImpl implements MobileAuthService {
         MobileDevice appareil = deviceRepository.save(new MobileDevice(
                 user.getId(), user.getBranchId(), requete.label().trim(), requete.publicKey()));
 
-        code.setUsedAt(LocalDateTime.now());
-        code.setDeviceId(appareil.getId());
+        // Le code n'est plus consommé : il note l'usage et reste vivant. Un
+        // second téléphone, ou une réinstallation après échec, s'enrôle avec le
+        // même QR.
+        code.noterUnUsage(appareil.getId());
         codeRepository.save(code);
 
         log.info("Appareil mobile enrôlé : deviceId={} userId={}", appareil.getId(), user.getId());

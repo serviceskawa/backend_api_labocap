@@ -10,12 +10,16 @@ import java.util.UUID;
 public interface MobileEnrollmentCodeRepository extends JpaRepository<MobileEnrollmentCode, UUID> {
 
     /**
-     * Codes encore inemployés d'un utilisateur, du plus récent au plus ancien.
+     * Codes d'un utilisateur, du plus récent au plus ancien.
      *
      * <p>Le code étant haché, on ne peut pas le retrouver par recherche directe :
-     * l'enrôlement désigne l'utilisateur, on charge ses codes vivants, puis on
-     * les vérifie un à un. Leur nombre est nécessairement minime — ils expirent
-     * vite et servent une fois.</p>
+     * l'enrôlement désigne l'utilisateur, on charge ses codes, puis on les
+     * vérifie un à un. Leur nombre reste minime — créer un code révoque le
+     * précédent.</p>
+     *
+     * <p>Ne filtre plus sur {@code usedAt} : un code sert désormais plusieurs
+     * fois, et l'écarter dès son premier usage le rendait inutilisable pour le
+     * deuxième téléphone.</p>
      */
-    List<MobileEnrollmentCode> findByUserIdAndUsedAtIsNullOrderByCreatedAtDesc(UUID userId);
+    List<MobileEnrollmentCode> findByUserIdOrderByCreatedAtDesc(UUID userId);
 }

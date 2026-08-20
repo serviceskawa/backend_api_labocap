@@ -69,8 +69,9 @@ public class MobileAuthController {
     /**
      * Délivre un code d'enrôlement pour un utilisateur.
      *
-     * <p>Le code en clair n'est renvoyé qu'ici, une seule fois : la base n'en
-     * garde que l'empreinte. L'administrateur doit le transmettre aussitôt.</p>
+     * <p>Le code en clair n'est renvoyé qu'ici : la base n'en garde que
+     * l'empreinte. Il reste valable jusqu'à sa révocation et sert autant de
+     * fois qu'il le faut, mais en délivrer un nouveau éteint le précédent.</p>
      */
     @PostMapping("/enrollment-codes")
     @PreAuthorize("hasAuthority('edit-users')")
@@ -80,6 +81,23 @@ public class MobileAuthController {
         return ResponseEntity.ok(ApiResponse.success("Code d'enrôlement créé",
                 mobileAuthService.creerCodeEnrolement(
                         requete.userId(), principal.getId(), principal.getBranchId())));
+    }
+
+    /**
+     * Éteint le code d'enrôlement d'un utilisateur.
+     *
+     * <p>Les appareils déjà enrôlés continuent de fonctionner : c'est la porte
+     * qu'on ferme, pas les clés déjà remises. Pour celles-là,
+     * {@code /devices/{id}/revoke} ou la fermeture de l'accès.</p>
+     */
+    @DeleteMapping("/enrollment-codes/{userId}")
+    @PreAuthorize("hasAuthority('edit-users')")
+    public ResponseEntity<ApiResponse<Void>> revoquerCode(
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        mobileAuthService.revoquerCodeEnrolement(
+                userId, principal.getId(), principal.getBranchId());
+        return ResponseEntity.ok(ApiResponse.success("Code d'enrôlement révoqué", null));
     }
 
     /** Échange un code d'enrôlement contre l'identité d'un appareil. Public. */
