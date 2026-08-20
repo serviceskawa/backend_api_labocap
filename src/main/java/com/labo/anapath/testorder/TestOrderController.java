@@ -50,6 +50,7 @@ import java.util.UUID;
 public class TestOrderController {
 
     private final TestOrderService testOrderService;
+    private final com.labo.anapath.report.ReportService reportService;
 
     /**
      * Retourne la liste paginée des bons d'examen de la branche de l'utilisateur connecté,
@@ -68,6 +69,27 @@ public class TestOrderController {
      * @param principal principal Spring Security contenant le branchId
      * @return page de {@link TestOrderResponseDto}
      */
+    /**
+     * L'état du dossier attaché à une demande, désigné par son code.
+     *
+     * <p>Sert le technicien : scanner le QR d'un bon, ou en saisir le code,
+     * pour savoir de quel patient il s'agit et où en est le dossier. Il ne
+     * reçoit pas le contenu médical — voir {@link com.labo.anapath.report.DossierResumeDto}.</p>
+     *
+     * <p>Distinct de {@code /reports/by-code}, gardé par {@code view-reports} :
+     * chercher une demande d'examen relève de {@code view-test-orders}, le
+     * droit qui correspond au geste. Sans cette distinction, organiser des
+     * prélèvements supposerait d'avoir accès aux diagnostics.</p>
+     */
+    @GetMapping("/by-code/{code}")
+    @PreAuthorize("hasAuthority('view-test-orders')")
+    public ResponseEntity<ApiResponse<com.labo.anapath.report.DossierResumeDto>> findDossierByCode(
+            @PathVariable String code,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                reportService.findResumeByTestOrderCode(code, principal.getBranchId())));
+    }
+
     @GetMapping
     @PreAuthorize("hasAuthority('view-test-orders')")
     public ResponseEntity<ApiResponse<PageResponse<TestOrderResponseDto>>> findAll(

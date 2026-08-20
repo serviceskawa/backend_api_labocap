@@ -112,6 +112,31 @@ public class ReportServiceImpl implements ReportService {
         return findDetailById(report.getId(), branchId);
     }
 
+    /** {@inheritDoc} */
+    @Override
+    @Transactional(readOnly = true)
+    public DossierResumeDto findResumeByTestOrderCode(String code, UUID branchId) {
+        // On réutilise la lecture complète plutôt que d'écrire une seconde
+        // requête : le cloisonnement par branche, le nom du patient et le
+        // journal y sont déjà traités, et deux chemins de lecture finiraient
+        // par diverger. Seule la restitution est réduite.
+        ReportDetailDto detail = findDetailByTestOrderCode(code, branchId);
+        return new DossierResumeDto(
+                detail.id(),
+                detail.code(),
+                detail.testOrderId(),
+                detail.testOrderCode(),
+                detail.patientName(),
+                detail.titleName(),
+                detail.status(),
+                detail.isDelivered(),
+                detail.retrieverName(),
+                detail.retrieverRelation(),
+                detail.retrieverSignature(),
+                detail.demandeCreatedAt(),
+                detail.deliveryDate());
+    }
+
     @Override
     @Transactional(readOnly = true)
     public ReportDetailDto findDetailById(UUID id, UUID branchId) {
