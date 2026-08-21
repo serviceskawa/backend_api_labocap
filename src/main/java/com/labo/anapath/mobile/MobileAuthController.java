@@ -56,21 +56,35 @@ public class MobileAuthController {
         return ResponseEntity.ok(ApiResponse.success("Accès mobile fermé", null));
     }
 
-    /** État de l'accès d'un utilisateur : droit, PIN posé, appareils enrôlés. */
+    /**
+     * État de l'accès d'un utilisateur : droit, PIN posé, appareils enrôlés.
+     *
+     * <p>Le code d'enrôlement n'accompagne l'état que pour qui peut en créer un.
+     * Consulter la fiche relève de {@code view-users} ; en repartir avec de quoi
+     * enrôler un téléphone relève de {@code edit-users}, et confondre les deux
+     * élargirait l'accès mobile à tout lecteur d'annuaire.</p>
+     */
     @GetMapping("/access/{userId}")
     @PreAuthorize("hasAuthority('view-users')")
     public ResponseEntity<ApiResponse<EtatAccesResponse>> etatAcces(
             @PathVariable UUID userId,
             @AuthenticationPrincipal UserPrincipal principal) {
-        return ResponseEntity.ok(ApiResponse.success(
-                mobileAuthService.etatAcces(userId, principal.getBranchId())));
+        EtatAccesResponse etat = mobileAuthService.etatAcces(userId, principal.getBranchId());
+        boolean peutEnroler = principal.getAuthorities().stream()
+                .anyMatch(a -> "edit-users".equals(a.getAuthority()));
+        if (!peutEnroler) {
+            etat = new EtatAccesResponse(etat.userId(), etat.acces(), etat.pinDefini(),
+                    etat.appareils(), null, etat.codeCreeLe());
+        }
+        return ResponseEntity.ok(ApiResponse.success(etat));
     }
 
     /**
      * Délivre un code d'enrôlement pour un utilisateur.
      *
-     * <p>Le code en clair n'est renvoyé qu'ici, une seule fois : la base n'en
-     * garde que l'empreinte. L'administrateur doit le transmettre aussitôt.</p>
+     * <p>Le code en clair n'est renvoyé qu'ici : la base n'en garde que
+     * l'empreinte. Il reste valable jusqu'à sa révocation et sert autant de
+     * fois qu'il le faut, mais en délivrer un nouveau éteint le précédent.</p>
      */
     @PostMapping("/enrollment-codes")
     @PreAuthorize("hasAuthority('edit-users')")
@@ -80,6 +94,23 @@ public class MobileAuthController {
         return ResponseEntity.ok(ApiResponse.success("Code d'enrôlement créé",
                 mobileAuthService.creerCodeEnrolement(
                         requete.userId(), principal.getId(), principal.getBranchId())));
+    }
+
+    /**
+     * Éteint le code d'enrôlement d'un utilisateur.
+     *
+     * <p>Les appareils déjà enrôlés continuent de fonctionner : c'est la porte
+     * qu'on ferme, pas les clés déjà remises. Pour celles-là,
+     * {@code /devices/{id}/revoke} ou la fermeture de l'accès.</p>
+     */
+    @DeleteMapping("/enrollment-codes/{userId}")
+    @PreAuthorize("hasAuthority('edit-users')")
+    public ResponseEntity<ApiResponse<Void>> revoquerCode(
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        mobileAuthService.revoquerCodeEnrolement(
+                userId, principal.getId(), principal.getBranchId());
+        return ResponseEntity.ok(ApiResponse.success("Code d'enrôlement révoqué", null));
     }
 
     /** Échange un code d'enrôlement contre l'identité d'un appareil. Public. */

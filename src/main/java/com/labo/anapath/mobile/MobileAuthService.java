@@ -29,8 +29,18 @@ public interface MobileAuthService {
     /** État de l'accès d'un utilisateur, pour l'écran d'administration. */
     EtatAccesResponse etatAcces(UUID userId, UUID branchId);
 
-    /** Délivre un code d'enrôlement à usage unique pour un utilisateur. */
+    /**
+     * Délivre un code d'enrôlement pour un utilisateur.
+     *
+     * <p>Valable jusqu'à sa révocation, et pour autant d'appareils qu'il en
+     * faut : il s'éteignait au premier téléphone enrôlé, ce qui obligeait à en
+     * régénérer un dès qu'une installation échouait. Créer un code révoque le
+     * précédent — un seul QR circule à la fois.</p>
+     */
     EnrollmentCodeResponse creerCodeEnrolement(UUID userId, UUID auteurId, UUID branchId);
+
+    /** Éteint le code d'enrôlement d'un utilisateur, sans toucher aux appareils déjà enrôlés. */
+    void revoquerCodeEnrolement(UUID userId, UUID auteurId, UUID branchId);
 
     /** Échange un code d'enrôlement contre l'identité d'un appareil. */
     EnrollResponse enroler(EnrollRequest requete);

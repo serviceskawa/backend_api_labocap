@@ -39,16 +39,41 @@ public class MobileEnrollmentCode {
     @Column(name = "code_hash", nullable = false, length = 255)
     private String codeHash;
 
-    @Column(name = "expires_at", nullable = false)
+    /**
+     * Échéance héritée : nulle pour les codes délivrés depuis que la validité
+     * tient à la révocation seule.
+     */
+    @Column(name = "expires_at")
     private LocalDateTime expiresAt;
 
     /**
-     * Marque l'usage plutôt que de supprimer la ligne : on veut pouvoir dire
-     * quel code a enrôlé quel appareil, et quand.
+     * Le code scellé, pour pouvoir remontrer le QR.
+     *
+     * <p>Chiffré (AES-256-GCM, clé applicative), jamais en clair : une copie de
+     * la base ne suffit pas à le lire. L'empreinte ci-dessus reste la référence
+     * qui valide un enrôlement ; cette colonne ne sert qu'à l'affichage.</p>
+     *
+     * <p>Nulle sans clé configurée, et pour les codes antérieurs : ils enrôlent
+     * encore, mais ne se réaffichent pas.</p>
      */
+    @Column(name = "code_chiffre", length = 512)
+    private String codeChiffre;
+
+    @Column(name = "revoked_at")
+    private LocalDateTime revokedAt;
+
+    @Column(name = "revoked_by")
+    private UUID revokedBy;
+
+    /** Combien d'appareils ce code a enrôlés. */
+    @Column(name = "used_count", nullable = false)
+    private int usedCount;
+
+    /** Premier usage. Conservé pour dire depuis quand le code circule. */
     @Column(name = "used_at")
     private LocalDateTime usedAt;
 
+    /** Le dernier appareil enrôlé par ce code. */
     @Column(name = "device_id")
     private UUID deviceId;
 
@@ -66,7 +91,28 @@ public class MobileEnrollmentCode {
         this.createdBy = createdBy;
     }
 
+    /**
+     * Utilisable tant qu'il n'est pas révoqué.
+     *
+     * <p>Il s'éteignait au premier appareil enrôlé. Un agent qui changeait de
+     * téléphone, ou dont l'installation échouait, devait faire rouvrir son
+     * accès — pour un code que rien n'obligeait à être à usage unique, la
+     * révocation existant déjà.</p>
+     */
     public boolean estUtilisable() {
-        return usedAt == null && expiresAt.isAfter(LocalDateTime.now());
+        return revokedAt == null
+                && (expiresAt == null || expiresAt.isAfter(LocalDateTime.now()));
+    }
+
+    /** Note un enrôlement de plus, sans effacer la trace du premier. */
+    public void noterUnUsage(UUID appareilId) {
+        if (usedAt == null) usedAt = LocalDateTime.now();
+        this.deviceId = appareilId;
+        usedCount++;
+    }
+
+    public void revoquer(UUID auteurId) {
+        revokedAt = LocalDateTime.now();
+        revokedBy = auteurId;
     }
 }
