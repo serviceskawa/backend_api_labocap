@@ -305,8 +305,8 @@ public class MobileAuthServiceImpl implements MobileAuthService {
         log.info("Connexion mobile réussie : deviceId={} userId={}", appareil.getId(), user.getId());
         return new MobileLoginResponse(
                 jwtTokenProvider.generateToken(principal, appareil.getId()),
-                jwtTokenProvider.generateRefreshToken(user.getId()),
-                jwtProperties.getExpirationMs() / 1000,
+                jwtTokenProvider.generateRefreshToken(user.getId(), true),
+                jwtProperties.getMobileExpirationMs() / 1000,
                 user.getId(),
                 NomComplet.de(user.getLastname(), user.getFirstname()),
                 user.getBranchId(),
@@ -358,8 +358,13 @@ public class MobileAuthServiceImpl implements MobileAuthService {
                 // Réémis avec la revendication d'appareil : celui d'AuthService
                 // ne la porte pas, puisqu'il sert aussi le web.
                 jwtTokenProvider.generateToken(principal, appareil.getId()),
-                reponse.refreshToken(),
-                jwtProperties.getExpirationMs() / 1000,
+                // Réémis lui aussi : celui d'AuthService porte la fenêtre du
+                // web, quinze minutes. L'appliquer à un téléphone réclamerait
+                // le code PIN quatre fois par heure, là où la politique dit une
+                // fois par heure au laboratoire et deux fois par jour au
+                // comptoir.
+                jwtTokenProvider.generateRefreshToken(userId, true),
+                jwtProperties.getMobileExpirationMs() / 1000,
                 userId,
                 NomComplet.de(user.getLastname(), user.getFirstname()),
                 user.getBranchId(),

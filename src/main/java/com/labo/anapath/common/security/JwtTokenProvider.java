@@ -91,7 +91,12 @@ public class JwtTokenProvider {
      */
     public String generateToken(UserPrincipal userPrincipal, UUID deviceId) {
         Date now = new Date();
-        Date expiry = new Date(now.getTime() + jwtProperties.getExpirationMs());
+        // La présence d'un appareil distingue les deux durées : une session web
+        // se ferme après quinze minutes sans activité, un téléphone non. Il se
+        // verrouille de lui-même et redemande son code PIN selon le métier.
+        Date expiry = new Date(now.getTime() + (deviceId != null
+                ? jwtProperties.getMobileExpirationMs()
+                : jwtProperties.getExpirationMs()));
 
         // Permissions are NOT embedded in the token — the filter reloads them from DB
         // (JwtAuthenticationFilter.loadUserById). Embedding 300+ slugs would bloat the JWT.
@@ -162,8 +167,20 @@ public class JwtTokenProvider {
      * @return token de rafraîchissement JWT signé
      */
     public String generateRefreshToken(UUID userId) {
+        return generateRefreshToken(userId, false);
+    }
+
+    /**
+     * Même chose, en distinguant la fenêtre d'un appareil de celle du web.
+     *
+     * @param pourAppareil vrai pour un téléphone enrôlé, dont la session ne suit
+     *                     pas les quinze minutes du poste de travail
+     */
+    public String generateRefreshToken(UUID userId, boolean pourAppareil) {
         Date now = new Date();
-        Date expiry = new Date(now.getTime() + jwtProperties.getRefreshExpirationMs());
+        Date expiry = new Date(now.getTime() + (pourAppareil
+                ? jwtProperties.getMobileRefreshExpirationMs()
+                : jwtProperties.getRefreshExpirationMs()));
 
         return Jwts.builder()
                 .id(UUID.randomUUID().toString())

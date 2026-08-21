@@ -57,8 +57,22 @@ server:
 app:
   jwt:
     secret: ${JWT_SECRET}
-    expiration-ms: ${JWT_EXPIRATION:86400000}
-    refresh-expiration-ms: ${JWT_REFRESH:604800000}
+    # Une session web s'éteint après 15 minutes sans activité.
+    #
+    # Ce n'est pas ce jeton-là qui tenait la session : le front rafraîchit tout
+    # seul sur 401, et le jeton de rafraîchissement vivait sept jours. Un poste
+    # laissé ouvert au comptoir restait donc utilisable une semaine.
+    #
+    # Le jeton d'accès est délibérément bien plus court que la fenêtre : c'est
+    # son expiration qui déclenche le rafraîchissement, donc qui fait glisser la
+    # fenêtre sur l'activité réelle. Cinq minutes laissent trois occasions de la
+    # prolonger avant les quinze.
+    expiration-ms: ${JWT_EXPIRATION:300000}
+    # La fenêtre elle-même. Le rafraîchissement fait tourner le jeton et
+    # blackliste l'ancien : chaque appel repart pour quinze minutes, et quinze
+    # minutes sans le moindre appel ferment la session côté serveur — quoi que
+    # fasse le navigateur.
+    refresh-expiration-ms: ${JWT_REFRESH:900000}
   storage:
     path: ${STORAGE_PATH:/tmp/labo/storage}
     encryption:
