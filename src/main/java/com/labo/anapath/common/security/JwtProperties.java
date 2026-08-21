@@ -29,11 +29,31 @@ public class JwtProperties {
     /** Clé secrète HMAC-SHA utilisée pour signer et vérifier les tokens JWT. */
     private String secret;
 
-    /** Durée de validité du token d'accès en millisecondes (défaut : 86 400 000 ms = 24 h). */
+    /** Durée de validité du token d'accès web, en millisecondes. */
     private long expirationMs;
 
-    /** Durée de validité du token de rafraîchissement en millisecondes (défaut : 604 800 000 ms = 7 jours). */
+    /**
+     * Durée de la fenêtre de session web, en millisecondes.
+     *
+     * <p>C'est elle qui décide de la durée d'une session : le navigateur
+     * renouvelle seul le jeton d'accès tant que celui-ci vit encore.</p>
+     */
     private long refreshExpirationMs;
+
+    /**
+     * Durée de validité du jeton d'accès d'un appareil mobile.
+     *
+     * <p>Séparée de la web à dessein. Un téléphone n'est pas un poste laissé
+     * ouvert au comptoir : il se verrouille de lui-même, et l'application
+     * redemande le code PIN selon le métier — chaque heure au laboratoire, deux
+     * fois par jour au comptoir. Lui imposer la fenêtre du web réclamerait un
+     * code toutes les quinze minutes, ce que cette politique refuse
+     * explicitement.</p>
+     */
+    private long mobileExpirationMs = 86_400_000L;
+
+    /** Fenêtre de session d'un appareil mobile. Voir {@link #mobileExpirationMs}. */
+    private long mobileRefreshExpirationMs = 604_800_000L;
 
     @PostConstruct
     public void validate() {
