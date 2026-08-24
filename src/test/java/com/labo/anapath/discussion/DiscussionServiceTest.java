@@ -41,10 +41,10 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class DiscussionServiceTest {
 
-    @Mock private DiscussionRepositories.Discussions discussions;
-    @Mock private DiscussionRepositories.Messages messages;
-    @Mock private DiscussionRepositories.Participants participants;
-    @Mock private DiscussionRepositories.Lectures lectures;
+    @Mock private DiscussionRepository discussions;
+    @Mock private DiscussionMessageRepository messages;
+    @Mock private DiscussionParticipantRepository participants;
+    @Mock private DiscussionLectureRepository lectures;
     @Mock private TestOrderRepository testOrderRepository;
     @Mock private TestOrderAssignmentDetailRepository detailRepository;
     @Mock private UserRepository userRepository;
