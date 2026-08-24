@@ -47,10 +47,10 @@ import static com.labo.anapath.discussion.DiscussionDtos.*;
 @RequiredArgsConstructor
 public class DiscussionService {
 
-    private final DiscussionRepositories.Discussions discussions;
-    private final DiscussionRepositories.Messages messages;
-    private final DiscussionRepositories.Participants participants;
-    private final DiscussionRepositories.Lectures lectures;
+    private final DiscussionRepository discussions;
+    private final DiscussionMessageRepository messages;
+    private final DiscussionParticipantRepository participants;
+    private final DiscussionLectureRepository lectures;
     private final TestOrderRepository testOrderRepository;
     private final TestOrderAssignmentDetailRepository detailRepository;
     private final UserRepository userRepository;
