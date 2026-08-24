@@ -55,4 +55,24 @@ public interface TestOrderAssignmentService {
 
     /** Retire une étiquette des propositions, sans effacer aucune trace. */
     void retirer(java.util.UUID branchId, java.util.UUID id);
+
+    /**
+     * La file de travail d'un médecin : ses demandes, tous lots confondus.
+     *
+     * <p>Une seule liste plate et non une liste de lots : le médecin traite des
+     * dossiers, il ne navigue pas de bordereau en bordereau. Le code du lot
+     * reste rappelé sur chaque ligne.</p>
+     */
+    java.util.List<DemandeDuMedecinDto> fileDuMedecin(java.util.UUID docteurId);
+
+    /**
+     * Change où en est le médecin sur une demande.
+     *
+     * <p>Depuis le web seulement — sur le téléphone la file est en lecture.
+     * On referme un dossier sur un poste de travail, pas en le consultant entre
+     * deux couloirs.</p>
+     */
+    DemandeDuMedecinDto changerStatutDuMedecin(java.util.UUID detailId,
+                                               String statut,
+                                               java.util.UUID branchId);
 }

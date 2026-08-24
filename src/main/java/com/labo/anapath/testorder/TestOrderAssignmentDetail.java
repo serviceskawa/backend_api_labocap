@@ -45,4 +45,21 @@ public class TestOrderAssignmentDetail extends AuditableEntity {
 
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
+
+    /**
+     * Où en est le médecin sur cette demande.
+     *
+     * <p>Stocké en clair et non en ordinal : un ordinal se décale dès qu'on
+     * insère une valeur au milieu de l'énumération, et rien ne le signale — les
+     * dossiers changent alors d'état tous à la fois. Voir {@link DocteurStatus}
+     * pour ce que ces trois valeurs disent, et pourquoi elles ne se confondent
+     * pas avec le statut du compte rendu.</p>
+     */
+    @Column(name = "docteur_status", nullable = false, length = 20)
+    private String docteurStatus = DocteurStatus.A_TRAITER.valeur();
+
+    /** Le statut, relu. Une valeur inconnue rend « à traiter ». */
+    public DocteurStatus statutDuMedecin() {
+        return DocteurStatus.depuis(docteurStatus);
+    }
 }

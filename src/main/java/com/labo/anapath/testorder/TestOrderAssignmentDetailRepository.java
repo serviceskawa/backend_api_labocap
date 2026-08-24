@@ -39,7 +39,10 @@ public interface TestOrderAssignmentDetailRepository extends JpaRepository<TestO
     @Query(value = """
             SELECT DISTINCT ON (d.test_order_id)
                    d.test_order_id,
-                   TRIM(COALESCE(u.firstname, '') || ' ' || COALESCE(u.lastname, ''))
+                   -- Nom puis prénoms, comme partout ailleurs. Cette requête
+                   -- composait dans l'autre sens : la même personne changeait
+                   -- d'ordre selon l'écran qui l'affichait.
+                   TRIM(COALESCE(u.lastname, '') || ' ' || COALESCE(u.firstname, ''))
             FROM test_order_assignment_details d
             JOIN test_order_assignments a ON a.id = d.test_order_assignment_id
             JOIN users u ON u.id = a.user_id
@@ -49,4 +52,32 @@ public interface TestOrderAssignmentDetailRepository extends JpaRepository<TestO
             ORDER BY d.test_order_id, a.created_at DESC
             """, nativeQuery = true)
     List<Object[]> findAssignedUserNames(@Param("testOrderIds") List<UUID> testOrderIds);
+
+    /**
+     * La file de travail d'un médecin : toutes ses demandes, tous lots
+     * confondus.
+     *
+     * <p>Une seule liste plate, comme la maquette l'exige : le médecin ne
+     * navigue pas de lot en lot, il traite des dossiers. Le code du lot reste
+     * rappelé sur chaque ligne pour qu'il sache d'où vient celui qu'il ouvre.</p>
+     *
+     * <p>Triée par ancienneté, du plus vieux au plus récent — c'est l'ordre
+     * dans lequel on doit les traiter, et le mettre à l'envers ferait vieillir
+     * en silence les dossiers du bas.</p>
+     *
+     * <p>Une demande terminée reste visible le jour même puis disparaît : la
+     * retirer aussitôt ferait douter d'avoir bien enregistré ce qu'on venait de
+     * faire.</p>
+     */
+    @Query("""
+            SELECT d FROM TestOrderAssignmentDetail d
+            JOIN FETCH d.testOrderAssignment a
+            LEFT JOIN FETCH d.testOrder o
+            WHERE a.user.id = :docteurId
+              AND d.deletedAt IS NULL
+              AND (d.docteurStatus <> 'termine' OR a.date >= :depuis)
+            ORDER BY a.date ASC, d.createdAt ASC
+            """)
+    List<TestOrderAssignmentDetail> fileDuMedecin(@Param("docteurId") UUID docteurId,
+                                                  @Param("depuis") java.time.LocalDate depuis);
 }
