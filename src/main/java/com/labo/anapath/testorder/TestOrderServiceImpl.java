@@ -968,6 +968,36 @@ public class TestOrderServiceImpl implements TestOrderService {
         return order.getArchive();
     }
 
+    /** {@inheritDoc} */
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<HistoriquePatientDto> historiqueDuPatient(UUID testOrderId, UUID branchId) {
+        TestOrder depart = testOrderRepository.findByIdAndBranchId(testOrderId, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", testOrderId));
+        if (depart.getPatient() == null) {
+            // Une demande sans patient rattaché n'a pas d'historique — mais elle
+            // se consulte quand même. Rendre la seule demande courante vaut
+            // mieux qu'une erreur : l'écran dira « 1 demande », ce qui est vrai.
+            return java.util.List.of(versHistorique(depart, testOrderId));
+        }
+        return testOrderRepository
+                .findByPatientOrderByCreatedAtDesc(depart.getPatient()).stream()
+                // Le cloisonnement par branche : un patient peut avoir été reçu
+                // sur deux sites, et l'historique ne montre que le sien.
+                .filter(o -> o.getBranchId() != null && o.getBranchId().equals(branchId))
+                .map(o -> versHistorique(o, testOrderId))
+                .toList();
+    }
+
+    private HistoriquePatientDto versHistorique(TestOrder o, UUID courante) {
+        return new HistoriquePatientDto(
+                o.getId(),
+                o.getCode(),
+                o.getCreatedAt(),
+                o.getStatus() == null ? null : o.getStatus().name(),
+                o.getId() != null && o.getId().equals(courante));
+    }
+
     @Override
     @Transactional(readOnly = true)
     public java.util.List<ImageDto> getImages(UUID id, UUID branchId) {

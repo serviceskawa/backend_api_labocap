@@ -148,6 +148,16 @@ public interface TestOrderService {
 
     List<ImageDto> getImages(UUID id, UUID branchId);
 
+    /**
+     * Les autres demandes du même patient, la plus récente en tête.
+     *
+     * <p>On part d'une demande et non d'un identifiant de patient : c'est le
+     * geste réel — le médecin consulte un dossier et veut savoir ce qui a
+     * précédé. Cela évite aussi de faire circuler des identifiants de patients
+     * là où personne n'en a besoin.</p>
+     */
+    List<HistoriquePatientDto> historiqueDuPatient(UUID testOrderId, UUID branchId);
+
     void deleteImage(UUID id, int index, UUID branchId);
 
     /**
