@@ -53,6 +53,8 @@ public class ReportServiceImpl implements ReportService {
     private final com.labo.anapath.mobile.SignatureAppareil signatureAppareil;
     private final com.labo.anapath.mobile.ProvenanceRequete provenanceRequete;
     private final com.labo.anapath.testorder.TestOrderAssignmentDetailRepository assignmentDetailRepository;
+    /** Pour relire les étiquettes, rangées en tableau JSON sur la ligne d'affectation. */
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     @Override
     @Transactional(readOnly = true)
@@ -138,7 +140,10 @@ public class ReportServiceImpl implements ReportService {
                 detail.deliveryDate(),
                 detail.assignedToName(),
                 detail.assignmentCode(),
-                detail.assignmentDate());
+                detail.assignmentDate(),
+                detail.assignmentLabels(),
+                detail.assignmentNote(),
+                detail.assignmentLotNote());
     }
 
     @Override
@@ -197,12 +202,23 @@ public class ReportServiceImpl implements ReportService {
                 report.getTags().stream().map(Tag::getId).toList(),
                 logDtos,
                 affectation.nom(), affectation.code(), affectation.date(),
+                affectation.etiquettes(), affectation.note(), affectation.noteDuLot(),
                 report.getCreatedAt(), report.getUpdatedAt());
     }
 
-    /** Ce que le suivi montre d'une affectation : chez qui, sous quel code, quand. */
-    private record Affectation(String nom, String code, java.time.LocalDate date) {
-        static final Affectation AUCUNE = new Affectation(null, null, null);
+    /**
+     * Ce que le suivi montre d'une affectation.
+     *
+     * <p>Chez qui, sous quel code, quand — et ce qui accompagne le prélèvement :
+     * ses étiquettes, la note écrite pour cette demande, et celle du lot
+     * entier. Les deux notes sont distinctes et le restent : l'une vise un
+     * dossier, l'autre une série.</p>
+     */
+    private record Affectation(String nom, String code, java.time.LocalDate date,
+                               java.util.List<String> etiquettes,
+                               String note, String noteDuLot) {
+        static final Affectation AUCUNE =
+                new Affectation(null, null, null, java.util.List.of(), null, null);
     }
 
     /**
@@ -215,14 +231,20 @@ public class ReportServiceImpl implements ReportService {
     private Affectation affectationDe(Report report) {
         if (report.getTestOrder() == null) return Affectation.AUCUNE;
         return assignmentDetailRepository.findByTestOrderId(report.getTestOrder().getId())
-                .map(com.labo.anapath.testorder.TestOrderAssignmentDetail::getTestOrderAssignment)
-                .filter(java.util.Objects::nonNull)
-                .map(a -> new Affectation(
-                        a.getUser() == null ? null
-                                : NomComplet.de(a.getUser().getLastname(),
-                                                a.getUser().getFirstname()),
-                        a.getCode(),
-                        a.getDate()))
+                .filter(d -> d.getTestOrderAssignment() != null)
+                .map(d -> {
+                    var a = d.getTestOrderAssignment();
+                    return new Affectation(
+                            a.getUser() == null ? null
+                                    : NomComplet.de(a.getUser().getLastname(),
+                                                    a.getUser().getFirstname()),
+                            a.getCode(),
+                            a.getDate(),
+                            com.labo.anapath.testorder.Etiquettes.decoder(
+                                    objectMapper, d.getLabels()),
+                            d.getNote(),
+                            a.getNote());
+                })
                 .orElse(Affectation.AUCUNE);
     }
 

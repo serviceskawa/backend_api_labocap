@@ -70,6 +70,24 @@ public record ReportDetailDto(
         String assignedToName,
         String assignmentCode,
         java.time.LocalDate assignmentDate,
+        /**
+         * Les étiquettes portées sur les contenants de cette demande.
+         *
+         * <p>Vide tant que la demande n'est pas affectée, ou si le technicien
+         * n'en a posé aucune — elles restent facultatives.</p>
+         */
+        List<String> assignmentLabels,
+        /** La note propre à cette demande, écrite au moment de l'affecter. */
+        String assignmentNote,
+        /**
+         * La note générale du lot, partagée par toutes ses demandes.
+         *
+         * <p>Distincte de la précédente : « série de garde du samedi » vaut
+         * pour le lot entier, « urgent, à traiter avant midi » pour un seul
+         * dossier. Les confondre ferait porter à une demande une consigne qui
+         * ne la vise pas.</p>
+         */
+        String assignmentLotNote,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {

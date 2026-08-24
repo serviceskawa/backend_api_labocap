@@ -315,20 +315,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
      * existence.</p>
      */
     private String encoderEtiquettes(List<String> etiquettes) {
-        if (etiquettes == null || etiquettes.isEmpty()) return null;
-        List<String> propres = etiquettes.stream()
-                .filter(java.util.Objects::nonNull)
-                .map(String::trim)
-                .filter(e -> !e.isEmpty())
-                .distinct()
-                .toList();
-        if (propres.isEmpty()) return null;
-        try {
-            return objectMapper.writeValueAsString(propres);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            throw new com.labo.anapath.common.exception.BusinessException(
-                    "Les étiquettes n'ont pas pu être enregistrées.");
-        }
+        return Etiquettes.encoder(objectMapper, etiquettes);
     }
 
     /**
@@ -337,11 +324,6 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
      */
     @SuppressWarnings("unchecked")
     private List<String> decoderEtiquettes(String brut) {
-        if (brut == null || brut.isBlank()) return List.of();
-        try {
-            return objectMapper.readValue(brut, List.class);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            return List.of();
-        }
+        return Etiquettes.decoder(objectMapper, brut);
     }
 }
