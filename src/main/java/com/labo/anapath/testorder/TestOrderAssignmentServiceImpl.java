@@ -233,6 +233,65 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
 
     /** {@inheritDoc} */
     @Override
+    @Transactional(readOnly = true)
+    public List<DemandeDuMedecinDto> fileDuMedecin(UUID docteurId) {
+        // Les demandes terminées restent visibles le jour même. La borne porte
+        // sur la date du lot, seule date que la ligne connaisse : c'est une
+        // approximation, mais elle va dans le bon sens — un lot du jour reste
+        // affiché, un lot d'hier disparaît.
+        return detailRepository.fileDuMedecin(docteurId, LocalDate.now()).stream()
+                .map(this::versDemandeDuMedecin)
+                .toList();
+    }
+
+    private DemandeDuMedecinDto versDemandeDuMedecin(TestOrderAssignmentDetail d) {
+        var lot = d.getTestOrderAssignment();
+        var demande = d.getTestOrder();
+        var patient = demande == null ? null : demande.getPatient();
+        return new DemandeDuMedecinDto(
+                d.getId(),
+                demande == null ? null : demande.getId(),
+                d.getTestOrderCode(),
+                patient == null ? null
+                        : com.labo.anapath.common.NomComplet.de(
+                                patient.getLastname(), patient.getFirstname()),
+                d.statutDuMedecin().valeur(),
+                demande == null || demande.getStatus() == null
+                        ? null : demande.getStatus().name(),
+                decoderEtiquettes(d.getLabels()),
+                d.getNote(),
+                lot == null ? null : lot.getCode(),
+                lot == null ? null : lot.getDate(),
+                lot == null ? null : lot.getNote());
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional
+    public DemandeDuMedecinDto changerStatutDuMedecin(UUID detailId, String statut, UUID branchId) {
+        TestOrderAssignmentDetail detail = detailRepository.findById(detailId)
+                .orElseThrow(() -> new ResourceNotFoundException("Détail d'assignment", detailId));
+        // Le cloisonnement par branche vaut ici comme ailleurs.
+        if (detail.getBranchId() != null && !detail.getBranchId().equals(branchId)) {
+            throw new ResourceNotFoundException("Détail d'assignment", detailId);
+        }
+        // Une valeur inconnue serait silencieusement ramenée à « à traiter » par
+        // `DocteurStatus.depuis` — tolérable en lecture, jamais en écriture :
+        // l'appelant croirait avoir posé un statut qu'il n'a pas posé.
+        DocteurStatus voulu = DocteurStatus.depuis(statut);
+        if (!voulu.valeur().equalsIgnoreCase(statut == null ? "" : statut.trim())) {
+            throw new com.labo.anapath.common.exception.BusinessException(
+                    "Statut inconnu : « " + statut + " ». Attendu : a_traiter, "
+                            + "pris_en_charge ou termine.");
+        }
+        detail.setDocteurStatus(voulu.valeur());
+        detailRepository.save(detail);
+        log.info("Statut médecin changé : detailId={} statut={}", detailId, voulu.valeur());
+        return versDemandeDuMedecin(detail);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     @Transactional
     public List<String> ajouterAuCatalogue(UUID branchId, String valeur) {
         enrichirLeCatalogue(branchId, List.of(valeur == null ? "" : valeur));
@@ -315,20 +374,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
      * existence.</p>
      */
     private String encoderEtiquettes(List<String> etiquettes) {
-        if (etiquettes == null || etiquettes.isEmpty()) return null;
-        List<String> propres = etiquettes.stream()
-                .filter(java.util.Objects::nonNull)
-                .map(String::trim)
-                .filter(e -> !e.isEmpty())
-                .distinct()
-                .toList();
-        if (propres.isEmpty()) return null;
-        try {
-            return objectMapper.writeValueAsString(propres);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            throw new com.labo.anapath.common.exception.BusinessException(
-                    "Les étiquettes n'ont pas pu être enregistrées.");
-        }
+        return Etiquettes.encoder(objectMapper, etiquettes);
     }
 
     /**
@@ -337,11 +383,6 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
      */
     @SuppressWarnings("unchecked")
     private List<String> decoderEtiquettes(String brut) {
-        if (brut == null || brut.isBlank()) return List.of();
-        try {
-            return objectMapper.readValue(brut, List.class);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            return List.of();
-        }
+        return Etiquettes.decoder(objectMapper, brut);
     }
 }

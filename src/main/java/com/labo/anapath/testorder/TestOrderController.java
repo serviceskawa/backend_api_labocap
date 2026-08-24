@@ -416,6 +416,23 @@ public class TestOrderController {
         return ResponseEntity.ok(ApiResponse.success(testOrderService.uploadImages(id, principal.getBranchId(), files)));
     }
 
+    /**
+     * Les autres demandes du même patient.
+     *
+     * <p>Gardé par {@code view-test-orders}, comme la consultation d'une
+     * demande : savoir qu'un patient est déjà venu relève du même droit que
+     * consulter le dossier d'où l'on part. Aucun contenu médical n'y figure —
+     * un code, une date, un état.</p>
+     */
+    @GetMapping("/{id}/historique-patient")
+    @PreAuthorize("hasAuthority('view-test-orders')")
+    public ResponseEntity<ApiResponse<List<HistoriquePatientDto>>> historiquePatient(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                testOrderService.historiqueDuPatient(id, principal.getBranchId())));
+    }
+
     @GetMapping("/{id}/images")
     @PreAuthorize("hasAuthority('view-test-orders')")
     public ResponseEntity<ApiResponse<List<ImageDto>>> getImages(

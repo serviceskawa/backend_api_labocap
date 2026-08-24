@@ -44,6 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -561,19 +562,24 @@ class TestOrderServiceImplTest {
     }
 
     @Test
-    @DisplayName("deleteImage - index valide → fichier supprimé et JSON mis à jour")
-    void deleteImage_validIndex_removesFileAndUpdatesJson() throws Exception {
+    @DisplayName("deleteImage - index valide → image marquée retirée, fichier conservé")
+    void deleteImage_validIndex_marquePlutotQueDeSupprimer() throws Exception {
         TestOrder order = buildOrder(TestOrderStatus.PENDING);
         order.setFilesName("[\"file.png\"]");
 
         when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
         when(objectMapper.readValue((String) any(), any(Class.class))).thenReturn(new ArrayList<>(List.of("file.png")));
-        when(objectMapper.writeValueAsString(any())).thenReturn("[]");
+        when(objectMapper.writeValueAsString(any())).thenReturn("[\"2026-08-24T10:00:00\"]");
         when(testOrderRepository.save(any())).thenReturn(order);
 
         testOrderService.deleteImage(ORDER_ID, 0, BRANCH_ID);
 
-        verify(fileStorageService).delete("file.png");
+        // Le fichier reste sur le disque et l'entrée à sa place : ces clichés
+        // montrent ce qui a été reçu au comptoir, et une suppression contestée
+        // plus tard ne doit pas avoir effacé jusqu'au fait qu'ils aient existé.
+        verify(fileStorageService, never()).delete(any());
+        assertThat(order.getFilesName()).isEqualTo("[\"file.png\"]");
+        assertThat(order.getFilesDeletedAt()).isNotNull();
         verify(testOrderRepository).save(any());
     }
 

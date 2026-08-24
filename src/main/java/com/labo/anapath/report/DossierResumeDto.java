@@ -42,6 +42,12 @@ public record DossierResumeDto(
         /** À qui la demande a été affectée, et quand. Nuls avant l'affectation. */
         String assignedToName,
         String assignmentCode,
-        java.time.LocalDate assignmentDate
+        java.time.LocalDate assignmentDate,
+        /** Les étiquettes portées sur les contenants de cette demande. */
+        java.util.List<String> assignmentLabels,
+        /** La note propre à cette demande. */
+        String assignmentNote,
+        /** La note générale du lot, partagée par toutes ses demandes. */
+        String assignmentLotNote
 ) {
 }

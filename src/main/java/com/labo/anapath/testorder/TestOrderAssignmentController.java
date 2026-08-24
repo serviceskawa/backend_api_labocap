@@ -45,6 +45,43 @@ public class TestOrderAssignmentController {
     }
 
     /**
+     * La file de travail du médecin connecté.
+     *
+     * <p>Toujours la sienne, jamais celle d'un autre : l'identité vient du
+     * jeton et non d'un paramètre. Un médecin n'a aucune raison de lire la file
+     * d'un confrère, et un paramètre l'y inviterait.</p>
+     *
+     * <p>Gardé par la lecture des affectations et non par leur administration :
+     * consulter ce qu'on doit traiter n'est pas composer des lots.</p>
+     */
+    @GetMapping("/mes-demandes")
+    @PreAuthorize("hasAuthority('view-test-order-assignments')")
+    public ResponseEntity<ApiResponse<java.util.List<DemandeDuMedecinDto>>> mesDemandes(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                assignmentService.fileDuMedecin(principal.getId())));
+    }
+
+    /**
+     * Change où en est le médecin sur une demande.
+     *
+     * <p>Sous la permission d'écriture. La maquette réserve ce geste au web :
+     * l'application mobile lit cette file, elle ne la modifie pas. Rien ici ne
+     * distingue les deux — c'est l'application qui n'offre pas le geste, et ce
+     * point d'entrée reste ouvert à qui en a le droit.</p>
+     */
+    @PutMapping("/details/{detailId}/statut-medecin")
+    @PreAuthorize("hasAuthority('manage-test-order-assignments')")
+    public ResponseEntity<ApiResponse<DemandeDuMedecinDto>> changerStatutMedecin(
+            @PathVariable UUID detailId,
+            @RequestBody java.util.Map<String, String> corps,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                assignmentService.changerStatutDuMedecin(
+                        detailId, corps.get("statut"), principal.getBranchId())));
+    }
+
+    /**
      * Le catalogue tel qu'on l'administre : identifiants et usages compris.
      *
      * <p>Distinct de {@code /labels}, qui ne sert que des chaînes aux
