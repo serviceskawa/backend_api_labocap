@@ -120,7 +120,6 @@ class PatientServiceImplTest {
                 null, null, null, BRANCH_ID, LocalDateTime.now(),
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
 
-        when(patientRepository.existsByTelephone1AndBranchId("0600000002", BRANCH_ID)).thenReturn(false);
         when(patientMapper.toEntity(requestDto)).thenReturn(patient);
         when(patientRepository.save(any(Patient.class))).thenReturn(patient);
         when(patientMapper.toResponseDto(patient)).thenReturn(responseDto);
@@ -166,18 +165,27 @@ class PatientServiceImplTest {
     }
 
     @Test
-    @DisplayName("create - should throw DuplicateResourceException when phone already exists")
-    void create_duplicatePhone() {
+    @DisplayName("create - deux patients peuvent partager un numéro de téléphone")
+    void create_telephoneDejaPris() {
+        // Un numéro n'identifie personne dans un laboratoire : une mère donne
+        // le sien pour ses trois enfants, un service hospitalier pour tous ses
+        // envois. Refuser bloquait un enregistrement au comptoir, devant
+        // quelqu'un qui attendait — et l'agent s'en tirait en inventant un
+        // chiffre, ce qui abîme la donnée bien plus sûrement qu'un doublon.
         PatientRequestDto requestDto = new PatientRequestDto();
         requestDto.setFirstname("Marie");
         requestDto.setLastname("Curie");
         requestDto.setTelephone1("0600000002");
         requestDto.setGenre("F");
 
-        when(patientRepository.existsByTelephone1AndBranchId("0600000002", BRANCH_ID)).thenReturn(true);
+        Patient patient = buildPatient();
+        when(patientMapper.toEntity(requestDto)).thenReturn(patient);
+        when(patientRepository.save(any(Patient.class))).thenReturn(patient);
+        when(patientMapper.toResponseDto(patient)).thenReturn(null);
 
-        assertThatThrownBy(() -> patientService.create(requestDto, BRANCH_ID))
-                .isInstanceOf(DuplicateResourceException.class);
+        patientService.create(requestDto, BRANCH_ID);
+
+        verify(patientRepository).save(any(Patient.class));
     }
 
     @Test

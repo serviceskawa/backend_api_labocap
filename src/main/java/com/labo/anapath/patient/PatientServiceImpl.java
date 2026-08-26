@@ -122,11 +122,14 @@ public class PatientServiceImpl implements PatientService {
             throw new DuplicateResourceException(
                     "Un patient avec le code '" + dto.getCode() + "' existe déjà dans cette agence.");
         }
-        if (StringUtils.hasText(dto.getTelephone1())
-                && patientRepository.existsByTelephone1AndBranchId(dto.getTelephone1(), branchId)) {
-            throw new DuplicateResourceException(
-                    "Un patient avec le téléphone '" + dto.getTelephone1() + "' existe déjà dans cette agence.");
-        }
+        // Le téléphone n'est pas une identité : une mère donne son numéro pour
+        // ses trois enfants, un service hospitalier pour tous ses envois. Le
+        // refuser bloquait un enregistrement au comptoir, devant quelqu'un qui
+        // attendait — et l'agent s'en tirait en inventant un chiffre, ce qui
+        // abîme la donnée bien plus sûrement qu'un doublon.
+        //
+        // L'identité d'un patient reste son code, dont l'unicité est vérifiée
+        // ci-dessus.
         Patient patient = patientMapper.toEntity(dto);
         patient.setBranchId(branchId);
         Patient saved = patientRepository.save(patient);
@@ -146,13 +149,9 @@ public class PatientServiceImpl implements PatientService {
             throw new DuplicateResourceException(
                     "Un patient avec le code '" + dto.getCode() + "' existe déjà.");
         }
-        // Vérifier le téléphone uniquement s'il change réellement
-        if (StringUtils.hasText(dto.getTelephone1())
-                && !dto.getTelephone1().equals(patient.getTelephone1())
-                && patientRepository.existsByTelephone1AndBranchId(dto.getTelephone1(), branchId)) {
-            throw new DuplicateResourceException(
-                    "Un patient avec le téléphone '" + dto.getTelephone1() + "' existe déjà dans cette agence.");
-        }
+        // Pas de contrôle sur le téléphone : voir `create`. Deux patients
+        // peuvent partager un numéro, et corriger celui d'une fiche ne doit pas
+        // buter sur une homonymie de numéro.
         patientMapper.updateEntityFromDto(dto, patient);
         return patientMapper.toResponseDto(patientRepository.save(patient));
     }
