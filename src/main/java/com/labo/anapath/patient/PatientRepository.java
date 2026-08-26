@@ -61,14 +61,11 @@ public interface PatientRepository extends JpaRepository<Patient, UUID>, JpaSpec
      */
     java.util.Optional<Patient> findByIdAndBranchId(UUID id, UUID branchId);
 
-    /**
-     * Vérifie qu'aucun patient de la même agence n'utilise déjà ce numéro de téléphone.
-     *
-     * @param telephone1 numéro de téléphone principal à vérifier
-     * @param branchId   identifiant de l'agence
-     * @return {@code true} si un doublon existe
-     */
-    boolean existsByTelephone1AndBranchId(String telephone1, UUID branchId);
+    // Il y avait ici un `existsByTelephone1AndBranchId`, qui servait à refuser
+    // un patient dont le numéro était déjà pris. La règle a été retirée : un
+    // numéro n'identifie personne dans un laboratoire, où une même ligne sert
+    // souvent à toute une famille. La méthode part avec elle — la laisser
+    // inviterait à rétablir la règle sans en reprendre la question.
 
     /**
      * Vérifie qu'aucun patient de la même agence n'a déjà ce code.
