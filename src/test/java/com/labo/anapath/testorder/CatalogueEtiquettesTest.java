@@ -41,6 +41,14 @@ class CatalogueEtiquettesTest {
     @Mock private BranchRepository branchRepository;
     @Mock private TestPathologyMacroRepository macroRepository;
     @Mock private SampleLabelRepository labelRepository;
+    /**
+     * Un vrai sérialiseur, non une doublure : les étiquettes passent par lui à
+     * l'aller comme au retour, et une doublure ne dirait rien de ce que la
+     * colonne contient réellement — qui est justement ce qu'on vérifie ici.
+     */
+    @org.mockito.Spy
+    private com.fasterxml.jackson.databind.ObjectMapper objectMapper =
+            new com.fasterxml.jackson.databind.ObjectMapper();
 
     @InjectMocks
     private TestOrderAssignmentServiceImpl service;
@@ -130,5 +138,55 @@ class CatalogueEtiquettesTest {
                 .isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> service.renommer(BRANCHE, e.getId(), "X".repeat(41)))
                 .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("corriger remplace les étiquettes au lieu de les compléter")
+    void laCorrectionRemplace() {
+        TestOrderAssignmentDetail ligne = new TestOrderAssignmentDetail();
+        ligne.setBranchId(BRANCHE);
+        ligne.setLabels("[\"L1\",\"Immuno non payé\"]");
+        ligne.setNote("urgent");
+        when(detailRepository.findById(any())).thenReturn(java.util.Optional.of(ligne));
+        when(detailRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(labelRepository.chercher(any(), any())).thenReturn(java.util.Optional.empty());
+
+        service.modifierDetail(UUID.randomUUID(),
+                new CorrectionDetailDto(List.of("L1", "Immuno payé"), null), BRANCHE);
+
+        // « Immuno non payé » doit disparaître. Compléter au lieu de remplacer
+        // laisserait les deux mentions sur le même contenant, et personne ne
+        // saurait laquelle vaut.
+        assertThat(ligne.getLabels()).contains("Immuno payé").doesNotContain("non payé");
+    }
+
+    @Test
+    @DisplayName("une note nulle n'est pas effacée par une correction d'étiquette")
+    void laNoteSurvitAUneCorrection() {
+        TestOrderAssignmentDetail ligne = new TestOrderAssignmentDetail();
+        ligne.setBranchId(BRANCHE);
+        ligne.setNote("à traiter avant midi");
+        when(detailRepository.findById(any())).thenReturn(java.util.Optional.of(ligne));
+        when(detailRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(labelRepository.chercher(any(), any())).thenReturn(java.util.Optional.empty());
+
+        service.modifierDetail(UUID.randomUUID(),
+                new CorrectionDetailDto(List.of("L2"), null), BRANCHE);
+
+        // Corriger une étiquette ne doit pas emporter une consigne qu'on
+        // n'avait pas l'intention de retirer.
+        assertThat(ligne.getNote()).isEqualTo("à traiter avant midi");
+    }
+
+    @Test
+    @DisplayName("on ne corrige pas la ligne d'une autre branche")
+    void correctionCloisonnee() {
+        TestOrderAssignmentDetail ligne = new TestOrderAssignmentDetail();
+        ligne.setBranchId(AUTRE_BRANCHE);
+        when(detailRepository.findById(any())).thenReturn(java.util.Optional.of(ligne));
+
+        assertThatThrownBy(() -> service.modifierDetail(UUID.randomUUID(),
+                new CorrectionDetailDto(List.of("L1"), null), BRANCHE))
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 }
