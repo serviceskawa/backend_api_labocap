@@ -153,6 +153,43 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
         return toDto(assignmentRepository.save(assignment));
     }
 
+    /** {@inheritDoc} */
+    @Override
+    @Transactional
+    public AssignmentDetailResponseDto modifierDetail(UUID detailId,
+                                                      CorrectionDetailDto correction,
+                                                      UUID branchId) {
+        TestOrderAssignmentDetail detail = detailRepository.findById(detailId)
+                .orElseThrow(() -> new ResourceNotFoundException("Détail d'assignment", detailId));
+        // Le cloisonnement par branche vaut ici comme ailleurs : on corrige les
+        // lots de son site, pas ceux du voisin.
+        if (detail.getBranchId() != null && !detail.getBranchId().equals(branchId)) {
+            throw new ResourceNotFoundException("Détail d'assignment", detailId);
+        }
+
+        // Les étiquettes sont remplacées, pas fusionnées : corriger veut dire
+        // « voici ce qui est vrai maintenant ». Ajouter « Immuno payé » sans
+        // retirer « Immuno non payé » laisserait les deux sur le contenant.
+        detail.setLabels(encoderEtiquettes(correction.labels()));
+        enrichirLeCatalogue(detail.getBranchId(), correction.labels());
+
+        // La note ne se vide que si l'appelant l'envoie vide. Un nul veut dire
+        // « je ne touche pas à la note » — sans quoi corriger une étiquette
+        // effacerait une consigne qu'on n'avait pas l'intention de retirer.
+        if (correction.note() != null) {
+            detail.setNote(correction.note().isBlank() ? null : correction.note());
+        }
+
+        detailRepository.save(detail);
+        log.info("Étiquettes corrigées : detailId={} demande={}", detailId, detail.getTestOrderCode());
+        return new AssignmentDetailResponseDto(
+                detail.getId(),
+                detail.getTestOrder() != null ? detail.getTestOrder().getId() : null,
+                detail.getTestOrderCode(),
+                decoderEtiquettes(detail.getLabels()),
+                detail.getNote());
+    }
+
     @Override
     @Transactional
     public void deleteDetail(UUID detailId) {

@@ -185,6 +185,23 @@ public class TestOrderAssignmentController {
         return ResponseEntity.ok(ApiResponse.success(assignmentService.getPrintData(id)));
     }
 
+    /**
+     * Corrige les étiquettes et la note d'une demande déjà affectée.
+     *
+     * <p>L'état d'un prélèvement change après son rangement — « Immuno non
+     * payé » devient « Immuno payé ». Sans cela, il fallait retirer la demande
+     * du lot et l'y remettre, ce qui perdait sa note.</p>
+     */
+    @PutMapping("/details/{detailId}")
+    @PreAuthorize("hasAuthority('manage-test-order-assignments')")
+    public ResponseEntity<ApiResponse<AssignmentDetailResponseDto>> modifierDetail(
+            @PathVariable UUID detailId,
+            @RequestBody CorrectionDetailDto correction,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                assignmentService.modifierDetail(detailId, correction, principal.getBranchId())));
+    }
+
     @DeleteMapping("/details/{detailId}")
     @PreAuthorize("hasAuthority('manage-test-order-assignments')")
     public ResponseEntity<ApiResponse<Void>> deleteDetail(@PathVariable UUID detailId) {

@@ -18,6 +18,20 @@ public interface TestOrderAssignmentService {
 
     AssignmentResponseDto update(UUID id, AssignmentRequestDto dto);
 
+    /**
+     * Corrige les étiquettes et la note d'une demande déjà affectée.
+     *
+     * <p>Une étiquette décrit l'état d'un prélèvement au moment où on le range,
+     * et cet état change : « Immuno non payé » devient « Immuno payé » quand la
+     * caisse encaisse, parfois le lendemain. Sans ce point d'entrée, il fallait
+     * retirer la demande du lot et l'y remettre — ce qui perdait sa note et
+     * faisait disparaître la ligne d'un écran que quelqu'un consultait
+     * peut-être.</p>
+     */
+    AssignmentDetailResponseDto modifierDetail(UUID detailId,
+                                               CorrectionDetailDto correction,
+                                               UUID branchId);
+
     void deleteDetail(UUID detailId);
 
     /**
