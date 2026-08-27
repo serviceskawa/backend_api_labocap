@@ -48,6 +48,7 @@ class DiscussionServiceTest {
     @Mock private TestOrderRepository testOrderRepository;
     @Mock private TestOrderAssignmentDetailRepository detailRepository;
     @Mock private UserRepository userRepository;
+    @Mock private com.labo.anapath.testorder.FileStorageService fichiers;
 
     @InjectMocks private DiscussionService service;
 
@@ -145,5 +146,57 @@ class DiscussionServiceTest {
                 AUTEUR, BRANCHE);
 
         assertThat(dto.type()).isEqualTo("texte");
+    }
+
+    @Test
+    @DisplayName("un format non prévu est refusé, quelle que soit son extension")
+    void formatRefuse() throws Exception {
+        // Liste blanche et non liste noire : un fil de discussion médical n'a
+        // pas à devenir un canal de transfert de fichiers quelconques.
+        var fichier = new org.springframework.mock.web.MockMultipartFile(
+                "file", "note.exe", "application/octet-stream", new byte[] {1, 2, 3});
+
+        assertThatThrownBy(() -> service.posterFichier(
+                DEMANDE, fichier, "audio", null, AUTEUR, BRANCHE))
+                .isInstanceOf(BusinessException.class);
+
+        verify(messages, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("un fichier trop lourd est refusé avant d'être écrit")
+    void fichierTropLourd() {
+        // Refusé avant l'écriture : accepter puis effacer laisserait le disque
+        // se remplir le temps du transfert, et c'est justement le cas qu'on
+        // veut borner.
+        var gros = new org.springframework.mock.web.MockMultipartFile(
+                "file", "long.m4a", "audio/mp4", new byte[11 * 1024 * 1024]);
+
+        assertThatThrownBy(() -> service.posterFichier(
+                DEMANDE, gros, "audio", null, AUTEUR, BRANCHE))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("10 Mo");
+
+        verify(messages, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("une note vocale acceptée garde le nom du fichier, pas son URL")
+    void laNoteVocalePasse() throws Exception {
+        var note = new org.springframework.mock.web.MockMultipartFile(
+                "file", "note.m4a", "audio/mp4", new byte[] {1, 2, 3});
+        when(fichiers.store(any(), any())).thenReturn("discussions/abc.m4a");
+        when(fichiers.getUrl("discussions/abc.m4a"))
+                .thenReturn("/api/v1/files/discussions/abc.m4a");
+
+        var dto = service.posterFichier(DEMANDE, note, "audio", null, AUTEUR, BRANCHE);
+
+        // En base le nom ; à l'écran l'URL. Stocker l'URL la figerait — un
+        // changement de préfixe casserait tous les messages anciens.
+        ArgumentCaptor<DiscussionMessage> capte =
+                ArgumentCaptor.forClass(DiscussionMessage.class);
+        verify(messages).save(capte.capture());
+        assertThat(capte.getValue().getContent()).isEqualTo("discussions/abc.m4a");
+        assertThat(dto.contenu()).isEqualTo("/api/v1/files/discussions/abc.m4a");
     }
 }
