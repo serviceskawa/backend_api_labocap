@@ -148,19 +148,42 @@ class DiscussionServiceTest {
         assertThat(dto.type()).isEqualTo("texte");
     }
 
+    /** Un entête MP4 : la boîte `ftyp` au quatrième octet. */
+    private static byte[] enteteMp4() {
+        byte[] t = new byte[32];
+        t[4] = 'f'; t[5] = 't'; t[6] = 'y'; t[7] = 'p';
+        return t;
+    }
+
     @Test
-    @DisplayName("un format non prévu est refusé, quelle que soit son extension")
+    @DisplayName("un fichier qui n'est pas de l'audio est refusé, même annoncé comme tel")
     void formatRefuse() throws Exception {
-        // Liste blanche et non liste noire : un fil de discussion médical n'a
-        // pas à devenir un canal de transfert de fichiers quelconques.
+        // Le format se lit dans le fichier, pas dans ce que le client annonce.
+        // Un type déclaré ne protège de rien : il suffit de le changer.
         var fichier = new org.springframework.mock.web.MockMultipartFile(
-                "file", "note.exe", "application/octet-stream", new byte[] {1, 2, 3});
+                "file", "note.m4a", "audio/mp4", new byte[] {1, 2, 3, 4, 5, 6, 7, 8});
 
         assertThatThrownBy(() -> service.posterFichier(
                 DEMANDE, fichier, "audio", null, AUTEUR, BRANCHE))
                 .isInstanceOf(BusinessException.class);
 
         verify(messages, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("un vrai MP4 passe, même annoncé « application/octet-stream »")
+    void octetStreamPasse() throws Exception {
+        // C'est le cas réel : `http.MultipartFile` de Dart déclare ce type par
+        // défaut, quelle que soit l'extension du fichier. Refuser là-dessus
+        // rejetait toutes les notes vocales.
+        var note = new org.springframework.mock.web.MockMultipartFile(
+                "file", "note.m4a", "application/octet-stream", enteteMp4());
+        when(fichiers.store(any(), any())).thenReturn("discussions/abc.m4a");
+        when(fichiers.getUrl(any())).thenReturn("/api/v1/files/discussions/abc.m4a");
+
+        var dto = service.posterFichier(DEMANDE, note, "audio", null, AUTEUR, BRANCHE);
+
+        assertThat(dto.type()).isEqualTo("audio");
     }
 
     @Test
@@ -184,7 +207,7 @@ class DiscussionServiceTest {
     @DisplayName("une note vocale acceptée garde le nom du fichier, pas son URL")
     void laNoteVocalePasse() throws Exception {
         var note = new org.springframework.mock.web.MockMultipartFile(
-                "file", "note.m4a", "audio/mp4", new byte[] {1, 2, 3});
+                "file", "note.m4a", "audio/mp4", enteteMp4());
         when(fichiers.store(any(), any())).thenReturn("discussions/abc.m4a");
         when(fichiers.getUrl("discussions/abc.m4a"))
                 .thenReturn("/api/v1/files/discussions/abc.m4a");

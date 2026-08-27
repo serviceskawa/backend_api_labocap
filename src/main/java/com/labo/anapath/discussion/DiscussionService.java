@@ -56,19 +56,6 @@ public class DiscussionService {
     private final UserRepository userRepository;
     private final com.labo.anapath.testorder.FileStorageService fichiers;
 
-    /**
-     * Ce qu'on accepte comme note vocale.
-     *
-     * <p>Une liste blanche, jamais une liste noire : ce qui n'y figure pas est
-     * refusé. Un fil de discussion médical n'a pas à devenir un canal de
-     * transfert de fichiers quelconques.</p>
-     */
-    private static final java.util.Set<String> TYPES_AUDIO = java.util.Set.of(
-            "audio/mp4", "audio/m4a", "audio/aac", "audio/mpeg",
-            "audio/ogg", "audio/wav", "audio/x-wav", "audio/webm");
-
-    private static final java.util.Set<String> TYPES_IMAGE = java.util.Set.of(
-            "image/jpeg", "image/png");
 
     /**
      * Au-delà, ce n'est plus une note dictée entre deux portes.
@@ -168,14 +155,23 @@ public class DiscussionService {
         }
 
         String voulu = type == null ? DiscussionMessage.AUDIO : type.trim();
-        String mime = fichier.getContentType() == null
-                ? "" : fichier.getContentType().toLowerCase();
+        // Le format se lit dans le fichier, pas dans ce que le client annonce.
+        // Les clients mentent — `http.MultipartFile` déclare
+        // « application/octet-stream » par défaut, quelle que soit l'extension —
+        // et un type déclaré ne protège de rien : il suffit de le changer.
+        byte[] tete = new byte[16];
+        try (java.io.InputStream flux = fichier.getInputStream()) {
+            flux.readNBytes(tete, 0, 16);
+        } catch (java.io.IOException e) {
+            throw new BusinessException("Le fichier n'a pas pu être lu.");
+        }
         boolean accepte = DiscussionMessage.AUDIO.equals(voulu)
-                ? TYPES_AUDIO.contains(mime)
-                : DiscussionMessage.PHOTO.equals(voulu) && TYPES_IMAGE.contains(mime);
+                ? estUnAudio(tete)
+                : DiscussionMessage.PHOTO.equals(voulu) && estUneImage(tete);
         if (!accepte) {
-            throw new BusinessException(
-                    "Ce format n'est pas accepté ici : « " + mime + " ».");
+            throw new BusinessException(DiscussionMessage.AUDIO.equals(voulu)
+                    ? "Ce fichier n'est pas une note vocale reconnue."
+                    : "Ce fichier n'est pas une image JPG ou PNG.");
         }
 
         TestOrder demande = testOrderRepository.findByIdAndBranchId(testOrderId, branchId)
@@ -234,6 +230,39 @@ public class DiscussionService {
     }
 
     // ── Interne ─────────────────────────────────────────────────────────
+
+    /**
+     * Le fichier porte-t-il la signature d'un format audio attendu ?
+     *
+     * <p>Quatre conteneurs suffisent à couvrir ce que produisent Android et
+     * iOS : MP4 — celui de l'application —, MP3, Ogg et WAV. Le reste est
+     * refusé plutôt que deviné.</p>
+     */
+    private boolean estUnAudio(byte[] t) {
+        // MP4 / M4A : « ftyp » en quatrième octet, la taille de boîte devant.
+        if (t[4] == 'f' && t[5] == 't' && t[6] == 'y' && t[7] == 'p') return true;
+        // MP3 : une étiquette ID3, ou une trame brute (0xFF 0xEx/0xFx).
+        if (t[0] == 'I' && t[1] == 'D' && t[2] == '3') return true;
+        if ((t[0] & 0xFF) == 0xFF && (t[1] & 0xE0) == 0xE0) return true;
+        // Ogg.
+        if (t[0] == 'O' && t[1] == 'g' && t[2] == 'g' && t[3] == 'S') return true;
+        // WAV : conteneur RIFF portant la marque WAVE.
+        if (t[0] == 'R' && t[1] == 'I' && t[2] == 'F' && t[3] == 'F'
+                && t[8] == 'W' && t[9] == 'A' && t[10] == 'V' && t[11] == 'E') {
+            return true;
+        }
+        // Matroska / WebM.
+        return (t[0] & 0xFF) == 0x1A && (t[1] & 0xFF) == 0x45
+                && (t[2] & 0xFF) == 0xDF && (t[3] & 0xFF) == 0xA3;
+    }
+
+    /** Signature JPEG ({@code FF D8 FF}) ou PNG ({@code 89 50 4E 47}). */
+    private boolean estUneImage(byte[] t) {
+        boolean jpeg = (t[0] & 0xFF) == 0xFF && (t[1] & 0xFF) == 0xD8
+                && (t[2] & 0xFF) == 0xFF;
+        boolean png = (t[0] & 0xFF) == 0x89 && t[1] == 'P' && t[2] == 'N' && t[3] == 'G';
+        return jpeg || png;
+    }
 
     private Discussion ouvrirOuCreer(TestOrder demande, UUID venantId, UUID branchId) {
         Discussion fil = discussions.findByTestOrderId(demande.getId())
