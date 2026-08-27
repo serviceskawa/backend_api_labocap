@@ -54,6 +54,31 @@ public class DiscussionController {
     }
 
     /**
+     * Poste une note vocale ou une photo dans le fil.
+     *
+     * <p>Même garde que le message texte : participer à la conversation d'un cas
+     * suppose le droit de consulter ce cas, ni plus ni moins.</p>
+     *
+     * <p>Le fichier est rangé où le sont les clichés d'un bon d'examen — même
+     * chiffrement au repos, même point d'entrée protégé pour le relire. Une note
+     * dictée sur un cas est une donnée médicale ; elle ne mérite pas moins de
+     * soin qu'une image de lame.</p>
+     */
+    @PostMapping(value = "/test-order/{testOrderId}/messages/fichier",
+                 consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('view-test-orders')")
+    public ResponseEntity<ApiResponse<MessageDto>> posterFichier(
+            @PathVariable UUID testOrderId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile fichier,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) UUID taggedUserId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                service.posterFichier(testOrderId, fichier, type, taggedUserId,
+                        principal.getId(), principal.getBranchId())));
+    }
+
+    /**
      * Marque le fil comme lu.
      *
      * <p>Appelé en ouvrant la discussion : la maquette veut que l'ouverture

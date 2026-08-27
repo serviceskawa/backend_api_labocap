@@ -54,6 +54,30 @@ public class DiscussionService {
     private final TestOrderRepository testOrderRepository;
     private final TestOrderAssignmentDetailRepository detailRepository;
     private final UserRepository userRepository;
+    private final com.labo.anapath.testorder.FileStorageService fichiers;
+
+    /**
+     * Ce qu'on accepte comme note vocale.
+     *
+     * <p>Une liste blanche, jamais une liste noire : ce qui n'y figure pas est
+     * refusé. Un fil de discussion médical n'a pas à devenir un canal de
+     * transfert de fichiers quelconques.</p>
+     */
+    private static final java.util.Set<String> TYPES_AUDIO = java.util.Set.of(
+            "audio/mp4", "audio/m4a", "audio/aac", "audio/mpeg",
+            "audio/ogg", "audio/wav", "audio/x-wav", "audio/webm");
+
+    private static final java.util.Set<String> TYPES_IMAGE = java.util.Set.of(
+            "image/jpeg", "image/png");
+
+    /**
+     * Au-delà, ce n'est plus une note dictée entre deux portes.
+     *
+     * <p>Dix mégaoctets laissent largement plusieurs minutes de parole
+     * compressée, et bornent ce qu'un fil peut coûter au disque comme au forfait
+     * de celui qui le consulte.</p>
+     */
+    private static final long TAILLE_MAX = 10L * 1024 * 1024;
 
     /**
      * Le fil d'un dossier, créé s'il n'existe pas.
@@ -118,6 +142,67 @@ public class DiscussionService {
         lectures.save(new DiscussionLecture(message.getId(), auteurId));
 
         log.info("Message posté : dossier={} auteur={} type={}", testOrderId, auteurId, type);
+        Map<UUID, User> gens = chargerLesGens(fil, List.of(message));
+        return versDto(message, gens, fil, Set.of());
+    }
+
+    /**
+     * Poste une note vocale ou une photo.
+     *
+     * <p>Le fichier est rangé comme les clichés d'un bon d'examen — même
+     * stockage, même chiffrement au repos, même point d'entrée protégé pour le
+     * relire. Le message ne garde que son nom ; l'URL se compose à la
+     * lecture.</p>
+     */
+    @Transactional
+    public MessageDto posterFichier(UUID testOrderId,
+                                    org.springframework.web.multipart.MultipartFile fichier,
+                                    String type, UUID taggedUserId,
+                                    UUID auteurId, UUID branchId) {
+        if (fichier == null || fichier.isEmpty()) {
+            throw new BusinessException("Aucun fichier reçu.");
+        }
+        if (fichier.getSize() > TAILLE_MAX) {
+            throw new BusinessException(
+                    "Ce fichier dépasse 10 Mo. Une note vocale plus courte passera.");
+        }
+
+        String voulu = type == null ? DiscussionMessage.AUDIO : type.trim();
+        String mime = fichier.getContentType() == null
+                ? "" : fichier.getContentType().toLowerCase();
+        boolean accepte = DiscussionMessage.AUDIO.equals(voulu)
+                ? TYPES_AUDIO.contains(mime)
+                : DiscussionMessage.PHOTO.equals(voulu) && TYPES_IMAGE.contains(mime);
+        if (!accepte) {
+            throw new BusinessException(
+                    "Ce format n'est pas accepté ici : « " + mime + " ».");
+        }
+
+        TestOrder demande = testOrderRepository.findByIdAndBranchId(testOrderId, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", testOrderId));
+        Discussion fil = ouvrirOuCreer(demande, auteurId, branchId);
+
+        if (taggedUserId != null) {
+            userRepository.findById(taggedUserId)
+                    .ifPresent(u -> ajouterAuFil(fil, u.getId(), roleDe(u)));
+        }
+
+        String nom;
+        try {
+            // Rangé à part des clichés de bons d'examen : ce ne sont pas les
+            // mêmes pièces, et les mêler compliquerait toute reprise ou tout
+            // ménage ultérieur.
+            nom = fichiers.store(fichier, "discussions");
+        } catch (java.io.IOException e) {
+            throw new BusinessException("Le fichier n'a pas pu être enregistré.");
+        }
+
+        DiscussionMessage message = messages.save(
+                new DiscussionMessage(fil, auteurId, voulu, nom, taggedUserId));
+        lectures.save(new DiscussionLecture(message.getId(), auteurId));
+
+        log.info("Fichier posté au fil : dossier={} auteur={} type={} taille={}",
+                testOrderId, auteurId, voulu, fichier.getSize());
         Map<UUID, User> gens = chargerLesGens(fil, List.of(message));
         return versDto(message, gens, fil, Set.of());
     }
@@ -221,9 +306,15 @@ public class DiscussionService {
                 .map(DiscussionParticipant::getRole)
                 .findFirst()
                 .orElse(DiscussionParticipant.TECHNICIEN);
+        // Le message garde le nom du fichier ; l'écran reçoit une URL. Stocker
+        // l'URL en base la figerait — un changement de préfixe casserait tous
+        // les messages anciens.
+        String contenu = DiscussionMessage.TEXTE.equals(m.getType())
+                ? m.getContent()
+                : fichiers.getUrl(m.getContent());
         return new MessageDto(
                 m.getId(), m.getAuthorId(), nomDe(gens.get(m.getAuthorId())), role,
-                m.getType(), m.getContent(),
+                m.getType(), contenu,
                 m.getTaggedUserId(), nomDe(gens.get(m.getTaggedUserId())),
                 // Un identifiant absent vaut « lu » : le seul message qui puisse
                 // en manquer est celui qu'on vient d'écrire, et son auteur l'a
