@@ -113,6 +113,26 @@ public class MobileAuthController {
         return ResponseEntity.ok(ApiResponse.success("Code d'enrôlement révoqué", null));
     }
 
+    /**
+     * Enregistre le jeton de notification de l'appareil connecté.
+     *
+     * <p>L'appareil vient du jeton de session, jamais du corps de la requête :
+     * accepter un identifiant d'appareil permettrait de détourner les
+     * notifications de quelqu'un d'autre vers son propre téléphone.</p>
+     *
+     * <p>Appelé à chaque connexion et non une seule fois : le jeton change tout
+     * seul — réinstallation, effacement des données, décision du système — et
+     * un jeton périmé ne se signale que par des notifications qui n'arrivent
+     * plus.</p>
+     */
+    @PostMapping("/push-token")
+    public ResponseEntity<ApiResponse<Void>> enregistrerJetonPush(
+            @RequestBody java.util.Map<String, String> corps,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        mobileAuthService.enregistrerJetonPush(principal.getId(), corps.get("token"));
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
     /** Échange un code d'enrôlement contre l'identité d'un appareil. Public. */
     @PostMapping("/enroll")
     public ResponseEntity<ApiResponse<EnrollResponse>> enroler(@Valid @RequestBody EnrollRequest requete) {

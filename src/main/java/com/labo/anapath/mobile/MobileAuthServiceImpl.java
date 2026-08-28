@@ -66,6 +66,7 @@ public class MobileAuthServiceImpl implements MobileAuthService {
     private final com.labo.anapath.auth.AuthService authService;
     private final com.labo.anapath.role.PermissionRepository permissionRepository;
     private final com.labo.anapath.common.security.ChiffreurDeSecrets chiffreur;
+    private final ProvenanceRequete provenanceRequete;
 
     @Override
     @Transactional
@@ -145,6 +146,29 @@ public class MobileAuthServiceImpl implements MobileAuthService {
         revoquerLesCodesVivants(userId, auteurId);
 
         log.warn("Accès mobile fermé pour userId={} par userId={}", userId, auteurId);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional
+    public void enregistrerJetonPush(UUID userId, String jeton) {
+        UUID appareilId = provenanceRequete.appareilCourant();
+        if (appareilId == null) {
+            // Session web : rien à enregistrer. Un jeton de notification
+            // appartient à un téléphone, pas à un navigateur.
+            return;
+        }
+        if (jeton == null || jeton.isBlank()) return;
+
+        deviceRepository.findByIdAndRevokedAtIsNull(appareilId).ifPresent(appareil -> {
+            // L'appareil doit être celui de la personne connectée. Sans cette
+            // vérification, un jeton volé permettrait de détourner les
+            // notifications d'un autre vers son propre téléphone.
+            if (!appareil.getUserId().equals(userId)) return;
+            appareil.setPushToken(jeton.trim());
+            appareil.setPushTokenAt(LocalDateTime.now());
+            deviceRepository.save(appareil);
+        });
     }
 
     /** {@inheritDoc} */

@@ -55,6 +55,8 @@ public class DiscussionService {
     private final TestOrderAssignmentDetailRepository detailRepository;
     private final UserRepository userRepository;
     private final com.labo.anapath.testorder.FileStorageService fichiers;
+    private final com.labo.anapath.mobile.NotificationsPush notifications;
+    private final com.labo.anapath.mobile.MobileDeviceRepository appareils;
 
 
     /**
@@ -130,6 +132,7 @@ public class DiscussionService {
 
         log.info("Message posté : dossier={} auteur={} type={}", testOrderId, auteurId, type);
         Map<UUID, User> gens = chargerLesGens(fil, List.of(message));
+        prevenir(fil, demande, message, gens);
         return versDto(message, gens, fil, Set.of());
     }
 
@@ -200,6 +203,7 @@ public class DiscussionService {
         log.info("Fichier posté au fil : dossier={} auteur={} type={} taille={}",
                 testOrderId, auteurId, voulu, fichier.getSize());
         Map<UUID, User> gens = chargerLesGens(fil, List.of(message));
+        prevenir(fil, demande, message, gens);
         return versDto(message, gens, fil, Set.of());
     }
 
@@ -227,6 +231,67 @@ public class DiscussionService {
         return messages.compterNonLus(lecteurId).stream()
                 .map(l -> new NonLusDto((UUID) l[0], ((Number) l[1]).longValue()))
                 .toList();
+    }
+
+    /**
+     * Prévient les participants, sauf celui qui vient d'écrire.
+     *
+     * <p>Les participants portent déjà les règles d'adressage de la maquette :
+     * le médecin affecté et les techniciens du dossier y entrent à l'ouverture,
+     * et taguer quelqu'un l'y fait entrer. Les recalculer ici les ferait
+     * diverger de ce que compte le badge des non-lus, avec le pire des
+     * résultats : une notification pour un message qui n'apparaît nulle
+     * part.</p>
+     *
+     * <h2>Ce que la notification tait</h2>
+     *
+     * <p>Le contenu du message. Elle s'affiche sur un écran verrouillé, parfois
+     * sous les yeux d'un tiers — dans un couloir, sur une table. Elle nomme donc
+     * l'auteur et le dossier, et laisse le reste derrière le déverrouillage.
+     * C'est un geste de plus, et c'est le prix de ne pas exposer une
+     * conversation médicale à qui passe.</p>
+     *
+     * <p>Un tag est signalé comme tel : être nommé change l'urgence, et le
+     * taire ferait manquer ce que la maquette veut justement mettre en avant.</p>
+     */
+    private void prevenir(Discussion fil, TestOrder demande,
+                          DiscussionMessage message, Map<UUID, User> gens) {
+        try {
+            if (!notifications.estActif()) return;
+            List<UUID> destinataires = fil.getParticipants().stream()
+                    .map(DiscussionParticipant::getUserId)
+                    .filter(id -> !id.equals(message.getAuthorId()))
+                    .toList();
+            if (destinataires.isEmpty()) return;
+
+            List<String> jetons = appareils.jetonsDe(destinataires);
+            if (jetons.isEmpty()) return;
+
+            // Un nom introuvable ne doit pas donner « null a écrit… » : mieux
+            // vaut une tournure impersonnelle qu'un mot qui trahit un défaut.
+            String auteur = nomDe(gens.get(message.getAuthorId()));
+            if (auteur == null || auteur.isBlank()) auteur = "Quelqu'un";
+            String quoi = switch (message.getType()) {
+                case DiscussionMessage.PHOTO -> "a envoyé une photo";
+                case DiscussionMessage.AUDIO -> "a envoyé une note vocale";
+                default -> "a écrit dans la discussion";
+            };
+            String corps = message.getTaggedUserId() != null
+                    ? auteur + " vous a nommé dans la discussion"
+                    : auteur + " " + quoi;
+
+            notifications.prevenir(
+                    jetons,
+                    "Dossier " + demande.getCode(),
+                    corps,
+                    Map.of("testOrderId", demande.getId().toString(),
+                           "codeDemande", demande.getCode() == null ? "" : demande.getCode()));
+        } catch (Exception e) {
+            // Une notification qui échoue ne doit jamais empêcher un message
+            // d'être posté. La conversation est la donnée ; l'alerte n'en est
+            // que l'écho.
+            log.warn("Notification du fil impossible", e);
+        }
     }
 
     // ── Interne ─────────────────────────────────────────────────────────

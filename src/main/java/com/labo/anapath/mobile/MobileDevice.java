@@ -59,6 +59,23 @@ public class MobileDevice {
      * Date de révocation, et non suppression de la ligne : couper un appareil
      * ne doit pas effacer la trace des actes qu'il a portés.
      */
+    /**
+     * Le jeton de notification de cet appareil.
+     *
+     * <p>Porté par l'appareil et non par la personne : un médecin peut avoir
+     * deux téléphones, et un téléphone changer de main. Révoquer l'appareil
+     * éteint ses notifications du même geste.</p>
+     *
+     * <p>Nul tant que l'application ne l'a pas transmis — un appareil enrôlé
+     * avant que les notifications n'existent, ou un système qui les refuse.</p>
+     */
+    @Column(name = "push_token", length = 512)
+    private String pushToken;
+
+    /** De quand date le jeton qu'on garde. */
+    @Column(name = "push_token_at")
+    private LocalDateTime pushTokenAt;
+
     @Column(name = "revoked_at")
     private LocalDateTime revokedAt;
 
