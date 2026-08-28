@@ -49,12 +49,16 @@ class DiscussionServiceTest {
     @Mock private TestOrderAssignmentDetailRepository detailRepository;
     @Mock private UserRepository userRepository;
     @Mock private com.labo.anapath.testorder.FileStorageService fichiers;
+    @Mock private com.labo.anapath.mobile.NotificationsPush notifications;
+    @Mock private com.labo.anapath.mobile.MobileDeviceRepository appareils;
 
     @InjectMocks private DiscussionService service;
 
     private final UUID DEMANDE = UUID.randomUUID();
     private final UUID BRANCHE = UUID.randomUUID();
     private final UUID AUTEUR = UUID.randomUUID();
+    private final UUID AUTRUI = UUID.randomUUID();
+    private Discussion fil;
 
     @BeforeEach
     void poser() {
@@ -67,16 +71,21 @@ class DiscussionServiceTest {
         when(testOrderRepository.findByIdAndBranchId(DEMANDE, BRANCHE))
                 .thenReturn(Optional.of(demande));
 
-        Discussion fil = new Discussion(DEMANDE, BRANCHE);
+        fil = new Discussion(DEMANDE, BRANCHE);
         when(discussions.findByTestOrderId(DEMANDE)).thenReturn(Optional.of(fil));
 
         User auteur = new User();
         auteur.setLastname("AGBO");
         auteur.setFirstname("Marc");
+        poserId(auteur, AUTEUR);
         when(userRepository.findById(AUTEUR)).thenReturn(Optional.of(auteur));
+        when(userRepository.findAllById(any())).thenReturn(List.of(auteur));
 
         when(detailRepository.findByTestOrderId(DEMANDE)).thenReturn(Optional.empty());
         when(messages.save(any())).thenAnswer(i -> i.getArgument(0));
+        // Un dépôt rend ce qu'on lui confie. Le laisser rendre `null` glissait
+        // un participant nul dans le fil, ce qui n'arrive jamais en vrai.
+        when(participants.save(any())).thenAnswer(i -> i.getArgument(0));
     }
 
     /** Pose l'identifiant d'une entité auditée, que rien n'expose en écriture. */
@@ -221,5 +230,107 @@ class DiscussionServiceTest {
         verify(messages).save(capte.capture());
         assertThat(capte.getValue().getContent()).isEqualTo("discussions/abc.m4a");
         assertThat(dto.contenu()).isEqualTo("/api/v1/files/discussions/abc.m4a");
+    }
+
+    // ── Les notifications hors-app ──────────────────────────────────────
+
+    /** Inscrit au fil l'auteur et un second participant. */
+    private void deuxParticipants() {
+        for (UUID qui : List.of(AUTEUR, AUTRUI)) {
+            var p = new DiscussionParticipant(fil, qui,
+                    qui.equals(AUTEUR) ? "docteur" : "laborantin");
+            fil.getParticipants().add(p);
+            // Déjà inscrits : sans cela le service les réinscrirait, et le fil
+            // compterait deux fois la même personne.
+            when(participants.findByDiscussionIdAndUserId(any(), org.mockito.ArgumentMatchers.eq(qui)))
+                    .thenReturn(Optional.of(p));
+        }
+    }
+
+    @Test
+    @DisplayName("celui qui écrit n'est pas prévenu de son propre message")
+    void pasDeNotificationAsoiMeme() {
+        deuxParticipants();
+        when(notifications.estActif()).thenReturn(true);
+        when(appareils.jetonsDe(any())).thenReturn(List.of("jeton-b"));
+
+        service.poster(DEMANDE,
+                new DiscussionDtos.NouveauMessage("texte", "Lame reçue.", null),
+                AUTEUR, BRANCHE);
+
+        // Le seul destinataire demandé doit être l'autre : se notifier soi-même
+        // ferait vibrer le téléphone de qui vient de reposer le sien.
+        ArgumentCaptor<java.util.Collection<UUID>> qui =
+                ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(appareils).jetonsDe(qui.capture());
+        assertThat(qui.getValue()).containsExactly(AUTRUI);
+    }
+
+    @Test
+    @DisplayName("la notification ne porte pas le contenu du message")
+    void leContenuResteDerriereLeVerrou() {
+        deuxParticipants();
+        when(notifications.estActif()).thenReturn(true);
+        when(appareils.jetonsDe(any())).thenReturn(List.of("jeton-b"));
+
+        service.poster(DEMANDE,
+                new DiscussionDtos.NouveauMessage("texte", "Carcinome infiltrant.", null),
+                AUTEUR, BRANCHE);
+
+        // Une notification s'affiche sur un écran verrouillé, parfois sous les
+        // yeux d'un tiers. Elle nomme l'auteur et le dossier ; le diagnostic
+        // attend le déverrouillage.
+        ArgumentCaptor<String> titre = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> corps = ArgumentCaptor.forClass(String.class);
+        verify(notifications).prevenir(any(), titre.capture(), corps.capture(), any());
+        assertThat(titre.getValue()).contains("26-0155");
+        assertThat(corps.getValue()).contains("AGBO").doesNotContain("Carcinome");
+    }
+
+    @Test
+    @DisplayName("être nommé se dit, parce que cela change l'urgence")
+    void leTagSeDit() {
+        deuxParticipants();
+        when(notifications.estActif()).thenReturn(true);
+        when(appareils.jetonsDe(any())).thenReturn(List.of("jeton-b"));
+
+        service.poster(DEMANDE,
+                new DiscussionDtos.NouveauMessage("texte", "@Marc peux-tu voir ?", AUTRUI),
+                AUTEUR, BRANCHE);
+
+        ArgumentCaptor<String> corps = ArgumentCaptor.forClass(String.class);
+        verify(notifications).prevenir(any(), any(), corps.capture(), any());
+        assertThat(corps.getValue()).contains("nommé");
+    }
+
+    @Test
+    @DisplayName("sans appareil enrôlé, on n'appelle pas le service d'envoi")
+    void aucunAppareil() {
+        deuxParticipants();
+        when(notifications.estActif()).thenReturn(true);
+        when(appareils.jetonsDe(any())).thenReturn(List.of());
+
+        service.poster(DEMANDE,
+                new DiscussionDtos.NouveauMessage("texte", "Lame reçue.", null),
+                AUTEUR, BRANCHE);
+
+        verify(notifications, never()).prevenir(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("une notification qui échoue n'empêche pas le message d'être posté")
+    void lEchecNEmporteRienDAutre() {
+        deuxParticipants();
+        when(notifications.estActif()).thenReturn(true);
+        when(appareils.jetonsDe(any())).thenThrow(new RuntimeException("réseau coupé"));
+
+        // La conversation est la donnée ; l'alerte n'en est que l'écho. Perdre
+        // l'écho est un désagrément, perdre le message serait une faute.
+        var dto = service.poster(DEMANDE,
+                new DiscussionDtos.NouveauMessage("texte", "Lame reçue.", null),
+                AUTEUR, BRANCHE);
+
+        assertThat(dto.contenu()).isEqualTo("Lame reçue.");
+        verify(messages).save(any());
     }
 }

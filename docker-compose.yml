@@ -94,6 +94,14 @@ services:
       # clé publique — pire que pas de chiffrement, puisqu'on le croirait actif.
       STORAGE_ENCRYPTION_ENABLED: ${STORAGE_ENCRYPTION_ENABLED:-false}
       STORAGE_ENCRYPTION_KEY: ${STORAGE_ENCRYPTION_KEY:-}
+      # Notifications hors-app. Le compte de service Firebase est monté en
+      # lecture seule plutôt que passé par l'environnement : le JSON fait deux
+      # kilo-octets et se retrouverait entier dans « docker inspect ».
+      #
+      # Vide par défaut, et c'est voulu : sans clé le serveur démarre et sert
+      # normalement, muet. Renseigner PUSH_CREDENTIALS_FILE dans .env une fois
+      # le fichier déposé dans ./secrets/.
+      PUSH_CREDENTIALS_FILE: ${PUSH_CREDENTIALS_FILE:-}
       # SMTP
       MAIL_HOST: ${MAIL_HOST:-smtp.mailtrap.io}
       MAIL_PORT: ${MAIL_PORT:-2525}
@@ -103,6 +111,10 @@ services:
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Labo AnaPath}
     volumes:
       - storage:/var/lib/labo/storage
+      # Les secrets en fichier — aujourd'hui le seul compte de service
+      # Firebase. En lecture seule : l'application n'a aucune raison d'y
+      # écrire, et le lui interdire ferme une porte de plus.
+      - ./secrets:/var/lib/labo/secrets:ro
       # Les sauvegardes doivent survivre au redéploiement : sans volume,
       # elles vivaient dans la couche éphémère du conteneur.
       - backups:/var/lib/labo/backups

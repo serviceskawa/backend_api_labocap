@@ -58,4 +58,12 @@ public interface MobileAuthService {
     void revoquer(UUID deviceId, UUID auteurId, UUID branchId);
 
     List<DeviceResponse> listerAppareils(UUID branchId);
+
+    /**
+     * Retient le jeton de notification de l'appareil d'où vient l'appel.
+     *
+     * <p>L'appareil est déduit de la session : il n'est pas demandé, et ne peut
+     * donc pas être choisi par l'appelant.</p>
+     */
+    void enregistrerJetonPush(UUID userId, String jeton);
 }
