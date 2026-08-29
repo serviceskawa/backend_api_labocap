@@ -102,6 +102,11 @@ services:
       # normalement, muet. Renseigner PUSH_CREDENTIALS_FILE dans .env une fois
       # le fichier déposé dans ./secrets/.
       PUSH_CREDENTIALS_FILE: ${PUSH_CREDENTIALS_FILE:-}
+      # Appels audio. Sans relais configuré, l'application le dit à l'écran
+      # plutôt que de laisser l'appel échouer sans explication : sur données
+      # mobiles, la connexion directe passe rarement.
+      TURN_URL: ${TURN_URL:-}
+      TURN_SECRET: ${TURN_SECRET:-}
       # SMTP
       MAIL_HOST: ${MAIL_HOST:-smtp.mailtrap.io}
       MAIL_PORT: ${MAIL_PORT:-2525}
@@ -129,6 +134,22 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+
+  # ─── Relais de voix pour les appels (coturn) ──────────────────────────────
+  turn:
+    image: coturn/coturn:4.6
+    container_name: labo-turn
+    restart: unless-stopped
+    # Réseau de l'hôte, et non un réseau Docker : coturn doit annoncer aux
+    # téléphones l'adresse publique à laquelle les joindre. Derrière une
+    # traduction d'adresses Docker, il annoncerait une adresse interne — les
+    # appels s'établiraient puis resteraient muets, ce qui est le symptôme le
+    # plus long à diagnostiquer. C'est aussi ce qui évite de publier les
+    # quarante ports UDP de la plage de relais un par un.
+    network_mode: host
+    volumes:
+      - ./relais/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command: ["-c", "/etc/coturn/turnserver.conf"]
 
 volumes:
   backups:

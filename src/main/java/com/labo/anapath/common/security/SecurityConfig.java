@@ -107,6 +107,11 @@ public class SecurityConfig {
                         // qui est lui-même le secret : il ne peut donc pas exiger
                         // un jeton d'accès valide, sinon il ne servirait à rien.
                         .requestMatchers("/api/v1/mobile/refresh").permitAll()
+                        // La signalisation des appels s'authentifie à la poignée
+                        // de main, jeton en en-tête : le filtre HTTP ne saurait
+                        // pas quoi faire d'une requête d'upgrade, et la refuser
+                        // ici empêcherait la liaison de s'ouvrir du tout.
+                        .requestMatchers("/ws/appels").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/v3/api-docs/**").permitAll()
                         .requestMatchers("/swagger-ui/**").permitAll()

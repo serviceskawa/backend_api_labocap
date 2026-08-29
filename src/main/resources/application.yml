@@ -98,6 +98,18 @@ app:
     # seule clé à garder pour qui en a déjà posé une. Changer la clé rend les
     # codes existants non réaffichables — ils continuent d'enrôler.
     key: ${SECRETS_KEY:}
+  appels:
+    # Le relais de voix (coturn). Sans lui, les appels échouent pour tous les
+    # abonnés derrière un NAT d'opérateur — c'est-à-dire la majorité sur données
+    # mobiles. L'application est prévenue par « relaisConfigure » et le dit,
+    # plutôt que de laisser l'appel échouer sans explication.
+    turn-url: ${TURN_URL:}
+    # Le secret partagé avec coturn (« use-auth-secret »). Le serveur en dérive
+    # des identifiants qui expirent : un mot de passe fixe embarqué dans l'APK
+    # ouvrirait le relais à qui le décompile.
+    turn-secret: ${TURN_SECRET:}
+    turn-ttl-secondes: ${TURN_TTL:86400}
+    stun-url: ${STUN_URL:stun:stun.l.google.com:19302}
   push:
     # Notifications hors-app (Firebase Cloud Messaging). Clé du compte de
     # service du projet Firebase, au choix par son contenu ou par son chemin.
