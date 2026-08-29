@@ -83,8 +83,16 @@ public class AppelController {
                 "maximumParticipants", Appel.MAXIMUM)));
     }
 
-    /** HMAC-SHA1 en base64 : la convention {@code use-auth-secret} de coturn. */
-    private static String signer(String message, String secret) {
+    /**
+     * HMAC-SHA1 en base64 : la convention {@code use-auth-secret} de coturn.
+     *
+     * <p>Visible pour le test, qui compare le résultat à un vecteur éprouvé
+     * contre un vrai coturn. Les trois façons de se tromper ici — SHA-256 au
+     * lieu de SHA-1, hexadécimal au lieu de base64, nom d'utilisateur sans
+     * l'horodatage — donnent toutes le même symptôme : un 401 muet, au moment
+     * précis où l'appel devait s'établir.</p>
+     */
+    static String signer(String message, String secret) {
         try {
             Mac mac = Mac.getInstance("HmacSHA1");
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA1"));
