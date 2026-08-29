@@ -41,6 +41,14 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+
+        <!-- Signalisation des appels. Le fil se rafraîchit par sondage toutes
+             les cinq secondes : très suffisant pour du texte, inutilisable pour
+             établir un appel, qui mettrait dix secondes à démarrer. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
