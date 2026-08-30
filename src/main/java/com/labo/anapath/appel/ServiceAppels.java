@@ -307,13 +307,18 @@ public class ServiceAppels {
         try {
             List<String> jetons = appareils.jetonsDe(List.of(cible));
             if (jetons.isEmpty()) return;
-            notifications.prevenir(jetons,
-                    "Appel — dossier " + code,
-                    nom + " vous appelle",
+            // Un réveil et non une notification : c'est l'application qui doit
+            // dessiner l'écran d'appel, la sonnerie et les deux boutons. Une
+            // notification ordinaire est dessinée par Android, et le code n'est
+            // appelé qu'au moment où l'on touche — trop tard pour sonner.
+            notifications.reveiller(jetons,
                     Map.of("testOrderId", appel.getDossier().toString(),
                            "codeDemande", code,
                            "appel", appel.getId().toString(),
-                           "genre", "appel"));
+                           "nomAppelant", nom,
+                           "groupe", String.valueOf(appel.getConviés().size() > 1),
+                           "genre", "appel"),
+                    45);
         } catch (Exception e) {
             log.debug("Sonnerie hors-app impossible : {}", e.getMessage());
         }

@@ -197,10 +197,23 @@ class ServiceAppelsTest {
 
         service.appeler(MEDECIN, BRANCHE, DOSSIER, List.of());
 
-        // Sans cela, l'appel n'atteint que ceux qui regardaient déjà leur écran.
+        // Un réveil, et non une notification : c'est l'application qui doit
+        // dessiner l'écran plein et faire sonner. Une notification ordinaire
+        // est dessinée par Android, et le code n'est appelé qu'au moment où
+        // l'on touche — trop tard pour sonner.
         ArgumentCaptor<Map<String, String>> donnees = ArgumentCaptor.forClass(Map.class);
-        verify(notifications).prevenir(eq(List.of("jeton")), any(), any(), donnees.capture());
-        assertThat(donnees.getValue()).containsEntry("genre", "appel");
+        ArgumentCaptor<Integer> vie = ArgumentCaptor.forClass(Integer.class);
+        verify(notifications).reveiller(eq(List.of("jeton")), donnees.capture(), vie.capture());
+        verify(notifications, never()).prevenir(any(), any(), any(), any());
+
+        assertThat(donnees.getValue())
+                .containsEntry("genre", "appel")
+                .containsKey("appel")
+                .containsKey("nomAppelant");
+
+        // Une durée de vie courte : un téléphone rallumé une heure plus tard ne
+        // doit pas sonner pour un appel abandonné depuis longtemps.
+        assertThat(vie.getValue()).isLessThanOrEqualTo(60);
     }
 
     @Test
