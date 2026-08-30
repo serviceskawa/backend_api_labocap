@@ -149,7 +149,21 @@ services:
     network_mode: host
     volumes:
       - ./relais/turnserver.conf:/etc/coturn/turnserver.conf:ro
-    command: ["-c", "/etc/coturn/turnserver.conf"]
+    # Le secret et l'adresse viennent de .env, jamais du fichier de
+    # configuration : celui-ci est versionné, et le déploiement fait
+    # « git reset --hard ». Inscrits dedans, ils seraient effacés à chaque
+    # mise en production.
+    #
+    # Sans TURN_IP, coturn se replie sur la boucle locale : il démarre, ne
+    # sert personne, et l'API annonce « relais non configuré » — ce que
+    # l'application dit à l'écran. Mieux qu'un conteneur qui refuse de
+    # partir et fait échouer tout le déploiement.
+    command:
+      - "-c"
+      - "/etc/coturn/turnserver.conf"
+      - "--static-auth-secret=${TURN_SECRET:-inactif}"
+      - "--listening-ip=${TURN_IP:-127.0.0.1}"
+      - "--relay-ip=${TURN_IP:-127.0.0.1}"
 
 volumes:
   backups:
