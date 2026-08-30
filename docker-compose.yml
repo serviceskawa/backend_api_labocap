@@ -164,6 +164,13 @@ services:
       - "--static-auth-secret=${TURN_SECRET:-inactif}"
       - "--listening-ip=${TURN_IP:-127.0.0.1}"
       - "--relay-ip=${TURN_IP:-127.0.0.1}"
+      # Le journal sur la sortie standard, pour que « docker logs labo-turn »
+      # montre quelque chose. Par défaut coturn écrit dans un fichier qui,
+      # dans cette image, n'existe nulle part : le conteneur tourne, se dit
+      # sain, et ne raconte rien. Un relais qu'on ne peut pas interroger est
+      # un relais qu'on ne peut pas réparer.
+      - "--log-file=stdout"
+      - "--simple-log"
 
 volumes:
   backups:
