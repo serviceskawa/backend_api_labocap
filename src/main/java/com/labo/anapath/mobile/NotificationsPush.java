@@ -118,27 +118,72 @@ public class NotificationsPush {
      */
     public void prevenir(List<String> jetons, String titre, String corps,
                          Map<String, String> donnees) {
+        envoyer(jetons, titre, corps, donnees, 0);
+    }
+
+    /**
+     * Réveille l'application sans rien afficher, à elle de décider.
+     *
+     * <p>Pour un appel qui sonne. Une notification ordinaire est <em>dessinée
+     * par Android</em> : elle apparaît en bandeau, et le code de l'application
+     * n'est appelé qu'au moment où l'on touche. Impossible d'y accrocher une
+     * sonnerie, un écran plein, ou des boutons « Répondre » et « Refuser ».</p>
+     *
+     * <p>Un message de données, lui, réveille l'application, qui construit
+     * elle-même ce qu'il faut.</p>
+     *
+     * <h2>Une durée de vie courte</h2>
+     *
+     * <p>Un appel qui n'a pas sonné dans les quarante-cinq secondes n'a plus
+     * lieu d'être : le correspondant a raccroché. Sans cette borne, un téléphone
+     * rallumé une heure plus tard sonnerait pour un appel oublié depuis
+     * longtemps — et son propriétaire décrocherait dans le vide.</p>
+     *
+     * <h2>Ce qu'aucun serveur ne peut garantir</h2>
+     *
+     * <p>Un message de données n'atteint pas une application <em>fermée de
+     * force</em> par l'utilisateur, ni celle qu'un constructeur a mise en
+     * veille pour économiser la batterie — les surcouches Tecno, Infinix,
+     * Xiaomi le font d'office. Sur ces appareils, il faut retirer
+     * l'application de l'optimisation de batterie, une fois, à la main.</p>
+     */
+    public void reveiller(List<String> jetons, Map<String, String> donnees,
+                          int secondesDeVie) {
+        envoyer(jetons, null, null, donnees, secondesDeVie);
+    }
+
+    private void envoyer(List<String> jetons, String titre, String corps,
+                         Map<String, String> donnees, int secondesDeVie) {
         if (messagerie == null || jetons.isEmpty()) return;
 
         for (String jeton : jetons) {
             try {
-                messagerie.send(Message.builder()
+                AndroidConfig.Builder android = AndroidConfig.builder()
+                        .setPriority(AndroidConfig.Priority.HIGH);
+                if (secondesDeVie > 0) {
+                    android.setTtl(secondesDeVie * 1000L);
+                }
+
+                Message.Builder message = Message.builder()
                         .setToken(jeton)
-                        .setNotification(Notification.builder()
-                                .setTitle(titre)
-                                .setBody(corps)
-                                .build())
-                        .setAndroidConfig(AndroidConfig.builder()
-                                .setPriority(AndroidConfig.Priority.HIGH)
-                                .setNotification(AndroidNotification.builder()
-                                        // Un fil par dossier : les messages d'un
-                                        // même cas se remplacent au lieu
-                                        // d'empiler dix lignes identiques.
-                                        .setTag(donnees.getOrDefault("testOrderId", "anapath"))
-                                        .build())
-                                .build())
-                        .putAllData(donnees)
-                        .build());
+                        .putAllData(donnees);
+
+                // Sans titre : message de données pur, que l'application
+                // construit elle-même. Y ajouter un bloc « notification »
+                // laisserait Android le dessiner en double.
+                if (titre != null) {
+                    message.setNotification(Notification.builder()
+                            .setTitle(titre)
+                            .setBody(corps)
+                            .build());
+                    android.setNotification(AndroidNotification.builder()
+                            // Un fil par dossier : les messages d'un même cas se
+                            // remplacent au lieu d'empiler dix lignes identiques.
+                            .setTag(donnees.getOrDefault("testOrderId", "anapath"))
+                            .build());
+                }
+
+                messagerie.send(message.setAndroidConfig(android.build()).build());
             } catch (FirebaseMessagingException e) {
                 // Le jeton peut être périmé — application désinstallée, données
                 // effacées. On le note sans le supprimer : c'est l'appareil qui

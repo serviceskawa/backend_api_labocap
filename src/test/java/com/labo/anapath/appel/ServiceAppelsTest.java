@@ -197,10 +197,23 @@ class ServiceAppelsTest {
 
         service.appeler(MEDECIN, BRANCHE, DOSSIER, List.of());
 
-        // Sans cela, l'appel n'atteint que ceux qui regardaient déjà leur écran.
+        // Un réveil, et non une notification : c'est l'application qui doit
+        // dessiner l'écran plein et faire sonner. Une notification ordinaire
+        // est dessinée par Android, et le code n'est appelé qu'au moment où
+        // l'on touche — trop tard pour sonner.
         ArgumentCaptor<Map<String, String>> donnees = ArgumentCaptor.forClass(Map.class);
-        verify(notifications).prevenir(eq(List.of("jeton")), any(), any(), donnees.capture());
-        assertThat(donnees.getValue()).containsEntry("genre", "appel");
+        ArgumentCaptor<Integer> vie = ArgumentCaptor.forClass(Integer.class);
+        verify(notifications).reveiller(eq(List.of("jeton")), donnees.capture(), vie.capture());
+        verify(notifications, never()).prevenir(any(), any(), any(), any());
+
+        assertThat(donnees.getValue())
+                .containsEntry("genre", "appel")
+                .containsKey("appel")
+                .containsKey("nomAppelant");
+
+        // Une durée de vie courte : un téléphone rallumé une heure plus tard ne
+        // doit pas sonner pour un appel abandonné depuis longtemps.
+        assertThat(vie.getValue()).isLessThanOrEqualTo(60);
     }
 
     @Test
@@ -218,5 +231,76 @@ class ServiceAppelsTest {
         // liaisons montantes et c'est le réseau du plus faible qui déciderait
         // pour tout le monde.
         assertThat(appel.getConviés()).hasSize(Appel.MAXIMUM - 1);
+    }
+
+    @Test
+    @DisplayName("celui qui se connecte réentend la sonnerie qui l'attendait")
+    void laSonnerieEstRedite() {
+        service.appeler(MEDECIN, BRANCHE, DOSSIER, List.of());
+        UUID appel = registre.tous().iterator().next().getId();
+
+        // Le cas réel : le téléphone était fermé, la notification l'a réveillé,
+        // et sa liaison s'ouvre après que la sonnerie est partie. Sans ce
+        // rappel, il touche « Untel vous appelle » et tombe sur son accueil.
+        service.rappelerLesSonneries(LABO);
+
+        // Rien à vérifier côté envoi — le registre n'a pas de liaison ouverte
+        // en test —, mais l'appel doit être encore là et LABO encore convié.
+        assertThat(registre.appel(appel)).isPresent();
+        assertThat(registre.appel(appel).get().getConviés()).contains(LABO);
+    }
+
+    @Test
+    @DisplayName("on ne redit rien à qui a déjà décroché")
+    void pasDeRappelAQuiEstDejaLa() {
+        service.appeler(MEDECIN, BRANCHE, DOSSIER, List.of());
+        UUID appel = registre.tous().iterator().next().getId();
+        service.accepter(LABO, appel);
+
+        service.rappelerLesSonneries(LABO);
+
+        // Il est présent : lui refaire sonner l'appel qu'il tient en main
+        // rouvrirait l'écran d'appel entrant par-dessus la conversation.
+        assertThat(registre.appel(appel).get().estPresent(LABO)).isTrue();
+    }
+
+    @Test
+    @DisplayName("un appel que personne ne décroche s'éteint tout seul")
+    void lAppelSansReponseSEteint() throws Exception {
+        service.appeler(MEDECIN, BRANCHE, DOSSIER, List.of());
+        Appel appel = registre.tous().iterator().next();
+        vieillir(appel, 60);
+
+        service.eteindreLesAppelsSansReponse();
+
+        // Sans cela il resterait ouvert : il ferait sonner le destinataire à
+        // chaque reconnexion, et empêcherait d'en lancer un nouveau sur le
+        // dossier, puisqu'un appel déjà ouvert se rejoint.
+        assertThat(registre.tous()).isEmpty();
+        ArgumentCaptor<JournalAppel> trace = ArgumentCaptor.forClass(JournalAppel.class);
+        verify(journal).save(trace.capture());
+        assertThat(trace.getValue().getIssue()).isEqualTo("sans réponse");
+    }
+
+    @Test
+    @DisplayName("un appel en cours n'est pas éteint par le balayage")
+    void laConversationNEstPasCoupee() throws Exception {
+        service.appeler(MEDECIN, BRANCHE, DOSSIER, List.of());
+        Appel appel = registre.tous().iterator().next();
+        service.accepter(LABO, appel.getId());
+        vieillir(appel, 600);
+
+        service.eteindreLesAppelsSansReponse();
+
+        // Deux personnes en ligne depuis dix minutes : le balayage ne regarde
+        // que les appels où personne n'a décroché.
+        assertThat(registre.tous()).hasSize(1);
+    }
+
+    /** Recule le début d'un appel, que rien n'expose en écriture. */
+    private static void vieillir(Appel appel, int secondes) throws Exception {
+        var champ = Appel.class.getDeclaredField("debut");
+        champ.setAccessible(true);
+        champ.set(appel, java.time.LocalDateTime.now().minusSeconds(secondes));
     }
 }

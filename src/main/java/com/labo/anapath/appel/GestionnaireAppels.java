@@ -48,6 +48,9 @@ public class GestionnaireAppels extends TextWebSocketHandler {
         UUID qui = utilisateurDe(session);
         if (qui == null) return;
         registre.ouvrir(qui, session);
+        // Un appel peut déjà sonner pour lui : c'est le cas de l'application
+        // réveillée par une notification, dont la liaison s'ouvre après coup.
+        service.rappelerLesSonneries(qui);
         log.debug("Liaison d'appel ouverte : {}", qui);
     }
 

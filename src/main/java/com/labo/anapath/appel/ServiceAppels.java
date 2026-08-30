@@ -12,6 +12,7 @@ import com.labo.anapath.user.User;
 import com.labo.anapath.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -116,6 +117,53 @@ public class ServiceAppels {
         registre.envoyer(qui, ouvert);
 
         log.info("Appel ouvert : dossier={} par={} conviés={}", dossier, qui, destinataires.size());
+    }
+
+    /**
+     * Redit les sonneries en attente à qui vient de se connecter.
+     *
+     * <p>Sans cela, l'appel reçu application fermée ne menait nulle part : la
+     * notification réveillait l'application, celle-ci ouvrait sa liaison — et
+     * n'apprenait rien, parce que la sonnerie était partie quand personne
+     * n'écoutait. L'agent voyait « Untel vous appelle », touchait, et tombait
+     * sur son accueil.</p>
+     */
+    public void rappelerLesSonneries(UUID qui) {
+        for (Appel appel : registre.tous()) {
+            if (!appel.getConviés().contains(qui) || appel.estPresent(qui)) continue;
+
+            TestOrder demande = demandes.findById(appel.getDossier()).orElse(null);
+            Map<String, Object> sonnerie = message("sonnerie");
+            sonnerie.put("appel", appel.getId().toString());
+            sonnerie.put("dossier", appel.getDossier().toString());
+            sonnerie.put("codeDemande",
+                    demande == null || demande.getCode() == null ? "" : demande.getCode());
+            sonnerie.put("de", appel.getInitiateur().toString());
+            sonnerie.put("nomAppelant", nomDe(appel.getInitiateur()));
+            sonnerie.put("groupe", appel.getConviés().size() > 1);
+            registre.envoyer(qui, sonnerie);
+        }
+    }
+
+    /**
+     * Éteint les appels que personne ne décroche.
+     *
+     * <p>Un appel sans réponse resterait sinon ouvert indéfiniment : il ferait
+     * sonner le téléphone du destinataire à chaque reconnexion, et empêcherait
+     * d'en lancer un nouveau sur le dossier — puisqu'un appel déjà ouvert se
+     * rejoint au lieu d'en créer un second.</p>
+     *
+     * <p>Quarante-cinq secondes : le temps de sortir un téléphone d'une poche,
+     * pas celui d'oublier qu'on appelait.</p>
+     */
+    @Scheduled(fixedDelay = 15_000L)
+    public void eteindreLesAppelsSansReponse() {
+        LocalDateTime limite = LocalDateTime.now().minusSeconds(45);
+        for (Appel appel : new ArrayList<>(registre.tous())) {
+            if (appel.estTermine() && appel.getDebut().isBefore(limite)) {
+                clore(appel, "sans réponse");
+            }
+        }
     }
 
     /** Entre dans l'appel, et se présente à ceux qui y sont déjà. */
@@ -259,13 +307,18 @@ public class ServiceAppels {
         try {
             List<String> jetons = appareils.jetonsDe(List.of(cible));
             if (jetons.isEmpty()) return;
-            notifications.prevenir(jetons,
-                    "Appel — dossier " + code,
-                    nom + " vous appelle",
+            // Un réveil et non une notification : c'est l'application qui doit
+            // dessiner l'écran d'appel, la sonnerie et les deux boutons. Une
+            // notification ordinaire est dessinée par Android, et le code n'est
+            // appelé qu'au moment où l'on touche — trop tard pour sonner.
+            notifications.reveiller(jetons,
                     Map.of("testOrderId", appel.getDossier().toString(),
                            "codeDemande", code,
                            "appel", appel.getId().toString(),
-                           "genre", "appel"));
+                           "nomAppelant", nom,
+                           "groupe", String.valueOf(appel.getConviés().size() > 1),
+                           "genre", "appel"),
+                    45);
         } catch (Exception e) {
             log.debug("Sonnerie hors-app impossible : {}", e.getMessage());
         }
