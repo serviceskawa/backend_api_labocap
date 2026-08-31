@@ -44,20 +44,36 @@ public class PoigneeDeMain implements HandshakeInterceptor {
                                    WebSocketHandler gestionnaire, Map<String, Object> attributs) {
         String entete = requete.getHeaders().getFirst("Authorization");
         if (entete == null || !entete.startsWith("Bearer ")) {
-            log.debug("Poignée de main refusée : aucun jeton.");
-            return false;
+            return refuser(reponse, "aucun jeton");
         }
         String jeton = entete.substring(7);
         if (!jetons.validateToken(jeton)) {
-            log.debug("Poignée de main refusée : jeton invalide.");
-            return false;
+            return refuser(reponse, "jeton invalide");
         }
         UUID utilisateur = jetons.extractUserId(jeton);
-        if (utilisateur == null) return false;
+        if (utilisateur == null) {
+            return refuser(reponse, "jeton sans utilisateur");
+        }
 
         attributs.put(UTILISATEUR, utilisateur);
         attributs.put(BRANCHE, jetons.extractBranchId(jeton));
         return true;
+    }
+
+    /**
+     * Refuse, et le dit dans le code HTTP.
+     *
+     * <p>Rendre {@code false} sans fixer de statut laisse Spring interrompre la
+     * négociation en conservant le {@code 200} par défaut : un refus
+     * d'authentification qui se présente comme un succès. L'appareil voit une
+     * liaison qui « réussit » puis se ferme aussitôt, et rien — ni dans ses
+     * journaux ni dans une requête de contrôle — ne dit que le jeton était en
+     * cause.</p>
+     */
+    private boolean refuser(ServerHttpResponse reponse, String raison) {
+        reponse.setStatusCode(org.springframework.http.HttpStatus.UNAUTHORIZED);
+        log.debug("Poignée de main refusée : {}", raison);
+        return false;
     }
 
     @Override
