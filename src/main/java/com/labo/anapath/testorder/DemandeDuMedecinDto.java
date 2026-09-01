@@ -34,7 +34,34 @@ public record DemandeDuMedecinDto(
         String code,
         String patientName,
         String docteurStatus,
-        String reportStatus,
+
+        /**
+         * L'état de la demande — PENDING, VALIDATED, DELIVERED, CANCELLED.
+         *
+         * <p>Le champ s'appelait {@code reportStatus} et portait déjà ceci : un
+         * nom qui désignait autre chose que son contenu, et sur lequel toute
+         * lecture ultérieure se serait trompée.</p>
+         */
+        String statutDemande,
+
+        /**
+         * L'état du compte rendu — DRAFT, PENDING_REVIEW, VALIDATED, DELIVERED.
+         *
+         * <p>Nul quand aucun compte rendu n'existe encore. C'est une autre
+         * chose que {@code statutDemande} : une demande validée ouvre un compte
+         * rendu à l'état de brouillon, elle ne le termine pas.</p>
+         */
+        String compteRenduStatut,
+
+        /**
+         * Le dossier a dépassé le délai sans compte rendu validé.
+         *
+         * <p>Calculé ici et non à l'écran, avec le seuil qui déclenche déjà
+         * l'alerte par courriel ({@code app.alerts.report.days}). Deux
+         * définitions de l'urgence — une pour l'écran, une pour le courriel —
+         * finiraient par se contredire, et c'est le médecin qui arbitrerait.</p>
+         */
+        boolean urgent,
         List<String> labels,
         String note,
         String assignmentCode,
