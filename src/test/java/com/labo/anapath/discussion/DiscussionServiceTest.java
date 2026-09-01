@@ -267,8 +267,8 @@ class DiscussionServiceTest {
     }
 
     @Test
-    @DisplayName("la notification ne porte pas le contenu du message")
-    void leContenuResteDerriereLeVerrou() {
+    @DisplayName("la notification porte le début du message")
+    void lApercuEstMontre() {
         deuxParticipants();
         when(notifications.estActif()).thenReturn(true);
         when(appareils.jetonsDe(any())).thenReturn(List.of("jeton-b"));
@@ -277,14 +277,14 @@ class DiscussionServiceTest {
                 new DiscussionDtos.NouveauMessage("texte", "Carcinome infiltrant.", null),
                 AUTEUR, BRANCHE);
 
-        // Une notification s'affiche sur un écran verrouillé, parfois sous les
-        // yeux d'un tiers. Elle nomme l'auteur et le dossier ; le diagnostic
-        // attend le déverrouillage.
+        // Arbitrage du laboratoire : l'aperçu vaut mieux que le déverrouillage
+        // à chaque message. La contrepartie — la coupure — est éprouvée plus
+        // bas, dans « leLongMessageEstCoupe ».
         ArgumentCaptor<String> titre = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> corps = ArgumentCaptor.forClass(String.class);
         verify(notifications).prevenir(any(), titre.capture(), corps.capture(), any());
         assertThat(titre.getValue()).contains("26-0155");
-        assertThat(corps.getValue()).contains("AGBO").doesNotContain("Carcinome");
+        assertThat(corps.getValue()).contains("AGBO").contains("Carcinome infiltrant.");
     }
 
     @Test
@@ -300,7 +300,7 @@ class DiscussionServiceTest {
 
         ArgumentCaptor<String> corps = ArgumentCaptor.forClass(String.class);
         verify(notifications).prevenir(any(), any(), corps.capture(), any());
-        assertThat(corps.getValue()).contains("nommé");
+        assertThat(corps.getValue()).contains("nommé").contains("peux-tu voir ?");
     }
 
     @Test
@@ -332,5 +332,42 @@ class DiscussionServiceTest {
 
         assertThat(dto.contenu()).isEqualTo("Lame reçue.");
         verify(messages).save(any());
+    }
+
+    @Test
+    @DisplayName("un long message est coupé, pas déroulé en entier")
+    void leLongMessageEstCoupe() {
+        deuxParticipants();
+        when(notifications.estActif()).thenReturn(true);
+        when(appareils.jetonsDe(any())).thenReturn(List.of("jeton-b"));
+
+        // Le cas qui a motivé la borne : un compte rendu collé dans le fil. Sans
+        // coupure, il se déroulerait en entier sur un écran éteint.
+        String pave = "Carcinome canalaire infiltrant de grade II. ".repeat(20);
+        service.poster(DEMANDE,
+                new DiscussionDtos.NouveauMessage("texte", pave, null),
+                AUTEUR, BRANCHE);
+
+        ArgumentCaptor<String> corps = ArgumentCaptor.forClass(String.class);
+        verify(notifications).prevenir(any(), any(), corps.capture(), any());
+        assertThat(corps.getValue()).hasSizeLessThan(200).endsWith("…");
+    }
+
+    @Test
+    @DisplayName("une photo s'annonce par sa nature, faute de texte")
+    void laPhotoNaPasDApercu() {
+        deuxParticipants();
+        when(notifications.estActif()).thenReturn(true);
+        when(appareils.jetonsDe(any())).thenReturn(List.of("jeton-b"));
+
+        // Le contenu d'un message photo est une URL de fichier : l'afficher
+        // donnerait une ligne d'adresse illisible au lieu d'une information.
+        service.poster(DEMANDE,
+                new DiscussionDtos.NouveauMessage("photo", "/api/v1/files/x.jpg", null),
+                AUTEUR, BRANCHE);
+
+        ArgumentCaptor<String> corps = ArgumentCaptor.forClass(String.class);
+        verify(notifications).prevenir(any(), any(), corps.capture(), any());
+        assertThat(corps.getValue()).contains("photo").doesNotContain("/api/v1/files");
     }
 }
