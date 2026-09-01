@@ -35,6 +35,17 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
     private final TestPathologyMacroRepository macroRepository;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final SampleLabelRepository labelRepository;
+    private final com.labo.anapath.report.ReportRepository reportRepository;
+
+    /**
+     * Le seuil au-delà duquel un dossier sans compte rendu devient urgent.
+     *
+     * <p>Le même que celui de l'alerte par courriel, à dessein : deux
+     * définitions de l'urgence finiraient par se contredire, et le médecin
+     * arbitrerait entre un écran rouge et un courriel muet.</p>
+     */
+    @org.springframework.beans.factory.annotation.Value("${app.alerts.report.days:18}")
+    private int joursAvantAlerte;
 
     @Override
     @Transactional
@@ -276,15 +287,55 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
         // sur la date du lot, seule date que la ligne connaisse : c'est une
         // approximation, mais elle va dans le bon sens — un lot du jour reste
         // affiché, un lot d'hier disparaît.
-        return detailRepository.fileDuMedecin(docteurId, LocalDate.now()).stream()
-                .map(this::versDemandeDuMedecin)
+        var lignes = detailRepository.fileDuMedecin(docteurId, LocalDate.now());
+
+        // Les comptes rendus en une seule requête : un par ligne ferait une
+        // trentaine d'allers-retours pour un écran d'accueil.
+        var idsDemandes = lignes.stream()
+                .map(TestOrderAssignmentDetail::getTestOrder)
+                .filter(java.util.Objects::nonNull)
+                .map(TestOrder::getId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        java.util.Map<UUID, String> etatsComptesRendus = idsDemandes.isEmpty()
+                ? java.util.Map.of()
+                : reportRepository.findByTestOrder_IdIn(idsDemandes).stream()
+                        .filter(r -> r.getTestOrder() != null && r.getStatus() != null)
+                        .collect(java.util.stream.Collectors.toMap(
+                                r -> r.getTestOrder().getId(),
+                                r -> r.getStatus().name(),
+                                (a, b) -> a));
+
+        return lignes.stream()
+                .map(d -> versDemandeDuMedecin(d, etatsComptesRendus))
                 .toList();
     }
 
-    private DemandeDuMedecinDto versDemandeDuMedecin(TestOrderAssignmentDetail d) {
+    /**
+     * Un dossier en retard, au sens de l'alerte par courriel.
+     *
+     * <p>Même définition, mot pour mot : créé il y a plus de {@code
+     * app.alerts.report.days} jours, et compte rendu ni validé ni remis. Deux
+     * définitions de l'urgence finiraient par se contredire, et le médecin
+     * arbitrerait entre un écran rouge et un courriel muet.</p>
+     */
+    private boolean estUrgent(TestOrder demande, String etatCompteRendu) {
+        if (demande == null || demande.getCreatedAt() == null) return false;
+        if ("VALIDATED".equals(etatCompteRendu) || "DELIVERED".equals(etatCompteRendu)) {
+            return false;
+        }
+        return demande.getCreatedAt().toLocalDate()
+                .isBefore(LocalDate.now().minusDays(joursAvantAlerte));
+    }
+
+    private DemandeDuMedecinDto versDemandeDuMedecin(
+            TestOrderAssignmentDetail d, java.util.Map<UUID, String> etatsComptesRendus) {
         var lot = d.getTestOrderAssignment();
         var demande = d.getTestOrder();
         var patient = demande == null ? null : demande.getPatient();
+        String etatCompteRendu = demande == null || demande.getId() == null
+                ? null : etatsComptesRendus.get(demande.getId());
         return new DemandeDuMedecinDto(
                 d.getId(),
                 demande == null ? null : demande.getId(),
@@ -295,6 +346,8 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
                 d.statutDuMedecin().valeur(),
                 demande == null || demande.getStatus() == null
                         ? null : demande.getStatus().name(),
+                etatCompteRendu,
+                estUrgent(demande, etatCompteRendu),
                 decoderEtiquettes(d.getLabels()),
                 d.getNote(),
                 lot == null ? null : lot.getCode(),
@@ -324,7 +377,16 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
         detail.setDocteurStatus(voulu.valeur());
         detailRepository.save(detail);
         log.info("Statut médecin changé : detailId={} statut={}", detailId, voulu.valeur());
-        return versDemandeDuMedecin(detail);
+        // Un seul dossier : la lecture ponctuelle du compte rendu ne coûte rien,
+        // et la ligne renvoyée doit porter la même urgence que dans la file.
+        var demandeTouchee = detail.getTestOrder();
+        java.util.Map<UUID, String> etat = demandeTouchee == null || demandeTouchee.getId() == null
+                ? java.util.Map.of()
+                : reportRepository.findByTestOrderId(demandeTouchee.getId())
+                        .filter(r -> r.getStatus() != null)
+                        .map(r -> java.util.Map.of(demandeTouchee.getId(), r.getStatus().name()))
+                        .orElse(java.util.Map.of());
+        return versDemandeDuMedecin(detail, etat);
     }
 
     /** {@inheritDoc} */
