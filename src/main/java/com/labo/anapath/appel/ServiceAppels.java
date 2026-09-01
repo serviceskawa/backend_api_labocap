@@ -105,10 +105,17 @@ public class ServiceAppels {
 
         for (UUID cible : destinataires) {
             registre.envoyer(cible, sonnerie);
-            // Hors ligne : le téléphone est en poche, application fermée. La
-            // notification est le seul moyen de le faire sonner — sans elle,
-            // l'appel n'atteint que ceux qui regardaient déjà leur écran.
-            if (!registre.estEnLigne(cible)) sonnerHorsApp(cible, appel, code, nom);
+            // Toujours, et pas seulement hors ligne.
+            //
+            // Une application en arrière-plan garde sa liaison ouverte
+            // plusieurs minutes : le serveur la croyait joignable, n'envoyait
+            // rien, et l'agent ne voyait aucun appel — puisque l'écran affiché
+            // n'était pas le sien. C'est pourtant le cas le plus fréquent : un
+            // téléphone posé, application ouverte en second plan.
+            //
+            // Le doublon ne coûte rien : l'appareil éteint la sonnerie dès que
+            // l'écran d'appel paraît, et l'ignore s'il est déjà dessus.
+            sonnerHorsApp(cible, appel, code, nom);
         }
 
         Map<String, Object> ouvert = message("ouvert");
