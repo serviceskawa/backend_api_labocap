@@ -94,6 +94,25 @@ services:
       # clé publique — pire que pas de chiffrement, puisqu'on le croirait actif.
       STORAGE_ENCRYPTION_ENABLED: ${STORAGE_ENCRYPTION_ENABLED:-false}
       STORAGE_ENCRYPTION_KEY: ${STORAGE_ENCRYPTION_KEY:-}
+      # ─── Stockage des fichiers sur S3 ──────────────────────────────────
+      #
+      # Désactivé par défaut : les fichiers restent sur le volume du serveur.
+      #
+      # Actif : on écrit dans le seau, on lit d'abord le seau puis le volume.
+      # Ce repli rend lisibles les clichés d'avant la bascule sans migration
+      # en bloc — et permet de revenir en arrière en retirant S3_ENABLED.
+      #
+      # ⚠ Le volume « storage » reste nécessaire tant qu'il détient des
+      # fichiers. Le retirer avant d'avoir tout migré rendrait les anciens
+      # dossiers introuvables, sans message d'erreur au démarrage.
+      #
+      # AWS ne reçoit que du chiffré : la clé ci-dessus reste indispensable.
+      S3_ENABLED: ${S3_ENABLED:-false}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_REGION: ${S3_REGION:-eu-west-3}
+      S3_PREFIX: ${S3_PREFIX:-}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
       # Notifications hors-app. Le compte de service Firebase est monté en
       # lecture seule plutôt que passé par l'environnement : le JSON fait deux
       # kilo-octets et se retrouverait entier dans « docker inspect ».

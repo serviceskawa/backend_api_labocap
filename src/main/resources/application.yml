@@ -85,6 +85,33 @@ app:
       # échoue si le chiffrement est activé sans elle — mieux vaut un refus au
       # démarrage qu'une erreur sur chaque image, découverte par les utilisateurs.
       key: ${STORAGE_ENCRYPTION_KEY:}
+    # ── Stockage sur S3 ──────────────────────────────────────────────────
+    #
+    # Désactivé par défaut : sans seau configuré, les fichiers restent sur le
+    # disque du serveur et rien ne change.
+    #
+    # Quand il est actif : on ÉCRIT dans le seau, et on LIT d'abord dans le
+    # seau puis sur le disque. Ce repli rend les clichés d'avant la bascule
+    # lisibles sans migration en bloc — et permet de revenir en arrière en
+    # retirant une seule ligne.
+    #
+    # Ce qu'AWS reçoit : des octets DÉJÀ CHIFFRÉS par le serveur. Le seau ne
+    # contient aucune lame lisible. Corollaire à connaître : on ne peut pas
+    # servir ces objets par lien signé au navigateur, qui ne saurait pas les
+    # déchiffrer — les images continuent de passer par l'API.
+    s3:
+      enabled: ${S3_ENABLED:false}
+      bucket: ${S3_BUCKET:}
+      region: ${S3_REGION:eu-west-3}
+      # Un dossier de tête dans le seau, si on le partage avec autre chose.
+      prefix: ${S3_PREFIX:}
+      # Vides, la chaîne d'AWS prend le relais : rôle IAM de la machine,
+      # variables d'environnement, ~/.aws. C'est ce qu'il faut sur une
+      # instance EC2, où poser une clé en dur serait un recul.
+      access-key: ${S3_ACCESS_KEY:}
+      secret-key: ${S3_SECRET_KEY:}
+      # Pour viser MinIO ou un service compatible plutôt qu'AWS.
+      endpoint: ${S3_ENDPOINT:}
   secrets:
     # Clé des secrets courts qu'il faut pouvoir remontrer — aujourd'hui le seul
     # code d'enrôlement mobile, dont le QR se réaffiche à chaque consultation.

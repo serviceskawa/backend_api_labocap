@@ -49,6 +49,22 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-websocket</artifactId>
         </dependency>
+
+        <!-- Stockage des fichiers sur S3. Le contenu y arrive déjà chiffré par
+             le serveur : AWS ne voit jamais une lame en clair. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.31.16</version>
+            <exclusions>
+                <!-- Le client asynchrone n'est pas utilisé : tous les appels au
+                     dépôt sont synchrones, dans le fil de la requête. -->
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>

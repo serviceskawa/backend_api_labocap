@@ -70,7 +70,10 @@ public class FileStorageServiceImpl implements FileStorageService {
                 log.warn("Tentative de suppression hors basePath: {}", relativePath);
                 return;
             }
-            Files.deleteIfExists(resolved);
+            // Par le dépôt : un fichier d'avant la bascule vit encore sur le
+            // disque, et ne supprimer que dans le seau le laisserait revenir
+            // à la lecture suivante — effacé à l'écran, présent en fait.
+            storedFiles.supprimer(resolved);
         } catch (IOException e) {
             log.warn("Impossible de supprimer le fichier {}: {}", relativePath, e.getMessage());
         }

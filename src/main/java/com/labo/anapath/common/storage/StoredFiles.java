@@ -55,6 +55,71 @@ public class StoredFiles {
      */
     private final ObjectProvider<FileCipher> chiffreur;
 
+    /** Toujours là : il détient les fichiers d'avant la bascule. */
+    private final DepotDisque disque;
+
+    /**
+     * Présent seulement si S3 est configuré.
+     *
+     * <p>Quand il l'est : on écrit chez lui, et on relit chez lui d'abord. Ce
+     * qu'il ne connaît pas est cherché sur le disque — c'est ainsi que les
+     * clichés d'hier restent lisibles sans migration en bloc, et que la bascule
+     * se défait en retirant une ligne de configuration.</p>
+     */
+    private final ObjectProvider<DepotS3> distant;
+
+    /**
+     * Une instance qui ne connaît que le disque.
+     *
+     * <p>Pour le rattrapage du chiffrement, qui parcourt le dossier de stockage
+     * fichier par fichier. Lui donner le dépôt distant lui ferait écrire la
+     * version chiffrée dans le seau <em>en laissant le clair sur le disque</em> —
+     * l'inverse exact de ce qu'il vient faire.</p>
+     */
+    static StoredFiles surLeDisqueSeul(ObjectProvider<FileCipher> chiffreur,
+                                       DepotDisque disque) {
+        return new StoredFiles(chiffreur, disque, null);
+    }
+
+    /** Où écrire : le distant s'il existe, le disque sinon. */
+    private DepotDOctets pourEcrire() {
+        DepotDOctets s3 = distant == null ? null : distant.getIfAvailable();
+        return s3 != null ? s3 : disque;
+    }
+
+    /**
+     * Les dépôts à interroger pour une lecture, dans l'ordre.
+     *
+     * <p>Le distant d'abord : c'est là que sont les fichiers récents, donc la
+     * plupart des lectures. Le disque ensuite, pour l'existant.</p>
+     */
+    private java.util.List<DepotDOctets> pourLire() {
+        DepotDOctets s3 = distant == null ? null : distant.getIfAvailable();
+        return s3 == null ? java.util.List.of(disque) : java.util.List.of(s3, disque);
+    }
+
+    /**
+     * La clé d'un chemin, relative à la racine du stockage.
+     *
+     * <p>Les trois services appelants raisonnent en chemins absolus ; le dépôt
+     * raisonne en clés. La conversion est ici, et nulle part ailleurs.</p>
+     */
+    private String cle(Path fichier) {
+        Path abs = fichier.toAbsolutePath().normalize();
+        Path racine = disque.racine();
+        String relative = abs.startsWith(racine)
+                ? racine.relativize(abs).toString()
+                : abs.getFileName().toString();
+        // S3 ne connaît que la barre oblique, y compris quand le serveur tourne
+        // sous un système qui sépare autrement.
+        return relative.replace(java.io.File.separatorChar, '/');
+    }
+
+    /** Le nom du dépôt d'écriture, pour les journaux et l'écran d'administration. */
+    public String depotCourant() {
+        return pourEcrire().nom();
+    }
+
     /** Le chiffrement est-il actif pour les écritures à venir ? */
     public boolean chiffrementActif() {
         return chiffreur.getIfAvailable() != null;
@@ -86,7 +151,7 @@ public class StoredFiles {
     /** Écrit un contenu déjà en mémoire — sert au rattrapage de l'existant. */
     public void ecrire(byte[] clair, Path cible) throws IOException {
         FileCipher c = chiffreur.getIfAvailable();
-        Files.write(cible, c == null ? clair : c.chiffrer(clair));
+        pourEcrire().ecrire(cle(cible), c == null ? clair : c.chiffrer(clair));
     }
 
     /**
@@ -129,6 +194,63 @@ public class StoredFiles {
             throw new InvalidOperationException(
                     "Ce fichier est chiffré mais le chiffrement est désactivé sur le serveur");
         }
-        return c.dechiffrer(Files.readAllBytes(fichier));
+        return c.dechiffrer(lireBrut(fichier));
+    }
+
+    /**
+     * Le contenu tel qu'il est stocké, sans le déchiffrer.
+     *
+     * <p>Cherché dans le dépôt distant puis sur le disque. Un fichier introuvable
+     * des deux côtés lève : rendre un tableau vide ferait servir une image de
+     * zéro octet, et l'écran afficherait un cadre cassé au lieu d'une erreur.</p>
+     */
+    public byte[] lireBrut(Path fichier) throws IOException {
+        String k = cle(fichier);
+        for (DepotDOctets depot : pourLire()) {
+            byte[] octets = depot.lire(k);
+            if (octets != null) return octets;
+        }
+        throw new java.io.FileNotFoundException(k);
+    }
+
+    /** Existe-t-il, ici ou là ? */
+    public boolean existe(Path fichier) throws IOException {
+        String k = cle(fichier);
+        for (DepotDOctets depot : pourLire()) {
+            if (depot.existe(k)) return true;
+        }
+        return false;
+    }
+
+    /** La taille stockée — chiffrée quand le contenu l'est. */
+    public long taille(Path fichier) throws IOException {
+        String k = cle(fichier);
+        for (DepotDOctets depot : pourLire()) {
+            long t = depot.taille(k);
+            if (t >= 0) return t;
+        }
+        return -1;
+    }
+
+    /**
+     * Supprime partout.
+     *
+     * <p>Des deux côtés, et non du seul dépôt d'écriture : un fichier d'avant la
+     * bascule vit encore sur le disque, et ne supprimer que dans le seau le
+     * laisserait revenir à la lecture suivante — effacé aux yeux de l'agent,
+     * toujours présent en fait.</p>
+     */
+    public void supprimer(Path fichier) throws IOException {
+        String k = cle(fichier);
+        IOException premiere = null;
+        for (DepotDOctets depot : pourLire()) {
+            try {
+                depot.supprimer(k);
+            } catch (IOException e) {
+                log.warn("Suppression impossible sur {} : {}", depot.nom(), e.getMessage());
+                if (premiere == null) premiere = e;
+            }
+        }
+        if (premiere != null) throw premiere;
     }
 }
