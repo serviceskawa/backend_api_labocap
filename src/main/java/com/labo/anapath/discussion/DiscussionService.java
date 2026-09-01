@@ -233,6 +233,54 @@ public class DiscussionService {
                 .toList();
     }
 
+    /** Ce que la notification montre, en une ligne. */
+    private String corpsDeLaNotification(String auteur, DiscussionMessage message) {
+        boolean nomme = message.getTaggedUserId() != null;
+
+        // Une photo et une note vocale n'ont pas de texte : les annoncer par leur
+        // nature est tout ce qu'on peut en dire.
+        String nature = switch (message.getType()) {
+            case DiscussionMessage.PHOTO -> "a envoyé une photo";
+            case DiscussionMessage.AUDIO -> "a envoyé une note vocale";
+            default -> null;
+        };
+        if (nature != null) {
+            return nomme ? auteur + " vous a nommé — " + nature : auteur + " " + nature;
+        }
+
+        String apercu = extrait(message.getContent());
+        if (apercu == null) {
+            return nomme ? auteur + " vous a nommé dans la discussion"
+                         : auteur + " a écrit dans la discussion";
+        }
+        return nomme ? auteur + " vous a nommé : " + apercu
+                     : auteur + " : " + apercu;
+    }
+
+    /**
+     * Le début d'un message, pour l'afficher sur l'écran de verrouillage.
+     *
+     * <h2>Un arbitrage assumé</h2>
+     *
+     * <p>La notification ne portait que l'auteur et le dossier : une
+     * conversation médicale se lit par-dessus l'épaule sur un téléphone posé.
+     * Le laboratoire a tranché en faveur de l'aperçu — savoir de quoi il
+     * retourne sans déverrouiller fait gagner du temps à chaque message, et
+     * l'écran de verrouillage d'un agent est déjà sous sa responsabilité.</p>
+     *
+     * <p>Ce qui reste de la précaution : la coupure à cent quarante caractères.
+     * Elle borne ce qui s'affiche sans déverrouiller, et évite qu'un compte
+     * rendu collé dans le fil ne se déroule en entier sur un écran éteint.</p>
+     */
+    private String extrait(String contenu) {
+        if (contenu == null) return null;
+        // Les retours à la ligne deviennent des espaces : Android replierait le
+        // texte de toute façon, et un saut de ligne y laisse un trou.
+        String propre = contenu.replaceAll("\\s+", " ").trim();
+        if (propre.isEmpty()) return null;
+        return propre.length() <= 140 ? propre : propre.substring(0, 139) + "…";
+    }
+
     /**
      * Prévient les participants, sauf celui qui vient d'écrire.
      *
@@ -243,13 +291,17 @@ public class DiscussionService {
      * résultats : une notification pour un message qui n'apparaît nulle
      * part.</p>
      *
-     * <h2>Ce que la notification tait</h2>
+     * <h2>Ce que la notification montre</h2>
      *
-     * <p>Le contenu du message. Elle s'affiche sur un écran verrouillé, parfois
-     * sous les yeux d'un tiers — dans un couloir, sur une table. Elle nomme donc
-     * l'auteur et le dossier, et laisse le reste derrière le déverrouillage.
-     * C'est un geste de plus, et c'est le prix de ne pas exposer une
-     * conversation médicale à qui passe.</p>
+     * <p>L'auteur, le dossier, et le début du message — cent quarante
+     * caractères au plus.</p>
+     *
+     * <p>Elle ne portait d'abord que l'auteur et le dossier : une conversation
+     * médicale se lit par-dessus l'épaule sur un téléphone posé. Le laboratoire
+     * a tranché en faveur de l'aperçu, jugeant que savoir de quoi il retourne
+     * sans déverrouiller fait gagner du temps à chaque message. La coupure est
+     * ce qui reste de la précaution : un compte rendu collé dans le fil ne se
+     * déroulera pas en entier sur un écran éteint.</p>
      *
      * <p>Un tag est signalé comme tel : être nommé change l'urgence, et le
      * taire ferait manquer ce que la maquette veut justement mettre en avant.</p>
@@ -271,14 +323,7 @@ public class DiscussionService {
             // vaut une tournure impersonnelle qu'un mot qui trahit un défaut.
             String auteur = nomDe(gens.get(message.getAuthorId()));
             if (auteur == null || auteur.isBlank()) auteur = "Quelqu'un";
-            String quoi = switch (message.getType()) {
-                case DiscussionMessage.PHOTO -> "a envoyé une photo";
-                case DiscussionMessage.AUDIO -> "a envoyé une note vocale";
-                default -> "a écrit dans la discussion";
-            };
-            String corps = message.getTaggedUserId() != null
-                    ? auteur + " vous a nommé dans la discussion"
-                    : auteur + " " + quoi;
+            String corps = corpsDeLaNotification(auteur, message);
 
             notifications.prevenir(
                     jetons,
