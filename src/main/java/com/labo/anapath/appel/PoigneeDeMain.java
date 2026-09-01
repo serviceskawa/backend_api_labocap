@@ -42,6 +42,21 @@ public class PoigneeDeMain implements HandshakeInterceptor {
     @Override
     public boolean beforeHandshake(ServerHttpRequest requete, ServerHttpResponse reponse,
                                    WebSocketHandler gestionnaire, Map<String, Object> attributs) {
+        // L'en-tête de montée en premier, avant même le jeton.
+        //
+        // Un proxy qui ne relaie pas « Upgrade » — nginx ne le fait pas sans
+        // configuration explicite — laisse arriver ici une requête HTTP
+        // ordinaire. Le contrôle du jeton répondrait alors 401, et l'on
+        // chercherait un problème d'authentification pendant des heures pour
+        // un défaut de proxy. Ce 426 nomme la vraie cause.
+        String montee = requete.getHeaders().getFirst("Upgrade");
+        if (montee == null || !montee.equalsIgnoreCase("websocket")) {
+            reponse.setStatusCode(org.springframework.http.HttpStatus.UPGRADE_REQUIRED);
+            log.warn("Poignée de main sans en-tête « Upgrade » : le proxy ne "
+                    + "relaie pas les WebSocket.");
+            return false;
+        }
+
         String entete = requete.getHeaders().getFirst("Authorization");
         if (entete == null || !entete.startsWith("Bearer ")) {
             return refuser(reponse, "aucun jeton");
