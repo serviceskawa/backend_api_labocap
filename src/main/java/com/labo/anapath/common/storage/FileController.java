@@ -108,6 +108,17 @@ public class FileController {
         if (name.endsWith(".png"))  return "image/png";
         if (name.endsWith(".gif"))  return "image/gif";
         if (name.endsWith(".webp")) return "image/webp";
+        // Les notes vocales du fil de discussion. Sans ces lignes elles
+        // partaient en « application/octet-stream » : un lecteur audio ne
+        // devine pas le format d'un flux qu'on lui annonce comme des octets
+        // quelconques, et refusait de jouer. Le chiffrement au repos écarte la
+        // détection par le contenu, l'extension reste donc la seule source.
+        if (name.endsWith(".m4a") || name.endsWith(".mp4")) return "audio/mp4";
+        if (name.endsWith(".aac"))  return "audio/aac";
+        if (name.endsWith(".mp3"))  return "audio/mpeg";
+        if (name.endsWith(".ogg") || name.endsWith(".oga")) return "audio/ogg";
+        if (name.endsWith(".wav"))  return "audio/wav";
+        if (name.endsWith(".webm")) return "audio/webm";
         return "application/octet-stream";
     }
 }
