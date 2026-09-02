@@ -38,7 +38,7 @@ public class FileController {
             return ResponseEntity.status(403).build();
         }
 
-        if (!Files.exists(filePath) || !Files.isReadable(filePath)) {
+        if (!storedFiles.existe(filePath)) {
             return ResponseEntity.notFound().build();
         }
 
@@ -64,8 +64,12 @@ public class FileController {
             resource = new ByteArrayResource(clair);
             longueur = clair.length;
         } else {
-            resource = new FileSystemResource(filePath);
-            longueur = Files.size(filePath);
+            // Un fichier non chiffré peut vivre sur le disque comme dans le
+            // seau : on passe par le dépôt plutôt que par le système de
+            // fichiers, sinon les anciens clichés migrés seraient introuvables.
+            byte[] brut = storedFiles.lireBrut(filePath);
+            resource = new ByteArrayResource(brut);
+            longueur = brut.length;
         }
 
         String contentType = detectContentType(filePath, chiffre);

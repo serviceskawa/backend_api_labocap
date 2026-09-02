@@ -70,7 +70,10 @@ public class FileStorageServiceImpl implements FileStorageService {
             if (!resolved.startsWith(base)) {
                 throw new BusinessException("Chemin de fichier invalide: " + filePath);
             }
-            Files.deleteIfExists(resolved);
+            // Par le dépôt : un fichier d'avant la bascule vit encore sur le
+            // disque, et ne supprimer que dans le seau le laisserait revenir
+            // à la lecture suivante — effacé à l'écran, présent en fait.
+            storedFiles.supprimer(resolved);
         } catch (IOException e) {
             log.warn("Impossible de supprimer le fichier physique: {}", filePath);
         }

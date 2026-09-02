@@ -62,7 +62,10 @@ public class FileStorageService {
         if (!target.startsWith(base)) {
             throw new IllegalArgumentException("Chemin de fichier invalide");
         }
-        Files.deleteIfExists(target);
+        // Par le dépôt : un fichier d'avant la bascule vit encore sur le
+        // disque, et ne supprimer que dans le seau le laisserait revenir
+        // à la lecture suivante — effacé à l'écran, présent en fait.
+        storedFiles.supprimer(target);
     }
 
     public String getUrl(String filename) {
