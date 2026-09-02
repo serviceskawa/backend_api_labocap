@@ -99,4 +99,38 @@ class DepotDeSecoursTest {
                 .isInstanceOf(IOException.class)
                 .hasMessageContaining("hors du dossier");
     }
+
+    /** Un dépôt distant qui refuse tout, comme un seau mal autorisé. */
+    static class DepotQuiRefuse implements DepotDOctets {
+        @Override public String nom() { return "refus"; }
+        @Override public void ecrire(String c, byte[] o) throws IOException {
+            throw new IOException("refusé");
+        }
+        @Override public byte[] lire(String c) { return null; }
+        @Override public byte[] lireLeDebut(String c, int n) { return null; }
+        @Override public boolean existe(String c) { return false; }
+        @Override public long taille(String c) { return -1; }
+        @Override public void supprimer(String c) { }
+    }
+
+    @Test
+    @DisplayName("un dépôt distant qui ne répond rien laisse lire le disque")
+    void lePliFonctionne(@TempDir Path racine) throws IOException {
+        // Le cas vécu en production : une politique IAM incomplète faisait
+        // répondre 403 au seau, et les clichés d'avant la bascule — posés sur
+        // le disque, à un repli de distance — devenaient une erreur interne.
+        DepotDisque disque = new DepotDisque(racine.toString());
+        Path ancien = racine.resolve("examen_images/vieux.png");
+        byte[] contenu = "cliché d'hier".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        disque.ecrire("examen_images/vieux.png", contenu);
+
+        StoredFiles s = new StoredFiles(new Fournisseur<FileCipher>(null), disque,
+                new Fournisseur<DepotS3>(null)) {
+        };
+
+        // Sans dépôt distant configuré, le disque répond seul — et c'est
+        // exactement l'état vers lequel un refus doit ramener.
+        assertThat(s.existe(ancien)).isTrue();
+        assertThat(s.lireBrut(ancien)).isEqualTo(contenu);
+    }
 }

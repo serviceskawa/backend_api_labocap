@@ -123,6 +123,16 @@ public class DepotS3 implements DepotDOctets {
         } catch (NoSuchKeyException e) {
             return null;
         } catch (S3Exception e) {
+            // Même raisonnement que pour la taille : un refus laisse sa chance
+            // au disque plutôt que de casser l'écran.
+            if (e.statusCode() == 403 || e.statusCode() == 404) {
+                if (e.statusCode() == 403) {
+                    log.warn("S3 refuse la lecture de « {} » (403) — repli sur "
+                            + "le disque. Vérifier la politique IAM du seau {}.",
+                            cle, seau);
+                }
+                return null;
+            }
             throw new IOException("Lecture S3 impossible : " + cle, e);
         }
     }
@@ -142,6 +152,7 @@ public class DepotS3 implements DepotDOctets {
             // Un objet plus court que l'intervalle demandé : ce n'est pas une
             // panne, c'est un petit fichier.
             if (e.statusCode() == 416) return lire(cle);
+            if (e.statusCode() == 403 || e.statusCode() == 404) return null;
             throw new IOException("Lecture S3 impossible : " + cle, e);
         }
     }
@@ -151,6 +162,24 @@ public class DepotS3 implements DepotDOctets {
         return taille(cle) >= 0;
     }
 
+    /**
+     * La taille, ou -1 si le seau ne peut rien en dire.
+     *
+     * <h2>Pourquoi un refus vaut « absent » et non « panne »</h2>
+     *
+     * <p>Un seau mal autorisé répond 403 là où un objet manquant donnerait 404 :
+     * sans droit d'inventaire, AWS ne distingue pas « tu n'as pas accès » de
+     * « cela n'existe pas », et choisit le premier pour ne rien révéler.</p>
+     *
+     * <p>Faire échouer la lecture sur ce 403 rendait une erreur interne à
+     * l'écran — <em>y compris pour les clichés d'avant la bascule</em>, qui
+     * dorment paisiblement sur le disque à un repli de distance. Une
+     * configuration IAM incomplète cassait ainsi des années de dossiers.</p>
+     *
+     * <p>On rend donc -1, la lecture se reporte sur le disque, et
+     * l'avertissement dit ce qu'il faut corriger. L'administrateur voit le
+     * problème ; l'agent voit ses images.</p>
+     */
     @Override
     public long taille(String cle) throws IOException {
         try {
@@ -161,6 +190,15 @@ public class DepotS3 implements DepotDOctets {
             return -1;
         } catch (S3Exception e) {
             if (e.statusCode() == 404) return -1;
+            if (e.statusCode() == 403) {
+                log.warn("S3 refuse l'accès à « {} » (403). Vérifier que la "
+                        + "politique IAM couvre « arn:aws:s3:::{}/* » ET "
+                        + "« arn:aws:s3:::{} », et qu'elle accorde s3:ListBucket "
+                        + "— sans ce droit, un objet absent est signalé 403 et "
+                        + "non 404. Repli sur le disque en attendant.",
+                        cle, seau, seau);
+                return -1;
+            }
             throw new IOException("Interrogation S3 impossible : " + cle, e);
         }
     }
@@ -171,6 +209,12 @@ public class DepotS3 implements DepotDOctets {
             client.deleteObject(
                     DeleteObjectRequest.builder().bucket(seau).key(objet(cle)).build());
         } catch (S3Exception e) {
+            // Refusée : on le dit, mais on laisse StoredFiles supprimer sur le
+            // disque. L'inverse laisserait un fichier que l'agent croit effacé.
+            if (e.statusCode() == 403) {
+                log.warn("S3 refuse la suppression de « {} » (403).", cle);
+                return;
+            }
             throw new IOException("Suppression S3 impossible : " + cle, e);
         }
     }
