@@ -232,9 +232,11 @@ public class InvoiceController {
     @PreAuthorize("hasAuthority('edit-invoices')")
     public ResponseEntity<ApiResponse<InvoiceResponseDto>> normalize(
             @PathVariable UUID id,
+            @RequestBody(required = false) InvoiceStatusUpdateDto corps,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success("Facture normalisée",
-                fluidInvoiceService.normaliser(id, principal.getBranchId())));
+                fluidInvoiceService.normaliser(id, principal.getBranchId(),
+                        corps == null ? null : corps.getPayment())));
     }
 
     /**
