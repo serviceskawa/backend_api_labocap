@@ -37,10 +37,12 @@ public class FluidInvoiceServiceImpl implements FluidInvoiceService {
     private final FluidInvoiceClient client;
     private final FluidInvoiceProperties properties;
     private final FinanceMapper financeMapper;
+    private final InvoiceService invoiceService;
 
     @Override
     @Transactional
-    public InvoiceResponseDto normaliser(UUID invoiceId, UUID branchId) {
+    public InvoiceResponseDto normaliser(UUID invoiceId, UUID branchId,
+                                         String modeDePaiement) {
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Facture", invoiceId));
 
@@ -51,6 +53,33 @@ public class FluidInvoiceServiceImpl implements FluidInvoiceService {
         // second document fiscal pour une seule vente.
         if (invoice.getNormalizedUrl() != null) {
             throw new InvalidOperationException("Cette facture est déjà normalisée.");
+        }
+
+
+        // Encaisser AVANT de déclarer, et non l'inverse.
+        //
+        // La charge utile porte un bloc « payment » que le serveur ne lit que
+        // sur la facture : tant qu'elle n'est pas réglée, ce bloc est absent
+        // et la DGI reçoit une facture annoncée non réglée. Déclarer d'abord
+        // enverrait une déclaration fausse, qu'aucun encaissement ultérieur ne
+        // corrigerait — un document fiscal ne se reprend pas.
+        //
+        // Un avoir échappe à cela : il contrepasse, il n'encaisse rien.
+        if (invoice.getStatusInvoice() != STATUT_AVOIR
+                && !Boolean.TRUE.equals(invoice.getPaid())) {
+            if (modeDePaiement == null || modeDePaiement.isBlank()) {
+                throw new InvalidOperationException(
+                        "Le mode de paiement est requis : il part avec la "
+                        + "déclaration à la DGI.");
+            }
+            InvoiceStatusUpdateDto reglement = new InvoiceStatusUpdateDto();
+            reglement.setPayment(modeDePaiement.trim());
+            // On passe par l'encaissement plutôt que de poser les champs à la
+            // main : lui seul crédite la caisse, trace l'opération et clôt le
+            // contrat à facture unique. Recopier cette logique ici la ferait
+            // diverger au premier changement.
+            invoiceService.markAsPaid(invoiceId, reglement, branchId);
+            invoice = invoiceRepository.findById(invoiceId).orElseThrow();
         }
 
         boolean estAvoir = invoice.getStatusInvoice() == STATUT_AVOIR;

@@ -11,7 +11,14 @@ public interface FluidInvoiceService {
      * <p>Une facture de vente part sur {@code POST /v1/invoices}, un avoir sur
      * {@code POST /v1/invoices/credit-note} avec la référence de son originale.</p>
      */
-    InvoiceResponseDto normaliser(UUID invoiceId, UUID branchId);
+    /**
+     * Déclare la facture à la DGI, en l'encaissant d'abord si besoin.
+     *
+     * @param modeDePaiement le règlement à enregistrer — ESPECES, MOBILEMONEY,
+     *                       CARTEBANCAIRE, VIREMENT, CHEQUES, AUTRE. Ignoré si
+     *                       la facture est déjà réglée : son mode fait foi.
+     */
+    InvoiceResponseDto normaliser(UUID invoiceId, UUID branchId, String modeDePaiement);
 
     /**
      * Le document normalisé, récupéré chez FluidInvoice.
