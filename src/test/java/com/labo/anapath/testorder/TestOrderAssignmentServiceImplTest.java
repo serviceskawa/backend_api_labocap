@@ -66,6 +66,7 @@ class TestOrderAssignmentServiceImplTest {
         a.setCode("AF26-0001");
         a.setDate(LocalDate.now());
         a.setDetails(new ArrayList<>());
+        a.setId(ASSIGNMENT_ID);
         return a;
     }
 
@@ -121,7 +122,7 @@ class TestOrderAssignmentServiceImplTest {
 
         when(assignmentRepository.findById(ASSIGNMENT_ID)).thenReturn(Optional.of(assignment));
         when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(detailRepository.existsByTestOrderId(ORDER_ID)).thenReturn(false);
+        when(detailRepository.findByTestOrderId(ORDER_ID)).thenReturn(Optional.empty());
         when(detailRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(macroRepository.findByTestOrderId(any())).thenReturn(Optional.empty());
         when(macroRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -140,7 +141,7 @@ class TestOrderAssignmentServiceImplTest {
     }
 
     @Test
-    @DisplayName("addDetail - déjà affecté → met à jour macro existante sans recréer de détail")
+    @DisplayName("addDetail - déjà dans ce lot → met à jour la macro sans recréer de détail")
     void addDetail_alreadyAssigned_updatesMacroOnly() {
         TestOrder order = buildOrder();
         TestOrderAssignment assignment = buildAssignment();
@@ -148,13 +149,13 @@ class TestOrderAssignmentServiceImplTest {
         existingMacro.setAllStepsTrue();
         TestOrderAssignmentDetail existingDetail = new TestOrderAssignmentDetail();
         existingDetail.setTestOrder(order);
+        existingDetail.setTestOrderAssignment(assignment);
 
         AssignmentDetailRequestDto dto = new AssignmentDetailRequestDto();
         dto.setTestOrderId(ORDER_ID);
 
         when(assignmentRepository.findById(ASSIGNMENT_ID)).thenReturn(Optional.of(assignment));
         when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(detailRepository.existsByTestOrderId(ORDER_ID)).thenReturn(true);
         when(detailRepository.findByTestOrderId(ORDER_ID)).thenReturn(Optional.of(existingDetail));
         when(macroRepository.findByTestOrderId(any())).thenReturn(Optional.of(existingMacro));
         when(macroRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -162,7 +163,8 @@ class TestOrderAssignmentServiceImplTest {
         service.addDetail(ASSIGNMENT_ID, dto);
 
         verify(macroRepository).save(any());
-        // Le détailRepository.save ne doit pas être appelé (déjà affecté)
+        // Rien à réécrire : la demande est déjà dans ce lot, et aucune étiquette
+        // n'accompagne la reprise.
         org.mockito.Mockito.verify(detailRepository, org.mockito.Mockito.never()).save(any());
     }
 

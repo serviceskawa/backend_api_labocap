@@ -12,11 +12,49 @@ import java.util.UUID;
 @Repository
 public interface TestOrderAssignmentDetailRepository extends JpaRepository<TestOrderAssignmentDetail, UUID> {
 
-    @Query("SELECT CASE WHEN COUNT(d) > 0 THEN TRUE ELSE FALSE END FROM TestOrderAssignmentDetail d WHERE d.testOrder.id = :testOrderId")
-    boolean existsByTestOrderId(@Param("testOrderId") UUID testOrderId);
+    /**
+     * Les affectations vivantes d'une demande, la plus récente en tête.
+     *
+     * <p>Rend une liste là où le bon sens dirait « au plus une ». C'est
+     * délibéré : la relation n'a jamais été contrainte en base, et la requête
+     * qui rendait un {@code Optional} levait une erreur de cardinalité sur
+     * toute demande figurant dans deux lots — un incident que rien dans le code
+     * n'annonçait. Une liste ne peut pas échouer ainsi ; l'appelant prend la
+     * première.</p>
+     */
+    @Query("""
+            SELECT d FROM TestOrderAssignmentDetail d
+            JOIN FETCH d.testOrderAssignment a
+            LEFT JOIN FETCH a.user
+            WHERE d.testOrder.id = :testOrderId
+              AND d.deletedAt IS NULL
+              AND d.remplaceeLe IS NULL
+            ORDER BY d.createdAt DESC
+            """)
+    List<TestOrderAssignmentDetail> affectationsCourantes(@Param("testOrderId") UUID testOrderId);
 
-    @Query("SELECT d FROM TestOrderAssignmentDetail d WHERE d.testOrder.id = :testOrderId")
-    Optional<TestOrderAssignmentDetail> findByTestOrderId(@Param("testOrderId") UUID testOrderId);
+    /** L'affectation qui vaut aujourd'hui, s'il y en a une. */
+    default Optional<TestOrderAssignmentDetail> findByTestOrderId(UUID testOrderId) {
+        return affectationsCourantes(testOrderId).stream().findFirst();
+    }
+
+    /**
+     * Toute la suite des affectations d'une demande, de la première à la
+     * dernière.
+     *
+     * <p>Dans l'ordre où elles ont été décidées : c'est cet ordre qui répond à
+     * « à qui était-ce confié au départ », question qu'on pose justement quand
+     * le dossier a changé de mains plusieurs fois.</p>
+     */
+    @Query("""
+            SELECT d FROM TestOrderAssignmentDetail d
+            JOIN FETCH d.testOrderAssignment a
+            LEFT JOIN FETCH a.user
+            WHERE d.testOrder.id = :testOrderId
+              AND d.deletedAt IS NULL
+            ORDER BY d.createdAt ASC
+            """)
+    List<TestOrderAssignmentDetail> historiqueDe(@Param("testOrderId") UUID testOrderId);
 
     /**
      * Nom de la personne affectée, pour un lot de bons d'examen.
@@ -26,11 +64,10 @@ public interface TestOrderAssignmentDetailRepository extends JpaRepository<TestO
      * comptes rendus et les factures dans {@code TestOrderServiceImpl.findAll}.
      * </p>
      * <p>
-     * {@code DISTINCT ON} ne retient qu'une affectation par bon, la plus
-     * récente. La relation n'est pas garantie unique — relevé en production, un
-     * bon figure dans deux affectations. Sans ce filtre, le bon apparaîtrait
-     * deux fois dans la correspondance et le nom retenu dépendrait de l'ordre
-     * de parcours.
+     * {@code DISTINCT ON} ne retient qu'une affectation par bon : celle qui
+     * vaut. La relation n'est pas contrainte, et une demande réaffectée en
+     * porte plusieurs. Sans ce filtre, le bon apparaîtrait deux fois dans la
+     * correspondance et le nom retenu dépendrait de l'ordre de parcours.
      * </p>
      *
      * @param testOrderIds identifiants des bons de la page courante
@@ -49,7 +86,12 @@ public interface TestOrderAssignmentDetailRepository extends JpaRepository<TestO
             WHERE d.test_order_id IN (:testOrderIds)
               AND d.deleted_at IS NULL
               AND a.deleted_at IS NULL
-            ORDER BY d.test_order_id, a.created_at DESC
+            ORDER BY d.test_order_id,
+                     -- L'affectation qui vaut passe devant celles qu'elle a
+                     -- remplacées, quelle que soit la date des lots : un lot
+                     -- ancien peut recevoir une demande reprise à un lot récent.
+                     (d.remplacee_le IS NULL) DESC,
+                     a.created_at DESC
             """, nativeQuery = true)
     List<Object[]> findAssignedUserNames(@Param("testOrderIds") List<UUID> testOrderIds);
 
@@ -65,6 +107,10 @@ public interface TestOrderAssignmentDetailRepository extends JpaRepository<TestO
      * dans lequel on doit les traiter, et le mettre à l'envers ferait vieillir
      * en silence les dossiers du bas.</p>
      *
+     * <p>Une demande qu'on a confiée à un confrère disparaît de la file
+     * aussitôt : le médecin qui l'avait ne la traite plus, et la lui laisser
+     * l'enverrait travailler sur un dossier qui ne lui revient pas.</p>
+     *
      * <p>Une demande terminée reste visible le jour même puis disparaît : la
      * retirer aussitôt ferait douter d'avoir bien enregistré ce qu'on venait de
      * faire.</p>
@@ -75,6 +121,7 @@ public interface TestOrderAssignmentDetailRepository extends JpaRepository<TestO
             LEFT JOIN FETCH d.testOrder o
             WHERE a.user.id = :docteurId
               AND d.deletedAt IS NULL
+              AND d.remplaceeLe IS NULL
               AND (d.docteurStatus <> 'termine' OR a.date >= :depuis)
             ORDER BY a.date ASC, d.createdAt ASC
             """)

@@ -12,6 +12,9 @@ public interface TestOrderAssignmentService {
 
     PageResponse<AssignmentResponseDto> findAllImmuno(int page, int size, UUID branchId);
 
+    /** À qui la demande a été confiée, de la première fois à aujourd'hui. */
+    HistoriqueAffectationDto historiqueDe(UUID demandeId, UUID branchId);
+
     AssignmentDetailResponseDto addDetail(UUID assignmentId, AssignmentDetailRequestDto dto);
 
     AssignmentPrintDto getPrintData(UUID assignmentId);

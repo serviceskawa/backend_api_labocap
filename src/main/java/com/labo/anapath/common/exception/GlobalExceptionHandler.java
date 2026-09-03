@@ -78,6 +78,25 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Gère la réaffectation d'une demande déjà confiée à un autre médecin.
+     *
+     * <p>Journalisée en information et non en avertissement : refuser une
+     * réaffectation non confirmée est le fonctionnement attendu, pas un
+     * incident. La noter en avertissement ferait chercher un défaut là où il
+     * n'y a qu'une question posée à l'utilisateur.</p>
+     *
+     * @param ex exception levée
+     * @return réponse 409 nommant le médecin en place
+     */
+    @ExceptionHandler(ReaffectationNonConfirmeeException.class)
+    public ResponseEntity<ApiResponse<Object>> handleReaffectation(
+            ReaffectationNonConfirmeeException ex) {
+        log.info("Réaffectation à confirmer : {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
      * Gère les opérations structurellement invalides dans le contexte courant.
      *
      * @param ex exception levée
