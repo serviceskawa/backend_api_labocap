@@ -138,7 +138,8 @@ public class FluidInvoiceServiceImpl implements FluidInvoiceService {
         }
         for (InvoiceDetail detail : invoice.getDetails()) {
             items.add(new FluidInvoiceRequestDto.Item(
-                    detail.getTestName(),
+                    // Idem que sur le document imprimé : un seul libellé.
+                    detail.nomAFacturer(),
                     enFrancs(detail.getTotal()),
                     BigDecimal.valueOf(Math.max(1, detail.getQuantity())),
                     properties.getTaxGroup()));

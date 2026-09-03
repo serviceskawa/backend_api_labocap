@@ -106,4 +106,15 @@ public interface InvoiceService {
      * @return l'avoir créé
      */
     InvoiceResponseDto createCreditNote(UUID invoiceId, UUID branchId);
+
+    /**
+     * Change le libellé d'une ligne de facture.
+     *
+     * <p>Le nom du catalogue reste intact : c'est la trace de l'analyse
+     * réellement rendue. Un libellé vide défait la personnalisation.</p>
+     */
+    InvoiceResponseDto changerLibelleDeLigne(java.util.UUID invoiceId,
+                                             java.util.UUID detailId,
+                                             LibelleDeLigneDto dto,
+                                             java.util.UUID branchId);
 }
