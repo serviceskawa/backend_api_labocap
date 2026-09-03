@@ -76,6 +76,7 @@ public class DiscussionService {
      */
     @Transactional
     public FilDto fil(UUID testOrderId, UUID lecteurId, UUID branchId) {
+        exigerUnMetierDuSoin(lecteurId);
         TestOrder demande = testOrderRepository.findByIdAndBranchId(testOrderId, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", testOrderId));
         Discussion fil = ouvrirOuCreer(demande, lecteurId, branchId);
@@ -100,6 +101,7 @@ public class DiscussionService {
     @Transactional
     public MessageDto poster(UUID testOrderId, NouveauMessage nouveau,
                              UUID auteurId, UUID branchId) {
+        exigerUnMetierDuSoin(auteurId);
         String contenu = nouveau.contenu() == null ? "" : nouveau.contenu().trim();
         if (contenu.isEmpty()) {
             throw new BusinessException("Un message vide ne s'envoie pas.");
@@ -149,6 +151,7 @@ public class DiscussionService {
                                     org.springframework.web.multipart.MultipartFile fichier,
                                     String type, UUID taggedUserId,
                                     UUID auteurId, UUID branchId) {
+        exigerUnMetierDuSoin(auteurId);
         if (fichier == null || fichier.isEmpty()) {
             throw new BusinessException("Aucun fichier reçu.");
         }
@@ -216,6 +219,7 @@ public class DiscussionService {
      */
     @Transactional
     public void marquerLu(UUID testOrderId, UUID lecteurId) {
+        exigerUnMetierDuSoin(lecteurId);
         discussions.findByTestOrderId(testOrderId).ifPresent(fil -> {
             List<DiscussionLecture> aPoser = lectures.nonLusDuFil(fil.getId(), lecteurId)
                     .stream()
@@ -228,6 +232,7 @@ public class DiscussionService {
     /** Ce que cette personne n'a pas lu, dossier par dossier. */
     @Transactional(readOnly = true)
     public List<NonLusDto> nonLus(UUID lecteurId) {
+        exigerUnMetierDuSoin(lecteurId);
         return messages.compterNonLus(lecteurId).stream()
                 .map(l -> new NonLusDto((UUID) l[0], ((Number) l[1]).longValue()))
                 .toList();
@@ -414,6 +419,44 @@ public class DiscussionService {
      * médecin est technicien : le fil ne connaît que ces deux voix, et un
      * troisième libellé n'apprendrait rien à qui lit.</p>
      */
+    /**
+     * Le fil n'est ouvert qu'aux médecins et aux laborantins.
+     *
+     * <h2>Pourquoi le refuser au comptoir</h2>
+     *
+     * <p>Une discussion de dossier porte des échanges cliniques — l'aspect d'une
+     * lame, un doute sur un prélèvement, une consigne de coupe. Le secrétariat
+     * remet un résultat et encaisse ; il n'a pas à lire ces échanges, et rien
+     * dans son travail ne l'y appelle.</p>
+     *
+     * <h2>Pourquoi ici et non par une permission</h2>
+     *
+     * <p>{@code view-test-orders} gardait ce point d'entrée, et le secrétariat
+     * la possède — il faut bien qu'il voie les demandes. Aucune permission
+     * existante ne sépare les deux métiers, et en créer une pour ce seul écran
+     * ferait une notion de plus à maintenir dans les rôles. Le rôle, lui, dit
+     * déjà ce qu'il faut.</p>
+     *
+     * <p>Contrôlé au serveur et non seulement à l'écran : cacher un bouton
+     * n'empêche personne d'appeler le point d'entrée.</p>
+     */
+    private void exigerUnMetierDuSoin(UUID userId) {
+        User u = userRepository.findById(userId).orElse(null);
+        if (u == null || u.getRoles() == null) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "La discussion d'un dossier est réservée aux médecins et aux laborantins.");
+        }
+        boolean autorise = u.getRoles().stream()
+                .map(r -> r.getSlug() == null ? "" : r.getSlug().toLowerCase())
+                .anyMatch(slug -> slug.equals("docteur")
+                        || slug.equals("laborantin")
+                        || slug.equals("super-admin"));
+        if (!autorise) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "La discussion d'un dossier est réservée aux médecins et aux laborantins.");
+        }
+    }
+
     private String roleDe(User u) {
         boolean medecin = u.getRoles().stream()
                 .anyMatch(r -> "docteur".equalsIgnoreCase(r.getSlug()));
