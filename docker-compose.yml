@@ -127,6 +127,24 @@ services:
       TURN_URL: ${TURN_URL:-}
       TURN_SECRET: ${TURN_SECRET:-}
       # SMTP
+      # ─── Facturation normalisée e-MCF / DGI ────────────────────────────
+      #
+      # Désactivée par défaut. Sans clé, aucune facture ne part à la DGI —
+      # et l'écran le dit plutôt que d'échouer en silence.
+      #
+      # ⚠ La clé porte son usage dans son préfixe :
+      #   fni_test_ → bac à sable, rien n'atteint l'administration
+      #   fni_live_ → factures normalisées RÉELLES, avec valeur fiscale
+      #
+      # Une facture normalisée émise par erreur n'est pas annulable d'un
+      # clic : c'est un document fiscal, et le laboratoire en répond.
+      FLUIDINVOICE_ENABLED: ${FLUIDINVOICE_ENABLED:-false}
+      FLUIDINVOICE_BASE_URL: ${FLUIDINVOICE_BASE_URL:-https://invoice.fluidpay.link/v1}
+      FLUIDINVOICE_API_KEY: ${FLUIDINVOICE_API_KEY:-}
+      # Nom de l'opérateur porté sur la facture normalisée.
+      FLUIDINVOICE_OPERATOR_NAME: ${FLUIDINVOICE_OPERATOR_NAME:-CENTRE ADECHINA ANATOMIE PATHOLOGIQUE}
+      # A = exonéré. La classification fiscale engage le contribuable (art. 168 CGI).
+      FLUIDINVOICE_TAX_GROUP: ${FLUIDINVOICE_TAX_GROUP:-A}
       MAIL_HOST: ${MAIL_HOST:-smtp.mailtrap.io}
       MAIL_PORT: ${MAIL_PORT:-2525}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
