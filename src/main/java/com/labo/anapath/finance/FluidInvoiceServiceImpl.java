@@ -199,6 +199,17 @@ public class FluidInvoiceServiceImpl implements FluidInvoiceService {
         FluidInvoiceResponseDto.Security securite = reponse.getSecurity();
         if (securite != null) {
             invoice.setCodeMecef(securite.getCodeMECeFDGI());
+            // Le champ hérité reçoit le même code.
+            //
+            // Deux parcours mènent à une facture déclarée : la saisie manuelle
+            // d'autrefois, qui renseigne « codeNormalise », et cette
+            // passerelle. Tout ce qui lit l'ancien champ — le document
+            // imprimé, la recherche par code — ignorerait les factures venues
+            // d'ici si on ne le remplissait pas. On ne l'écrase jamais : une
+            // saisie humaine antérieure fait foi.
+            if (invoice.getCodeNormalise() == null || invoice.getCodeNormalise().isBlank()) {
+                invoice.setCodeNormalise(securite.getCodeMECeFDGI());
+            }
             invoice.setCounters(securite.getCounters());
             invoice.setDateGenerate(securite.getDateTime());
             invoice.setNim(securite.getNim());
