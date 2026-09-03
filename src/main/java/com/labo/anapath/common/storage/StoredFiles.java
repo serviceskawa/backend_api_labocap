@@ -8,10 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 
 /**
  * Le seul endroit du projet où un fichier stocké s'écrit et se relit.
@@ -134,18 +131,13 @@ public class StoredFiles {
      */
     public void ecrire(MultipartFile source, Path cible) throws IOException {
         FileCipher c = chiffreur.getIfAvailable();
-        if (c == null) {
-            try (InputStream in = source.getInputStream()) {
-                Files.copy(in, cible, StandardCopyOption.REPLACE_EXISTING);
-            }
-            return;
-        }
         // GCM scelle l'ensemble : il n'y a pas de chiffrement en flux qui
         // permette d'authentifier au fil de l'eau sans garder le tout. Le
         // téléversement est déjà plafonné à 50 Mo par Spring, et le fichier
-        // vient de traverser la mémoire pour arriver ici.
-        byte[] clair = source.getBytes();
-        Files.write(cible, c.chiffrer(clair));
+        // vient de traverser la mémoire pour arriver ici. Le dépôt distant
+        // demande de toute façon le contenu entier.
+        byte[] contenu = source.getBytes();
+        pourEcrire().ecrire(cle(cible), c == null ? contenu : c.chiffrer(contenu));
     }
 
     /** Écrit un contenu déjà en mémoire — sert au rattrapage de l'existant. */
@@ -165,17 +157,15 @@ public class StoredFiles {
         // Un fichier absent n'est pas chiffré — il est absent. Lever ici
         // remplacerait le « Fichier physique introuvable » que les appelants
         // savent rendre par une erreur de lecture, sur un cas qui arrive :
-        // une ligne en base dont le fichier a disparu du disque.
-        if (!Files.isRegularFile(fichier) || Files.size(fichier) < FileCipher.TAILLE_ENTETE) {
-            return false;
+        // une ligne en base dont le fichier a disparu du dépôt.
+        String k = cle(fichier);
+        for (DepotDOctets depot : pourLire()) {
+            byte[] tete = depot.lireLeDebut(k, FileCipher.TAILLE_ENTETE_RECONNAISSANCE);
+            if (tete == null) continue;
+            if (tete.length < FileCipher.TAILLE_ENTETE_RECONNAISSANCE) return false;
+            return FileCipher.porteLaMarque(tete);
         }
-        byte[] tete = new byte[FileCipher.TAILLE_ENTETE_RECONNAISSANCE];
-        try (InputStream in = Files.newInputStream(fichier)) {
-            if (in.readNBytes(tete, 0, tete.length) != tete.length) {
-                return false;
-            }
-        }
-        return FileCipher.porteLaMarque(tete);
+        return false;
     }
 
     /**
