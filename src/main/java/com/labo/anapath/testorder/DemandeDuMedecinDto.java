@@ -61,6 +61,29 @@ public record DemandeDuMedecinDto(
          * définitions de l'urgence — une pour l'écran, une pour le courriel —
          * finiraient par se contredire, et c'est le médecin qui arbitrerait.</p>
          */
+        /**
+         * Le dossier a dépassé le délai sans compte rendu validé.
+         *
+         * <p>Calculé ici et non à l'écran, avec le seuil qui déclenche déjà
+         * l'alerte par courriel ({@code app.alerts.report.days}). Deux
+         * définitions du retard — une pour l'écran, une pour le courriel —
+         * finiraient par se contredire, et c'est le médecin qui arbitrerait.</p>
+         *
+         * <p>À ne pas confondre avec {@link #urgent} : celui-ci se constate,
+         * celui-là se décide.</p>
+         */
+        boolean enRetard,
+
+        /**
+         * Le bon a été marqué urgent, et n'est pas encore remis.
+         *
+         * <p>C'est une décision prise à l'accueil — un cas qu'on veut voir
+         * passer devant. Elle cesse de valoir une fois le résultat remis :
+         * l'urgence portait sur le délai, et ce délai est tenu.</p>
+         *
+         * <p>Distinct du retard, qui lui se constate après coup. Un dossier
+         * peut être l'un, l'autre, les deux, ou aucun.</p>
+         */
         boolean urgent,
         List<String> labels,
         String note,

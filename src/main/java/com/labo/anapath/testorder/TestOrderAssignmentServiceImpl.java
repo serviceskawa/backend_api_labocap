@@ -127,7 +127,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
         }
 
         return new AssignmentDetailResponseDto(detail.getId(), order.getId(), order.getCode(),
-                decoderEtiquettes(detail.getLabels()), detail.getNote());
+                statutDe(order), decoderEtiquettes(detail.getLabels()), detail.getNote());
     }
 
     @Override
@@ -141,6 +141,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
                         d.getId(),
                         d.getTestOrder() != null ? d.getTestOrder().getId() : null,
                         d.getTestOrderCode(),
+                        statutDe(d.getTestOrder()),
                         decoderEtiquettes(d.getLabels()),
                         d.getNote()))
                 .toList();
@@ -197,6 +198,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
                 detail.getId(),
                 detail.getTestOrder() != null ? detail.getTestOrder().getId() : null,
                 detail.getTestOrderCode(),
+                statutDe(detail.getTestOrder()),
                 decoderEtiquettes(detail.getLabels()),
                 detail.getNote());
     }
@@ -320,13 +322,36 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
      * définitions de l'urgence finiraient par se contredire, et le médecin
      * arbitrerait entre un écran rouge et un courriel muet.</p>
      */
-    private boolean estUrgent(TestOrder demande, String etatCompteRendu) {
+    /**
+     * Le bon a-t-il été marqué urgent, et reste-t-il à remettre ?
+     *
+     * <p>L'urgence est une décision prise à l'accueil : on veut voir ce cas
+     * passer devant. Elle cesse de valoir une fois le résultat remis — elle
+     * portait sur le délai, et ce délai est tenu. La laisser vivre après la
+     * remise ferait grossir un compteur que plus rien ne peut faire baisser,
+     * et qu'on finirait par ne plus regarder.</p>
+     */
+    private boolean estMarqueUrgent(TestOrder demande) {
+        if (demande == null || !Boolean.TRUE.equals(demande.getIsUrgent())) {
+            return false;
+        }
+        return demande.getStatus() != TestOrderStatus.DELIVERED
+                && demande.getStatus() != TestOrderStatus.CANCELLED;
+    }
+
+    private boolean estEnRetard(TestOrder demande, String etatCompteRendu) {
         if (demande == null || demande.getCreatedAt() == null) return false;
         if ("VALIDATED".equals(etatCompteRendu) || "DELIVERED".equals(etatCompteRendu)) {
             return false;
         }
         return demande.getCreatedAt().toLocalDate()
                 .isBefore(LocalDate.now().minusDays(joursAvantAlerte));
+    }
+
+    /** L'état d'une demande, ou null si la ligne n'en désigne aucune. */
+    private static String statutDe(TestOrder demande) {
+        return demande == null || demande.getStatus() == null
+                ? null : demande.getStatus().name();
     }
 
     private DemandeDuMedecinDto versDemandeDuMedecin(
@@ -347,7 +372,8 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
                 demande == null || demande.getStatus() == null
                         ? null : demande.getStatus().name(),
                 etatCompteRendu,
-                estUrgent(demande, etatCompteRendu),
+                estEnRetard(demande, etatCompteRendu),
+                estMarqueUrgent(demande),
                 decoderEtiquettes(d.getLabels()),
                 d.getNote(),
                 lot == null ? null : lot.getCode(),
