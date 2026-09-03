@@ -148,7 +148,8 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
         }
 
         return new AssignmentDetailResponseDto(detail.getId(), order.getId(), order.getCode(),
-                statutDe(order), decoderEtiquettes(detail.getLabels()), detail.getNote());
+                statutDe(order), decoderEtiquettes(detail.getLabels()), detail.getNote(),
+                detail.getRemplaceeLe());
     }
 
     /** Le médecin d'une ligne d'affectation, nom de famille en tête. */
@@ -214,7 +215,8 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
                         d.getTestOrderCode(),
                         statutDe(d.getTestOrder()),
                         decoderEtiquettes(d.getLabels()),
-                        d.getNote()))
+                        d.getNote(),
+                        d.getRemplaceeLe()))
                 .toList();
         return new AssignmentPrintDto(
                 toDto(assignment),
@@ -271,7 +273,8 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
                 detail.getTestOrderCode(),
                 statutDe(detail.getTestOrder()),
                 decoderEtiquettes(detail.getLabels()),
-                detail.getNote());
+                detail.getNote(),
+                detail.getRemplaceeLe());
     }
 
     @Override

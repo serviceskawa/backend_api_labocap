@@ -22,4 +22,15 @@ public record AssignmentDetailResponseDto(
          * Vide pour les affectations antérieures à leur enregistrement.
          */
         List<String> labels,
-        String note) {}
+        String note,
+
+        /**
+         * Le moment où la demande a quitté ce lot pour un autre médecin.
+         *
+         * <p>{@code null} tant qu'elle y est. Une ligne transférée reste dans
+         * le lot — c'est ce qu'on a remis ce jour-là, et le bordereau imprimé
+         * ne doit pas changer après coup. À l'écran, en revanche, elle doit se
+         * distinguer : sans cela le lot présenterait comme à traiter un dossier
+         * qu'on a confié à quelqu'un d'autre.</p>
+         */
+        java.time.LocalDateTime remplaceeLe) {}
