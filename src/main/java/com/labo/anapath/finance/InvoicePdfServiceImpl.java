@@ -134,7 +134,10 @@ public class InvoicePdfServiceImpl implements InvoicePdfService {
         for (InvoiceDetail d : invoice.getDetails()) {
             lines.add(new PdfLine(
                     i++,
-                    d.getTestName() != null ? d.getTestName() : "",
+                    // Le nom personnalisé s'il y en a un : c'est le même
+                    // libellé qui doit paraître ici et dans la déclaration à
+                    // la DGI, sinon le papier ne correspond plus au déclaré.
+                    d.nomAFacturer() != null ? d.nomAFacturer() : "",
                     1,
                     money(d.getPrice()),
                     money(d.getDiscount()),

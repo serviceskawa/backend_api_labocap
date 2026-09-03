@@ -57,6 +57,21 @@ public class InvoiceDetail {
     private String testName;
 
     /** Prix catalogue de l'analyse au moment de la facturation. */
+    /**
+     * Un libellé choisi à la main, qui remplace {@link #testName} s'il est posé.
+     *
+     * <p>Le nom du catalogue ne convient pas toujours à ce qu'on facture : un
+     * acte regroupé, une formulation attendue par un assureur, une précision
+     * demandée par le patient. Le corriger dans le catalogue changerait toutes
+     * les factures à venir — et celle-ci seule est en cause.</p>
+     *
+     * <p>{@link #testName} n'est pas écrasé pour autant : il reste la trace de
+     * l'analyse réellement rendue, et c'est sur lui que se font les
+     * rapprochements avec le catalogue.</p>
+     */
+    @Column(name = "custom_test_name", length = 100)
+    private String customTestName;
+
     @Column(name = "price")
     private Double price;
 
@@ -80,4 +95,21 @@ public class InvoiceDetail {
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    /**
+     * Le libellé à faire paraître : le nom personnalisé s'il y en a un.
+     *
+     * <p>Un seul endroit décide. Le document imprimé et la requête de
+     * normalisation doivent porter le même mot : deux lectures séparées de
+     * cette règle finiraient par diverger, et la facture papier ne
+     * correspondrait plus à celle déclarée à la DGI.</p>
+     *
+     * <p>Un nom fait d'espaces vaut un nom absent — un champ effleuré au
+     * clavier ne doit pas remplacer le libellé du catalogue par du vide.</p>
+     */
+    public String nomAFacturer() {
+        return customTestName != null && !customTestName.isBlank()
+                ? customTestName.trim()
+                : testName;
+    }
 }
