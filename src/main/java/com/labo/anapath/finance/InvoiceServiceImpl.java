@@ -541,6 +541,15 @@ public class InvoiceServiceImpl implements InvoiceService {
             throw new InvalidOperationException(
                     "Une facture d'avoir ne peut pas faire l'objet d'un avoir.");
         }
+        // Un avoir contrepasse une déclaration. Tant que la facture n'a pas été
+        // normalisée, rien n'a été déclaré à la DGI : il n'y a donc rien à
+        // contrepasser, et l'on corrige ou l'on annule plutôt qu'on n'émet un
+        // second document fiscal qui ne répond à aucun premier.
+        if (!estNormalisee(vente)) {
+            throw new InvalidOperationException(
+                    "Cette facture n'est pas encore normalisée : un avoir ne peut "
+                    + "contrepasser qu'une facture déclarée.");
+        }
         // L'avoir étant unique par vente, le second serait un doublon comptable.
         invoiceRepository.findFirstByReferenceId(vente.getId()).ifPresent(existant -> {
             throw new InvalidOperationException(
@@ -653,9 +662,22 @@ public class InvoiceServiceImpl implements InvoiceService {
         return financeMapper.toInvoiceResponseDto(facture);
     }
 
-    /** La facture a-t-elle déjà été déclarée ? */
+    /**
+     * La facture a-t-elle déjà été déclarée ?
+     *
+     * <p>Les trois marques comptent, parce que deux parcours coexistent : la
+     * saisie manuelle héritée de Laravel pose {@code codeNormalise}, la
+     * passerelle pose {@code codeMecef} et {@code fluidinvoiceId}. N'en
+     * regarder qu'une laisserait passer les factures déclarées par l'autre
+     * chemin.</p>
+     */
     private boolean estNormalisee(Invoice facture) {
-        return (facture.getCodeMecef() != null && !facture.getCodeMecef().isBlank())
-                || (facture.getFluidinvoiceId() != null && !facture.getFluidinvoiceId().isBlank());
+        return renseigne(facture.getCodeMecef())
+                || renseigne(facture.getFluidinvoiceId())
+                || renseigne(facture.getCodeNormalise());
+    }
+
+    private static boolean renseigne(String v) {
+        return v != null && !v.isBlank();
     }
 }
