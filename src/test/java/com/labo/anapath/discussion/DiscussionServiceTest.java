@@ -77,6 +77,7 @@ class DiscussionServiceTest {
         User auteur = new User();
         auteur.setLastname("AGBO");
         auteur.setFirstname("Marc");
+        auteur.setRoles(java.util.List.of(role("docteur")));
         poserId(auteur, AUTEUR);
         when(userRepository.findById(AUTEUR)).thenReturn(Optional.of(auteur));
         when(userRepository.findAllById(any())).thenReturn(List.of(auteur));
@@ -86,6 +87,13 @@ class DiscussionServiceTest {
         // Un dépôt rend ce qu'on lui confie. Le laisser rendre `null` glissait
         // un participant nul dans le fil, ce qui n'arrive jamais en vrai.
         when(participants.save(any())).thenAnswer(i -> i.getArgument(0));
+    }
+
+    /** Un rôle à un seul champ utile : son slug. */
+    private static com.labo.anapath.role.Role role(String slug) {
+        var r = new com.labo.anapath.role.Role();
+        r.setSlug(slug);
+        return r;
     }
 
     /** Pose l'identifiant d'une entité auditée, que rien n'expose en écriture. */
@@ -369,5 +377,56 @@ class DiscussionServiceTest {
         ArgumentCaptor<String> corps = ArgumentCaptor.forClass(String.class);
         verify(notifications).prevenir(any(), any(), corps.capture(), any());
         assertThat(corps.getValue()).contains("photo").doesNotContain("/api/v1/files");
+    }
+
+    // ── Qui a le droit d'ouvrir un fil ──────────────────────────────────
+
+    @Test
+    @DisplayName("le secrétariat n'accède pas à la discussion d'un dossier")
+    void leComptoirEstEcarte() {
+        User secretaire = new User();
+        secretaire.setLastname("HOUNSA");
+        secretaire.setRoles(java.util.List.of(role("secretariat")));
+        poserId(secretaire, AUTRUI);
+        when(userRepository.findById(AUTRUI)).thenReturn(Optional.of(secretaire));
+
+        // Une discussion de dossier porte des échanges cliniques — l'aspect
+        // d'une lame, un doute sur un prélèvement. Le comptoir remet un
+        // résultat ; rien dans son travail ne l'appelle à les lire.
+        assertThatThrownBy(() -> service.fil(DEMANDE, AUTRUI, BRANCHE))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        assertThatThrownBy(() -> service.poster(DEMANDE,
+                new DiscussionDtos.NouveauMessage("texte", "bonjour", null),
+                AUTRUI, BRANCHE))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("le laborantin y accède, comme le médecin")
+    void leLaboratoireEstAdmis() {
+        User technicien = new User();
+        technicien.setLastname("KAKPO");
+        technicien.setRoles(java.util.List.of(role("laborantin")));
+        poserId(technicien, AUTRUI);
+        when(userRepository.findById(AUTRUI)).thenReturn(Optional.of(technicien));
+
+        // C'est lui qui prépare la lame et qui a la question à poser.
+        var dto = service.poster(DEMANDE,
+                new DiscussionDtos.NouveauMessage("texte", "Lame recoupée.", null),
+                AUTRUI, BRANCHE);
+        assertThat(dto.contenu()).isEqualTo("Lame recoupée.");
+    }
+
+    @Test
+    @DisplayName("un utilisateur sans rôle est refusé, pas laissé passer")
+    void sansRoleOnRefuse() {
+        User orphelin = new User();
+        poserId(orphelin, AUTRUI);
+        when(userRepository.findById(AUTRUI)).thenReturn(Optional.of(orphelin));
+
+        // Un rôle absent est une donnée manquante, pas une autorisation. Le
+        // sens inverse ouvrirait le fil à tout compte mal configuré.
+        assertThatThrownBy(() -> service.fil(DEMANDE, AUTRUI, BRANCHE))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
     }
 }
