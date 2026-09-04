@@ -152,6 +152,14 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
                 detail.getRemplaceeLe());
     }
 
+    /** Combien de dossiers de la file précèdent l'année demandée. */
+    @Override
+    @Transactional(readOnly = true)
+    public long arriereDuMedecin(UUID docteurId, int annee) {
+        return detailRepository.compterAnterieures(
+                docteurId, LocalDate.now(), LocalDate.of(annee, 1, 1).atStartOfDay());
+    }
+
     /** Le médecin d'une ligne d'affectation, nom de famille en tête. */
     private static String medecinDe(TestOrderAssignmentDetail detail) {
         TestOrderAssignment lot = detail.getTestOrderAssignment();
@@ -358,12 +366,21 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
     /** {@inheritDoc} */
     @Override
     @Transactional(readOnly = true)
-    public List<DemandeDuMedecinDto> fileDuMedecin(UUID docteurId) {
+    public List<DemandeDuMedecinDto> fileDuMedecin(UUID docteurId, Integer annee) {
         // Les demandes terminées restent visibles le jour même. La borne porte
         // sur la date du lot, seule date que la ligne connaisse : c'est une
         // approximation, mais elle va dans le bon sens — un lot du jour reste
         // affiché, un lot d'hier disparaît.
-        var lignes = detailRepository.fileDuMedecin(docteurId, LocalDate.now());
+        //
+        // L'année, elle, se filtre ici et non sur le téléphone. Un médecin de
+        // production traîne 3 574 dossiers ouverts dont aucun de l'année :
+        // trier au retour reviendrait à en faire descendre trois mille cinq
+        // cents pour n'en afficher aucun, sur une connexion mobile.
+        LocalDateTime debut = annee == null
+                ? null : LocalDate.of(annee, 1, 1).atStartOfDay();
+        var lignes = detailRepository.fileDuMedecin(
+                docteurId, LocalDate.now(), debut,
+                debut == null ? null : debut.plusYears(1));
 
         // Les comptes rendus en une seule requête : un par ligne ferait une
         // trentaine d'allers-retours pour un écran d'accueil.

@@ -57,9 +57,26 @@ public class TestOrderAssignmentController {
     @GetMapping("/mes-demandes")
     @PreAuthorize("hasAuthority('view-test-order-assignments')")
     public ResponseEntity<ApiResponse<java.util.List<DemandeDuMedecinDto>>> mesDemandes(
+            @RequestParam(required = false) Integer annee,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                assignmentService.fileDuMedecin(principal.getId())));
+                assignmentService.fileDuMedecin(principal.getId(), annee)));
+    }
+
+    /**
+     * Combien de dossiers de sa file précèdent l'année donnée.
+     *
+     * <p>Un nombre seul, pour la ligne « + N des années précédentes ». Le
+     * téléphone ne peut pas le déduire de ce qu'il a reçu, puisqu'il ne reçoit
+     * précisément que l'année en cours.</p>
+     */
+    @GetMapping("/mes-demandes/arriere")
+    @PreAuthorize("hasAuthority('view-test-order-assignments')")
+    public ResponseEntity<ApiResponse<Long>> arriere(
+            @RequestParam int annee,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                assignmentService.arriereDuMedecin(principal.getId(), annee)));
     }
 
     /**

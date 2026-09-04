@@ -80,7 +80,11 @@ public interface TestOrderAssignmentService {
      * dossiers, il ne navigue pas de bordereau en bordereau. Le code du lot
      * reste rappelé sur chaque ligne.</p>
      */
-    java.util.List<DemandeDuMedecinDto> fileDuMedecin(java.util.UUID docteurId);
+    java.util.List<DemandeDuMedecinDto> fileDuMedecin(java.util.UUID docteurId,
+                                                      Integer annee);
+
+    /** Combien de dossiers de sa file datent d'avant l'année donnée. */
+    long arriereDuMedecin(java.util.UUID docteurId, int annee);
 
     /**
      * Change où en est le médecin sur une demande.
