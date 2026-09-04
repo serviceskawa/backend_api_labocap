@@ -55,6 +55,22 @@ server:
   forward-headers-strategy: framework
 
 app:
+  report:
+    notify-retry:
+      # Reprise des avis de disponibilité qu'un compte-rendu validé hors de la
+      # plage d'appel 8h–18h n'a pas pu déclencher. Tous les jours à 8h, heure du
+      # laboratoire. « - » désactive la tâche ; un cron plus court sert la recette.
+      cron: ${REPORT_NOTIFY_RETRY_CRON:0 0 8 * * *}
+  # Adresse publique de l'API, telle qu'un client la voit depuis son téléphone.
+  # Sert à construire le lien de téléchargement envoyé par SMS : il doit être
+  # joignable depuis l'extérieur, pas seulement depuis le réseau du laboratoire.
+  public-base-url: ${PUBLIC_BASE_URL:https://api.caap.bj}
+  invoice:
+    share-link:
+      # Durée de vie du lien public de facture. Un SMS reste indéfiniment dans le
+      # téléphone de son destinataire : sans expiration, le lien deviendrait un
+      # accès permanent à une pièce comptable.
+      ttl-days: ${INVOICE_SHARE_LINK_TTL_DAYS:60}
   jwt:
     secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION:86400000}
@@ -74,6 +90,27 @@ app:
   mail:
     from: ${MAIL_FROM}
     from-name: ${MAIL_FROM_NAME:Labo AnaPath}
+  fluidpay:
+    sms:
+      # Passerelle SMS FluidPay (app.fluidpay.link), qui achemine via l'opérateur
+      # désigné ci-dessous. Distincte de app.fluidinvoice, qui est la passerelle
+      # fiscale : deux produits, deux domaines, deux clés.
+      #
+      # Activée par défaut, mais sans effet tant que la clé manque : les SMS
+      # repartent alors par l'API OurVoice directe, comme avant la bascule.
+      enabled: ${FLUIDPAY_SMS_ENABLED:true}
+      base-url: ${FLUIDPAY_SMS_BASE_URL:https://app.fluidpay.link}
+      # Jamais en dur : la clé autorise des envois facturés.
+      api-key: ${FLUIDPAY_SMS_API_KEY:}
+      # Clé de chiffrement, 32 caractères. Obligatoire : le serveur refuse une
+      # requête SMS non chiffrée (missing_encrypted_data), quoi qu'en dise
+      # docs/openapi.yaml, qui décrit l'endpoint comme prenant du clair.
+      encryption-key: ${FLUIDPAY_SMS_ENCRYPTION_KEY:}
+      # Opérateur d'acheminement : ourvoice | lafricamobile.
+      provider: ${FLUIDPAY_SMS_PROVIDER:ourvoice}
+      # Expéditeur affiché sur le téléphone, 11 caractères au plus. Vide = celui
+      # déclaré au compte de l'opérateur, le seul enregistré auprès de lui.
+      sender: ${FLUIDPAY_SMS_SENDER:}
   fluidinvoice:
     # Passerelle de facturation normalisée e-MCF / DGI (invoice.fluidpay.link).
     # Désactivée par défaut : sans clé, aucune facture ne doit partir à la DGI.

@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -21,6 +22,29 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
     Page<Report> findByBranchId(UUID branchId, Pageable pageable);
 
     Optional<Report> findByTestOrderId(UUID testOrderId);
+
+    /**
+     * Comptes-rendus validés dont le patient n'a jamais reçu l'avis de
+     * disponibilité — ceux que la reprise de 8h doit traiter.
+     *
+     * <p>Seuls les {@code VALIDATED} sont repris : un compte-rendu déjà
+     * {@code DELIVERED} a été retiré, prévenir son patient n'a plus d'objet.</p>
+     *
+     * <p><b>La borne de date n'est pas décorative.</b> Après une panne de
+     * plusieurs jours, la requête sans borne remonterait un arriéré entier et
+     * lancerait des centaines d'appels d'un coup. Trois jours couvrent le cas
+     * réel — un week-end prolongé — et rien au-delà : passé ce délai, l'avis se
+     * fait au comptoir.</p>
+     *
+     * @param depuis   date de validation la plus ancienne encore reprise
+     * @param pageable plafond du lot ; le tri est porté par la requête
+     */
+    @Query("SELECT r FROM Report r "
+            + "WHERE r.status = com.labo.anapath.report.ReportStatus.VALIDATED "
+            + "AND r.patientNotifiedAt IS NULL "
+            + "AND r.signatureDate >= :depuis "
+            + "ORDER BY r.signatureDate ASC")
+    List<Report> findAvisPatientEnAttente(@Param("depuis") LocalDateTime depuis, Pageable pageable);
 
     List<Report> findByTestOrder_IdIn(Collection<UUID> testOrderIds);
 

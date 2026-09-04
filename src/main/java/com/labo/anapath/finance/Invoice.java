@@ -23,6 +23,7 @@ import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -161,4 +162,38 @@ public class Invoice extends AuditableEntity {
     /** Identifiant interne FluidInvoice, référence d'origine des avoirs. */
     @Column(name = "fluidinvoice_id", length = 36)
     private String fluidinvoiceId;
+
+    /**
+     * Jeton du lien public de téléchargement envoyé par SMS au client.
+     *
+     * <p>Le client n'a pas de compte : c'est ce jeton, et non l'identifiant de la
+     * facture, qui autorise l'accès au PDF sans authentification. Tiré au sort,
+     * il n'est pas devinable depuis la facture. NULL tant qu'aucun lien n'a été
+     * émis.</p>
+     */
+    @Column(name = "share_token", length = 64)
+    private String shareToken;
+
+    /**
+     * Date au-delà de laquelle le lien public cesse de servir le document.
+     *
+     * <p>Un SMS reste indéfiniment dans le téléphone de son destinataire ; sans
+     * expiration, le lien deviendrait un accès permanent à une pièce comptable.</p>
+     */
+    @Column(name = "share_token_expires_at")
+    private LocalDateTime shareTokenExpiresAt;
+
+    /**
+     * Date d'envoi du SMS portant le lien de téléchargement.
+     *
+     * <p>Une facture est validée par plusieurs gestes successifs — encaissée,
+     * puis normalisée — et chacun d'eux signale la facture comme disponible.
+     * Cette date, une fois posée, interdit tout nouvel envoi automatique : sans
+     * elle, le client recevrait un SMS par geste.</p>
+     *
+     * <p>Elle n'est écrite qu'après une réponse d'OurVoice, jamais avant : un
+     * envoi échoué doit rester rattrapable par le geste suivant.</p>
+     */
+    @Column(name = "share_sms_sent_at")
+    private LocalDateTime shareSmsSentAt;
 }

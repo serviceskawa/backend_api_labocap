@@ -10,6 +10,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -36,6 +37,9 @@ class MecefServiceImplTest {
     @Mock private SettingInvoiceRepository settingInvoiceRepository;
     @Mock private FinanceMapper financeMapper;
     @Mock private RestTemplate restTemplate;
+    /** L'encaissement publie InvoiceValidatedEvent : sans ce mock, @InjectMocks
+     *  laisse le champ à null et markAsPaid lève un NullPointerException. */
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks private MecefServiceImpl service;
 
