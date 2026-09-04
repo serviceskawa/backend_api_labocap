@@ -10,7 +10,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface TestOrderAssignmentDetailRepository extends JpaRepository<TestOrderAssignmentDetail, UUID> {
+public interface TestOrderAssignmentDetailRepository
+        extends JpaRepository<TestOrderAssignmentDetail, UUID>,
+                org.springframework.data.jpa.repository.JpaSpecificationExecutor<TestOrderAssignmentDetail> {
 
     /**
      * Les affectations vivantes d'une demande, la plus récente en tête.

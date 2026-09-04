@@ -64,6 +64,74 @@ public class TestOrderAssignmentController {
     }
 
     /**
+     * Une page de sa file, filtrée au serveur.
+     *
+     * <p>Point d'entrée distinct de {@code /mes-demandes}, qui rend la liste
+     * entière. Les deux coexistent le temps que le parc d'appareils se mette à
+     * jour : changer la forme de la réponse sur place aurait mis hors service
+     * toutes les applications déjà installées, à l'instant du déploiement.</p>
+     *
+     * <p>{@code demandes} restreint à des dossiers précis. Il sert au filtre
+     * « non lus » : le téléphone connaît déjà cette courte liste, et l'envoyer
+     * évite à cette requête de joindre les lectures de discussion.</p>
+     */
+    @GetMapping("/mes-demandes/page")
+    @PreAuthorize("hasAuthority('view-test-order-assignments')")
+    public ResponseEntity<ApiResponse<PageResponse<DemandeDuMedecinDto>>> pageDeMaFile(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) Integer annee,
+            @RequestParam(required = false) String lot,
+            @RequestParam(required = false) String docteurStatus,
+            @RequestParam(required = false) String statutDemande,
+            @RequestParam(required = false) Boolean urgents,
+            @RequestParam(required = false) Boolean enRetard,
+            @RequestParam(required = false) java.util.List<UUID> demandes,
+            @RequestParam(required = false) Boolean exclureTermines,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                assignmentService.pageDeLaFile(principal.getId(),
+                        new FiltreFileDuMedecin(annee, lot, docteurStatus,
+                                statutDemande, urgents, enRetard, demandes,
+                                exclureTermines),
+                        page, size)));
+    }
+
+    /** Les lots présents dans sa file, pour alimenter le filtre. */
+    @GetMapping("/mes-demandes/lots")
+    @PreAuthorize("hasAuthority('view-test-order-assignments')")
+    public ResponseEntity<ApiResponse<java.util.List<String>>> lotsDeMaFile(
+            @RequestParam(required = false) Integer annee,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                assignmentService.lotsDeLaFile(principal.getId(), annee)));
+    }
+
+    /**
+     * La répartition de sa file entre « à traiter », « en cours » et
+     * « terminées », sur le périmètre demandé.
+     *
+     * <p>Les mêmes filtres que la page, sauf le statut du médecin : c'est lui
+     * qu'on décompose. Le téléphone les comptait sur ce qu'il recevait ; il ne
+     * reçoit plus qu'une page.</p>
+     */
+    @GetMapping("/mes-demandes/resume")
+    @PreAuthorize("hasAuthority('view-test-order-assignments')")
+    public ResponseEntity<ApiResponse<ResumeFileDto>> resumeDeMaFile(
+            @RequestParam(required = false) Integer annee,
+            @RequestParam(required = false) String lot,
+            @RequestParam(required = false) String statutDemande,
+            @RequestParam(required = false) Boolean urgents,
+            @RequestParam(required = false) Boolean enRetard,
+            @RequestParam(required = false) java.util.List<UUID> demandes,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                assignmentService.resumeDeLaFile(principal.getId(),
+                        new FiltreFileDuMedecin(annee, lot, null, statutDemande,
+                                urgents, enRetard, demandes, null))));
+    }
+
+    /**
      * Combien de dossiers de sa file précèdent l'année donnée.
      *
      * <p>Un nombre seul, pour la ligne « + N des années précédentes ». Le
