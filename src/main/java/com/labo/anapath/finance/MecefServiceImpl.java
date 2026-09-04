@@ -7,6 +7,7 @@ import com.labo.anapath.setting.SettingInvoice;
 import com.labo.anapath.setting.SettingInvoiceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -31,6 +32,7 @@ public class MecefServiceImpl implements MecefService {
     private final SettingInvoiceRepository settingInvoiceRepository;
     private final FinanceMapper financeMapper;
     private final RestTemplate restTemplate;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -61,7 +63,14 @@ public class MecefServiceImpl implements MecefService {
         log.info("MECeF confirm réussi — invoiceId={}, codeMecef={}", invoiceId,
                 mecefResponse != null ? mecefResponse.getCodeMECeFDGI() : "N/A");
 
-        return financeMapper.toInvoiceResponseDto(invoiceRepository.save(invoice));
+        Invoice normalisee = invoiceRepository.save(invoice);
+
+        // La confirmation MECeF vaut validation : la facture est due et son
+        // document existe. Le client en reçoit le lien par SMS — sans doublon si
+        // elle avait déjà été encaissée, voir InvoiceValidatedEvent.
+        eventPublisher.publishEvent(new InvoiceValidatedEvent(normalisee.getId()));
+
+        return financeMapper.toInvoiceResponseDto(normalisee);
     }
 
     @Override

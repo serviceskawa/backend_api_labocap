@@ -11,6 +11,7 @@ import com.labo.anapath.testorder.DetailTestOrder;
 import com.labo.anapath.testorder.TestOrder;
 import com.labo.anapath.testorder.TestOrderRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -43,6 +44,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final ContratRepository contratRepository;
     private final RefundRequestRepository refundRequestRepository;
     private final RefundReasonRepository refundReasonRepository;
+    private final ApplicationEventPublisher eventPublisher;
     private final SettingInvoiceRepository settingInvoiceRepository;
     private final FinanceMapper financeMapper;
     private final com.labo.anapath.report.QrCodeService qrCodeService;
@@ -282,6 +284,12 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
 
         Invoice saved = invoiceRepository.save(invoice);
+
+        // Le client reçoit par SMS le lien de téléchargement de sa facture, une
+        // fois l'encaissement validé en base. C'est le geste le plus fréquent des
+        // trois qui valident une facture — voir InvoiceValidatedEvent.
+        eventPublisher.publishEvent(new InvoiceValidatedEvent(saved.getId()));
+
         return financeMapper.withRefund(financeMapper.toInvoiceResponseDto(saved), findRefundFor(saved));
     }
 

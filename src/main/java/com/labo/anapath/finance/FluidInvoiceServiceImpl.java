@@ -4,7 +4,9 @@ import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -37,6 +39,7 @@ public class FluidInvoiceServiceImpl implements FluidInvoiceService {
     private final FluidInvoiceClient client;
     private final FluidInvoiceProperties properties;
     private final FinanceMapper financeMapper;
+    private final ApplicationEventPublisher eventPublisher;
     private final InvoiceService invoiceService;
 
     @Override
@@ -94,7 +97,14 @@ public class FluidInvoiceServiceImpl implements FluidInvoiceService {
                 : client.emettre(payload, idempotencyKey);
 
         appliquer(invoice, reponse);
-        return financeMapper.toInvoiceResponseDto(invoiceRepository.save(invoice));
+        Invoice normalisee = invoiceRepository.save(invoice);
+
+        // Le client est prévenu par SMS une fois la transaction validée : voir
+        // InvoiceValidatedEvent pour ce que coûterait un envoi synchrone. Le SMS
+        // n'est pas dupliqué si la facture avait déjà été encaissée.
+        eventPublisher.publishEvent(new InvoiceValidatedEvent(normalisee.getId()));
+
+        return financeMapper.toInvoiceResponseDto(normalisee);
     }
 
     @Override
@@ -117,11 +127,35 @@ public class FluidInvoiceServiceImpl implements FluidInvoiceService {
     // Construction de la charge utile
     // -------------------------------------------------------------------------
 
+    /**
+     * Première valeur réellement renseignée, ou {@code null} si aucune ne l'est.
+     *
+     * <p>Une chaîne vide n'est pas une valeur : la reprise des données Laravel a
+     * laissé des colonnes vides là où l'absence se lirait mieux en {@code NULL},
+     * et les transmettre telles quelles fait échouer l'appel côté éditeur.</p>
+     */
+    private static String premierRenseigne(String... valeurs) {
+        for (String valeur : valeurs) {
+            if (StringUtils.hasText(valeur)) {
+                return valeur;
+            }
+        }
+        return null;
+    }
+
     private FluidInvoiceRequestDto construirePayload(Invoice invoice, boolean estAvoir) {
         List<FluidInvoiceRequestDto.Item> items = lignes(invoice);
         if (items.isEmpty()) {
             throw new InvalidOperationException(
                     "Une facture sans ligne ne peut pas être normalisée.");
+        }
+        // Chaque ligne déclarée doit porter un libellé. Sans cette garde,
+        // l'éditeur répond « Items[0].Name failed on the required tag », que le
+        // caissier ne peut relier à aucune ligne de sa facture.
+        if (items.stream().anyMatch(item -> item.name() == null || item.name().isBlank())) {
+            throw new InvalidOperationException(
+                    "Une ligne de cette facture n'a pas de libellé : complétez-le "
+                    + "avant de normaliser.");
         }
 
         String reference = null;
@@ -135,8 +169,22 @@ public class FluidInvoiceServiceImpl implements FluidInvoiceService {
             // L'éditeur accepte l'un ou l'autre. On envoie le code MECeF quand la
             // vente a été normalisée hors FluidInvoice (ancien flux direct SYGMEF),
             // et l'identifiant FluidInvoice sinon.
-            reference = originale.getCodeMecef();
-            originalInvoiceId = originale.getFluidinvoiceId();
+            //
+            // Le code de normalisation vit dans deux colonnes selon le chemin
+            // emprunté : code_mecef quand la machine e-MECeF a répondu, et
+            // code_normalise quand le caissier l'a saisi à la main, normalisation
+            // automatique désactivée (voir InvoiceServiceImpl#markAsPaid). Ne
+            // regarder que la première laissait sans référence des avoirs dont la
+            // vente était pourtant bien normalisée.
+            reference = premierRenseigne(originale.getCodeMecef(), originale.getCodeNormalise());
+            originalInvoiceId = StringUtils.hasText(originale.getFluidinvoiceId())
+                    ? originale.getFluidinvoiceId()
+                    : null;
+
+            // Le vide compte comme l'absence : les factures reprises de Laravel
+            // portent une chaîne vide plutôt que NULL, et une référence vide
+            // partait telle quelle chez l'éditeur, qui la refusait par un
+            // MISSING_REFERENCE incompréhensible pour le caissier.
             if (reference == null && originalInvoiceId == null) {
                 throw new InvalidOperationException(
                         "La facture de vente d'origine doit être normalisée avant son avoir.");

@@ -16,6 +16,7 @@ import com.labo.anapath.mobile.MobileDevice;
 import org.springframework.security.access.AccessDeniedException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -49,6 +50,7 @@ public class ReportServiceImpl implements ReportService {
     private final ReportMapper reportMapper;
     private final EmailService emailService;
     private final NotificationSettings notificationSettings;
+    private final ApplicationEventPublisher eventPublisher;
     private final com.labo.anapath.mobile.MobileDeviceRepository mobileDeviceRepository;
     private final com.labo.anapath.mobile.SignatureAppareil signatureAppareil;
     private final com.labo.anapath.mobile.ProvenanceRequete provenanceRequete;
@@ -270,6 +272,11 @@ public class ReportServiceImpl implements ReportService {
                     .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", dto.getTestOrderId())));
         }
 
+        // Statut d'avant écriture : c'est la transition vers VALIDATED, et non le
+        // fait d'être validé, qui prévient le patient. Sans cette comparaison, tout
+        // réenregistrement d'un compte-rendu déjà validé le rappellerait.
+        ReportStatus statutInitial = report.getStatus();
+
         report.setContent(dto.getContent());
         report.setContentMicro(dto.getContentMicro());
         report.setComment(dto.getComment());
@@ -324,6 +331,7 @@ public class ReportServiceImpl implements ReportService {
 
         Report saved = reportRepository.save(report);
         logAction(saved.getId(), isCreate ? "CREATE" : "UPDATE", branchId);
+        signalerValidation(statutInitial, saved, utilisateurCourant());
         return reportMapper.toResponseDto(saved);
     }
 
@@ -510,6 +518,10 @@ public class ReportServiceImpl implements ReportService {
         boolean etaitSigne = report.getSignatureDate() != null && report.getSignatory1() != null;
         EmpreinteCompteRendu empreinte = etaitSigne ? EmpreinteCompteRendu.de(report) : null;
 
+        // Statut d'avant écriture : seule la transition vers VALIDATED prévient le
+        // patient — voir signalerValidation.
+        ReportStatus statutInitial = report.getStatus();
+
         // -------------------------------------------------------------------
         // Réplique EXACTE de ReportController@store (Laravel) : un unique
         // enregistrement pilote le contenu ET le statut du compte-rendu.
@@ -602,6 +614,8 @@ public class ReportServiceImpl implements ReportService {
                 tracerModificationApresSignature(saved, champsModifies, userId);
             }
         }
+
+        signalerValidation(statutInitial, saved, userId);
 
         return reportMapper.toResponseDto(saved);
     }
@@ -730,6 +744,7 @@ public class ReportServiceImpl implements ReportService {
         if (report.getStatus() == ReportStatus.VALIDATED || report.getStatus() == ReportStatus.DELIVERED) {
             throw new InvalidOperationException("Le rapport est déjà validé ou livré.");
         }
+        ReportStatus statutInitial = report.getStatus();
         report.setStatus(ReportStatus.VALIDATED);
         report.setSignatureDate(LocalDateTime.now());
         report.setDeliveryDate(LocalDateTime.now());
@@ -756,6 +771,7 @@ public class ReportServiceImpl implements ReportService {
 
         Report saved = reportRepository.save(report);
         logAction(id, preuve != null ? "Validé (signé par appareil)" : "Validé", userId);
+        signalerValidation(statutInitial, saved, userId);
         return reportMapper.toResponseDto(saved);
     }
 
@@ -903,6 +919,48 @@ public class ReportServiceImpl implements ReportService {
      * service, et l'y faire entrer imposerait de la modifier partout pour un
      * besoin qui ne concerne que cette branche.</p>
      */
+    /**
+     * Publie {@link ReportValidatedEvent} si le compte-rendu vient de passer à
+     * l'état validé, pour que le patient soit prévenu que son résultat est
+     * disponible au retrait.
+     *
+     * <p>La condition porte sur la <b>transition</b>, jamais sur le statut seul :
+     * un compte-rendu validé est réenregistré chaque fois qu'on y corrige une
+     * coquille, et chacun de ces enregistrements relancerait sinon un appel chez
+     * le patient.</p>
+     *
+     * <p>L'envoi lui-même est différé après le commit et exécuté hors de cette
+     * transaction — voir {@link ReportValidationNotifier}.</p>
+     *
+     * @param statutInitial statut lu avant écriture
+     * @param saved         compte-rendu tel qu'enregistré
+     * @param userId        auteur de la validation, pour la journalisation de l'envoi
+     */
+    private void signalerValidation(ReportStatus statutInitial, Report saved, UUID userId) {
+        if (saved.getStatus() == ReportStatus.VALIDATED && statutInitial != ReportStatus.VALIDATED) {
+            eventPublisher.publishEvent(new ReportValidatedEvent(saved.getId(), userId));
+        }
+    }
+
+    /**
+     * Identifiant de l'utilisateur connecté, ou {@code null} hors contexte
+     * authentifié (tâche planifiée, test).
+     *
+     * <p>{@code createOrUpdate} ne reçoit pas d'identifiant d'auteur — sa signature
+     * est partagée avec le reste du service — alors que la journalisation de la
+     * notification en demande un. Le contexte de sécurité est ici la seule source
+     * disponible, comme pour {@link #exigerLeDroitDeValider}.</p>
+     */
+    private UUID utilisateurCourant() {
+        var authentification = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        if (authentification == null
+                || !(authentification.getPrincipal() instanceof com.labo.anapath.common.security.UserPrincipal principal)) {
+            return null;
+        }
+        return principal.getId();
+    }
+
     private void exigerLeDroitDeValider(ReportStatus statutActuel) {
         if (statutActuel == ReportStatus.VALIDATED || statutActuel == ReportStatus.DELIVERED) {
             return;
