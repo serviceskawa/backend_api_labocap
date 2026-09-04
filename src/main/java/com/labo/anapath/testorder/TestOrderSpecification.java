@@ -81,12 +81,28 @@ public class TestOrderSpecification {
                 predicates.add(cb.equal(root.get("isUrgent"), filter.getIsUrgent()));
             }
             if (filter.getAnnee() != null) {
-                // Le préfixe du code — « 26- » — et non l'année de création :
-                // 328 dossiers repris de l'ancien système portent un code dont
-                // l'année ne coïncide pas avec leur date d'insertion, et c'est
-                // le code que le laboratoire lit et prononce.
-                predicates.add(cb.like(root.get("code"),
-                        String.format("%02d-%%", filter.getAnnee() % 100)));
+                // L'année de création, et non le préfixe du code.
+                //
+                // Le code dit pourtant l'année — « 26-0155 » — et c'est ce que
+                // le laboratoire prononce. Mais il n'est attribué qu'à la
+                // validation : les 332 demandes encore en attente n'en ont
+                // aucun, et un filtre sur le code les faisait toutes
+                // disparaître, quelle que soit l'année demandée. Or ce sont
+                // précisément celles dont l'arriéré encombre les compteurs.
+                //
+                // Le relevé de production tranche : sur 19 024 dossiers portant
+                // un code d'année, aucun ne contredit son année de création.
+                // Les deux repères disent la même chose, et celui-ci parle
+                // aussi des dossiers qui n'ont pas encore de nom.
+                // Un encadrement plutôt qu'un date_part : une fonction
+                // appliquée à la colonne interdit à tout index de servir, et
+                // cette table en compte vingt mille.
+                java.time.LocalDateTime debut =
+                        java.time.LocalDate.of(filter.getAnnee(), 1, 1).atStartOfDay();
+                predicates.add(cb.greaterThanOrEqualTo(
+                        root.get("createdAt"), debut));
+                predicates.add(cb.lessThan(
+                        root.get("createdAt"), debut.plusYears(1)));
             }
             if (Boolean.TRUE.equals(filter.getEnCours())) {
                 predicates.add(root.get("status").in(

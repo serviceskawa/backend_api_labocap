@@ -58,14 +58,6 @@ public record DemandeDuMedecinDto(
          *
          * <p>Calculé ici et non à l'écran, avec le seuil qui déclenche déjà
          * l'alerte par courriel ({@code app.alerts.report.days}). Deux
-         * définitions de l'urgence — une pour l'écran, une pour le courriel —
-         * finiraient par se contredire, et c'est le médecin qui arbitrerait.</p>
-         */
-        /**
-         * Le dossier a dépassé le délai sans compte rendu validé.
-         *
-         * <p>Calculé ici et non à l'écran, avec le seuil qui déclenche déjà
-         * l'alerte par courriel ({@code app.alerts.report.days}). Deux
          * définitions du retard — une pour l'écran, une pour le courriel —
          * finiraient par se contredire, et c'est le médecin qui arbitrerait.</p>
          *
@@ -85,6 +77,17 @@ public record DemandeDuMedecinDto(
          * peut être l'un, l'autre, les deux, ou aucun.</p>
          */
         boolean urgent,
+
+        /**
+         * L'année d'ouverture du dossier.
+         *
+         * <p>Envoyée plutôt que déduite du code : le code porte bien l'année,
+         * mais il n'est attribué qu'à la validation, et une demande encore en
+         * attente n'en a pas. Le téléphone s'en sert pour ne compter dans ses
+         * alertes que les dossiers de l'année — une déduction faite sur place
+         * se serait trompée sur ceux qui n'ont pas encore de nom.</p>
+         */
+        Integer annee,
         List<String> labels,
         String note,
         String assignmentCode,

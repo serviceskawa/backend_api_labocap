@@ -7,6 +7,7 @@ import jakarta.persistence.criteria.Root;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -30,16 +31,21 @@ import static org.mockito.Mockito.when;
  * restait 57 — mais 54 d'entre eux dataient d'années passées, et noyaient les
  * trois de l'année en cours.</p>
  *
- * <h2>L'année du code, pas celle du prélèvement</h2>
+ * <h2>Quelle année, mesurée où</h2>
  *
- * <p>Un prélèvement de décembre enregistré en janvier porte un code de la
- * nouvelle année. C'est un dossier courant, et filtrer sur la date de
- * prélèvement l'écarterait — chaque mois de janvier, sur les dossiers les plus
- * récents.</p>
+ * <p>Sur la date de création. Le code porte pourtant l'année — « 26-0155 » —
+ * mais il n'est attribué qu'à la validation : les 332 demandes en attente n'en
+ * ont aucune, et un filtre sur le code les écartait toutes. Sur les 19 024
+ * dossiers qui ont un code, aucun ne contredit son année de création : les deux
+ * repères s'accordent, et celui-ci parle aussi des dossiers sans nom.</p>
+ *
+ * <p>Ni sur la date de prélèvement : un prélèvement de décembre enregistré en
+ * janvier relève de la charge de l'année nouvelle, et 244 dossiers de
+ * production sont dans ce cas.</p>
  */
 class UrgentsDeLanneeTest {
 
-    /** Les prédicats qu'une spécification pose, sans base de données. */
+    /** Les bornes et les colonnes qu'une spécification met en jeu. */
     private static List<String> predicatsPoses(TestOrderFilterDto filtre) {
         @SuppressWarnings("unchecked")
         Root<TestOrder> root = mock(Root.class);
@@ -51,8 +57,13 @@ class UrgentsDeLanneeTest {
             traces.add("get:" + i.getArgument(0));
             return mock(Path.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
         });
-        when(cb.like(any(), anyString())).thenAnswer(i -> {
-            traces.add("like:" + i.getArgument(1));
+        when(cb.greaterThanOrEqualTo(any(), any(LocalDateTime.class)))
+                .thenAnswer(i -> {
+                    traces.add("depuis:" + i.getArgument(1));
+                    return mock(Predicate.class);
+                });
+        when(cb.lessThan(any(), any(LocalDateTime.class))).thenAnswer(i -> {
+            traces.add("avant:" + i.getArgument(1));
             return mock(Predicate.class);
         });
 
@@ -61,30 +72,34 @@ class UrgentsDeLanneeTest {
     }
 
     @Test
-    @DisplayName("l'année devient un préfixe de code à deux chiffres")
-    void anneeVersPrefixe() {
+    @DisplayName("l'année devient un encadrement de la date de création")
+    void anneeVersEncadrement() {
         TestOrderFilterDto f = new TestOrderFilterDto();
         f.setAnnee(2026);
 
-        assertThat(predicatsPoses(f)).contains("like:26-%");
+        // Un encadrement et non un date_part : une fonction posée sur la
+        // colonne écarterait tout index, sur une table de vingt mille lignes
+        // interrogée à chaque ouverture d'écran.
+        assertThat(predicatsPoses(f))
+                .contains("depuis:2026-01-01T00:00", "avant:2027-01-01T00:00");
     }
 
     @Test
-    @DisplayName("une année du siècle précédent garde ses deux chiffres")
-    void anneeSurDeuxChiffres() {
+    @DisplayName("la borne haute exclut le 1er janvier suivant")
+    void borneHauteStricte() {
         TestOrderFilterDto f = new TestOrderFilterDto();
-        // 2003 doit donner « 03- » et non « 3- » : sans le zéro, le motif ne
-        // correspondrait à aucun code.
-        f.setAnnee(2003);
+        f.setAnnee(2025);
 
-        assertThat(predicatsPoses(f)).contains("like:03-%");
+        // Stricte : un dossier ouvert le 1er janvier 2026 à 00h00 appartient à
+        // 2026. Une borne inclusive le compterait dans les deux années.
+        assertThat(predicatsPoses(f)).contains("avant:2026-01-01T00:00");
     }
 
     @Test
-    @DisplayName("sans année demandée, aucun filtre sur le code")
+    @DisplayName("sans année demandée, aucune borne de date")
     void sansAnnee() {
         assertThat(predicatsPoses(new TestOrderFilterDto()))
-                .noneMatch(t -> t.startsWith("like:"));
+                .noneMatch(t -> t.startsWith("depuis:") || t.startsWith("avant:"));
     }
 
     @Test

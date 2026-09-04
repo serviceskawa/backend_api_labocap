@@ -42,13 +42,17 @@ public class TestOrderFilterDto {
     private Boolean isUrgent;
 
     /**
-     * L'année du dossier, telle que son code la porte — 2026 pour « 26-0155 ».
+     * L'année d'ouverture du dossier — 2026 pour un dossier « 26-0155 ».
      *
-     * <p>L'année du <em>code</em> et non celle du prélèvement : un prélèvement
-     * de décembre enregistré en janvier porte le numéro de la nouvelle année et
-     * relève de sa charge de travail. Filtrer sur la date de prélèvement
-     * écarterait chaque janvier les dossiers les plus récents, ceux-là mêmes
-     * qu'on cherche.</p>
+     * <p>Mesurée sur la date de création et non sur le code, bien que le code
+     * porte l'année et que ce soit lui qu'on prononce : il n'est attribué qu'à
+     * la validation, et les demandes encore en attente n'en ont pas. Un filtre
+     * sur le code les écartait toutes — celles-là mêmes dont l'arriéré
+     * encombre les compteurs.</p>
+     *
+     * <p>Ni sur la date de prélèvement : un prélèvement de décembre enregistré
+     * en janvier relève de la charge de l'année nouvelle, et 244 dossiers de
+     * production sont dans ce cas.</p>
      */
     private Integer annee;
 
