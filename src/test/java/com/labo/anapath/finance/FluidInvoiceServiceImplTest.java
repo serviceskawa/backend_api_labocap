@@ -153,6 +153,48 @@ class FluidInvoiceServiceImplTest {
     }
 
     @Test
+    @DisplayName("ligne sans test_name → le libellé du catalogue prend le relais")
+    void ligneSansNom_repliSurLeCatalogue() {
+        // Des lignes reprises de Laravel n'ont pas de test_name. Sans repli,
+        // l'éditeur refusait la déclaration (Items[0].Name required).
+        com.labo.anapath.test.LabTest examen = new com.labo.anapath.test.LabTest();
+        examen.setName("Appendicectomie");
+
+        InvoiceDetail ligne = new InvoiceDetail();
+        ligne.setTestName(null);
+        ligne.setLabTest(examen);
+        ligne.setTotal(BigDecimal.valueOf(35_000));
+        ligne.setQuantity(1);
+
+        Invoice avoir = avoirRattacheA(originale("MECEF-123", null, null));
+        avoir.setDetails(List.of(ligne));
+        when(invoiceRepository.findById(AVOIR_ID)).thenReturn(Optional.of(avoir));
+        editeurRepondOk();
+
+        service.normaliser(AVOIR_ID, BRANCHE, null);
+
+        assertThat(payloadEnvoye().items().get(0).name()).isEqualTo("Appendicectomie");
+    }
+
+    @Test
+    @DisplayName("ligne sans nom ni catalogue → refus lisible, l'éditeur n'est pas appelé")
+    void ligneSansAucunNom_refusLisible() {
+        InvoiceDetail ligne = new InvoiceDetail();
+        ligne.setTestName("   ");
+        ligne.setTotal(BigDecimal.valueOf(35_000));
+        ligne.setQuantity(1);
+
+        Invoice avoir = avoirRattacheA(originale("MECEF-123", null, null));
+        avoir.setDetails(List.of(ligne));
+        when(invoiceRepository.findById(AVOIR_ID)).thenReturn(Optional.of(avoir));
+
+        assertThatThrownBy(() -> service.normaliser(AVOIR_ID, BRANCHE, null))
+                .isInstanceOf(InvalidOperationException.class)
+                .hasMessageContaining("libellé");
+        verify(client, never()).emettreAvoir(any(), anyString());
+    }
+
+    @Test
     @DisplayName("avoir non rattaché à une vente → refus explicite")
     void avoirSansOriginale_refus() {
         Invoice avoir = avoirRattacheA(null);

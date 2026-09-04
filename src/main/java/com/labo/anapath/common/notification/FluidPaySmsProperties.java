@@ -74,10 +74,13 @@ public class FluidPaySmsProperties {
 
     /**
      * Opérateur qui achemine le SMS, parmi ceux que FluidPay prend en charge
-     * ({@code ourvoice}, {@code lafricamobile}). Le laboratoire est client
-     * d'OurVoice ; changer d'opérateur est un réglage, pas un déploiement.
+     * ({@code lafricamobile}, {@code ourvoice}). Le laboratoire achemine par
+     * lafricamobile ; changer d'opérateur reste un réglage, pas un déploiement.
+     *
+     * <p>À ne pas confondre avec OurVoice, qui garde l'appel vocal : c'est
+     * l'acheminement du SMS qui change ici, pas la voix.</p>
      */
-    private String provider = "ourvoice";
+    private String provider = "lafricamobile";
 
     /**
      * Nom affiché comme expéditeur sur le téléphone du destinataire.

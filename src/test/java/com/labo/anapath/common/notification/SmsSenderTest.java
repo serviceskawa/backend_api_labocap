@@ -73,7 +73,7 @@ class SmsSenderTest {
 
         FluidPaySmsMessage envoye = envoyerEtCapturer("Votre facture est disponible");
 
-        assertThat(envoye.provider()).isEqualTo("ourvoice");
+        assertThat(envoye.provider()).isEqualTo("lafricamobile");
         assertThat(envoye.recipientPhone()).isEqualTo(NUMERO);
         assertThat(envoye.sourceId()).isEqualTo(SOURCE_ID.toString());
         assertThat(envoye.sourceType()).isEqualTo(SmsSender.SOURCE_FACTURE);

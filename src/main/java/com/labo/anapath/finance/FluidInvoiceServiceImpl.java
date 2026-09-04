@@ -149,6 +149,14 @@ public class FluidInvoiceServiceImpl implements FluidInvoiceService {
             throw new InvalidOperationException(
                     "Une facture sans ligne ne peut pas être normalisée.");
         }
+        // Chaque ligne déclarée doit porter un libellé. Sans cette garde,
+        // l'éditeur répond « Items[0].Name failed on the required tag », que le
+        // caissier ne peut relier à aucune ligne de sa facture.
+        if (items.stream().anyMatch(item -> item.name() == null || item.name().isBlank())) {
+            throw new InvalidOperationException(
+                    "Une ligne de cette facture n'a pas de libellé : complétez-le "
+                    + "avant de normaliser.");
+        }
 
         String reference = null;
         String originalInvoiceId = null;

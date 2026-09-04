@@ -187,7 +187,7 @@ app:
       # docs/openapi.yaml, qui décrit l'endpoint comme prenant du clair.
       encryption-key: ${FLUIDPAY_SMS_ENCRYPTION_KEY:}
       # Opérateur d'acheminement : ourvoice | lafricamobile.
-      provider: ${FLUIDPAY_SMS_PROVIDER:ourvoice}
+      provider: ${FLUIDPAY_SMS_PROVIDER:lafricamobile}
       # Expéditeur affiché sur le téléphone, 11 caractères au plus. Vide = celui
       # déclaré au compte de l'opérateur, le seul enregistré auprès de lui.
       sender: ${FLUIDPAY_SMS_SENDER:}
@@ -207,6 +207,27 @@ app:
       max-per-run: ${ALERT_REPORT_MAX:200}
   support:
     ticket-notify-email: ${TICKET_NOTIFY_EMAIL:serviceskawa@gmail.com}
+
+logging:
+  file:
+    # Journal sur disque, en plus de la console. Sans lui, les traces meurent
+    # avec le terminal : un envoi de SMS refusé la nuit ne laisse rien à lire
+    # le lendemain.
+    #
+    # Chemin relatif au répertoire de lancement en développement ; en
+    # production, viser un volume qui survit au conteneur (LOG_FILE).
+    name: ${LOG_FILE:logs/labo-api.log}
+  logback:
+    rollingpolicy:
+      # Un fichier par jour, et un nouveau dès 10 Mo : un journal d'un seul
+      # tenant devient illisible et finit par remplir le disque.
+      file-name-pattern: ${LOG_FILE:logs/labo-api.log}.%d{yyyy-MM-dd}.%i.gz
+      max-file-size: ${LOG_MAX_FILE_SIZE:10MB}
+      # Un mois d'historique : de quoi remonter à un incident signalé tard,
+      # sans garder indéfiniment des journaux qui nomment des patients.
+      max-history: ${LOG_MAX_HISTORY:30}
+      total-size-cap: ${LOG_TOTAL_SIZE_CAP:1GB}
+      clean-history-on-start: false
 
 management:
   endpoints:
