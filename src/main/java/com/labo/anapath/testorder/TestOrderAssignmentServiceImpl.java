@@ -188,45 +188,19 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
     public ResumeFileDto resumeDeLaFile(UUID docteurId, FiltreFileDuMedecin filtre) {
         var perimetre = filtre.sansStatutDuMedecin();
         return new ResumeFileDto(
-                compter(docteurId, perimetre, DocteurStatus.A_TRAITER),
-                compter(docteurId, perimetre, DocteurStatus.PRIS_EN_CHARGE),
-                compter(docteurId, perimetre, DocteurStatus.TERMINE),
-                compterSelon(docteurId, perimetre, true, null),
-                compterSelon(docteurId, perimetre, null, true),
-                compterParStatutDemande(docteurId, perimetre, TestOrderStatus.PENDING),
-                compterParStatutDemande(docteurId, perimetre, TestOrderStatus.VALIDATED),
-                compterParStatutDemande(docteurId, perimetre, TestOrderStatus.DELIVERED));
+                compter(docteurId, perimetre.avecAvancement(Avancement.A_TRAITER)),
+                compter(docteurId, perimetre.avecAvancement(Avancement.EN_RELECTURE)),
+                compter(docteurId, perimetre.avecAvancement(Avancement.TERMINE)),
+                compter(docteurId, perimetre.avecAlerte(true, null)),
+                compter(docteurId, perimetre.avecAlerte(null, true)),
+                compter(docteurId, perimetre.avecStatutDemande(TestOrderStatus.PENDING)),
+                compter(docteurId, perimetre.avecStatutDemande(TestOrderStatus.VALIDATED)),
+                compter(docteurId, perimetre.avecStatutDemande(TestOrderStatus.DELIVERED)));
     }
 
-    /** Le périmètre, compté sous un état de demande imposé. */
-    private long compterParStatutDemande(UUID docteurId,
-                                         FiltreFileDuMedecin perimetre,
-                                         TestOrderStatus statut) {
+    private long compter(UUID docteurId, FiltreFileDuMedecin filtre) {
         return detailRepository.count(SpecificationFileDuMedecin.filtrer(
-                docteurId, LocalDate.now(), joursAvantAlerte,
-                new FiltreFileDuMedecin(perimetre.annee(), perimetre.lot(), null,
-                        statut.name(), perimetre.urgents(), perimetre.enRetard(),
-                        perimetre.demandes(), null)));
-    }
-
-    /** Le périmètre, compté sous un critère d'urgence ou de retard imposé. */
-    private long compterSelon(UUID docteurId, FiltreFileDuMedecin perimetre,
-                              Boolean urgents, Boolean enRetard) {
-        return detailRepository.count(SpecificationFileDuMedecin.filtrer(
-                docteurId, LocalDate.now(), joursAvantAlerte,
-                new FiltreFileDuMedecin(perimetre.annee(), perimetre.lot(), null,
-                        perimetre.statutDemande(), urgents, enRetard,
-                        perimetre.demandes(), null)));
-    }
-
-    private long compter(UUID docteurId, FiltreFileDuMedecin perimetre,
-                         DocteurStatus statut) {
-        return detailRepository.count(SpecificationFileDuMedecin.filtrer(
-                docteurId, LocalDate.now(), joursAvantAlerte,
-                new FiltreFileDuMedecin(perimetre.annee(), perimetre.lot(),
-                        statut.valeur(), perimetre.statutDemande(),
-                        perimetre.urgents(), perimetre.enRetard(),
-                        perimetre.demandes(), null)));
+                docteurId, LocalDate.now(), joursAvantAlerte, filtre));
     }
 
     /**
@@ -243,7 +217,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
         return detailRepository.findAll(SpecificationFileDuMedecin.filtrer(
                         docteurId, LocalDate.now(), joursAvantAlerte,
                         new FiltreFileDuMedecin(annee, null, null, null,
-                                null, null, null, null)))
+                                null, null, null, null, null)))
                 .stream()
                 .map(d -> d.getTestOrderAssignment() == null
                         ? null : d.getTestOrderAssignment().getCode())
@@ -575,6 +549,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
                 etatCompteRendu,
                 estEnRetard(demande, etatCompteRendu),
                 estMarqueUrgent(demande),
+                Avancement.selonLeCompteRendu(etatCompteRendu).valeur(),
                 demande == null || demande.getCreatedAt() == null
                         ? null : demande.getCreatedAt().getYear(),
                 decoderEtiquettes(d.getLabels()),

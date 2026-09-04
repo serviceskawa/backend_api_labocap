@@ -3,8 +3,14 @@ package com.labo.anapath.testorder;
 /**
  * Combien de dossiers la file compte, dans chacun des trois états.
  *
+ * <p>Les trois premiers disent l'avancement réel du travail, lu sur le compte
+ * rendu — voir {@link Avancement}. Ils reposaient sur le suivi manuel du
+ * médecin, que personne ne renseigne : un médecin lisait « 172 à traiter »
+ * quand 124 de ces dossiers étaient déjà remis au client, compte rendu
+ * compris.</p>
+ *
  * <p>Calculé sur le périmètre courant — année, lot, urgence — mais sans le
- * filtre de statut lui-même : c'est la répartition de ce périmètre qu'on
+ * filtre d'avancement lui-même : c'est la répartition de ce périmètre qu'on
  * affiche, et l'y appliquer mettrait deux compteurs sur trois à zéro dès qu'on
  * se pose sur le premier.</p>
  *
@@ -15,7 +21,7 @@ package com.labo.anapath.testorder;
  */
 public record ResumeFileDto(
         long aTraiter,
-        long prisEnCharge,
+        long enRelecture,
         long termine,
 
         /**
