@@ -343,15 +343,15 @@ class ReportServiceImplTest {
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("Aucune trace après signature enregistrée"));
         assertThat(trace.getDescription())
-                .contains("Coralie OGOUSSAN")
+                .contains("OGOUSSAN Coralie")
                 .contains("Contenu macroscopique");
         assertThat(trace.getUser()).isEqualTo(auteur);
 
         // Chaque administrateur configuré est averti, pas seulement le premier.
         verify(emailService).sendPostSignatureChangeAlert(eq("admin@caap.bj"),
-                eq("CO26-0001"), any(), any(), eq("Coralie OGOUSSAN"), any(), eq("CAAP"));
+                eq("CO26-0001"), any(), any(), eq("OGOUSSAN Coralie"), any(), eq("CAAP"));
         verify(emailService).sendPostSignatureChangeAlert(eq("direction@caap.bj"),
-                eq("CO26-0001"), any(), any(), eq("Coralie OGOUSSAN"), any(), eq("CAAP"));
+                eq("CO26-0001"), any(), any(), eq("OGOUSSAN Coralie"), any(), eq("CAAP"));
     }
 
     @Test

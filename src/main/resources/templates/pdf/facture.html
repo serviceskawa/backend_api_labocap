@@ -124,6 +124,11 @@
         .destinataire td.texte .rightbox { float: none; text-align: right; }
         .destinataire td.code { width: 92px; }
         .destinataire .qr { width: 92px; height: 92px; }
+        /* Plus petit que le QR fiscal : il sert à scanner de près, au comptoir,
+           et non à être lu par un agent du fisc. 56 px restent largement
+           au-dessus du minimum pour un code de sept caractères. */
+        .qr-dossier { margin: 0.2rem 0 0; }
+        .qr-dossier img { width: 56px; height: 56px; }
         .signature .paid { display: block; width: 108px; margin: 0.35rem auto 0; }
 </style>
 </head>
@@ -174,6 +179,17 @@
                     <p class="kv"><strong>Adresse: </strong> <span th:text="${clientAddress}"></span></p>
                     <p class="kv"><strong>Code client: </strong> <span th:text="${patientCode}"></span></p>
                     <p class="kv"><strong>Demande d'examen: </strong> <span th:text="${demandeExamen}"></span></p>
+                    <!--
+                      QR du dossier, lu par l'application mobile au comptoir.
+
+                      Placé sous la référence qu'il encode, et non à côté du QR
+                      fiscal de l'en-tête : deux codes voisins servant à des
+                      usages différents finiraient par être scannés l'un pour
+                      l'autre. Absent des factures sans demande rattachée.
+                    -->
+                    <p class="kv qr-dossier" th:if="${!#strings.isEmpty(dossierQrcode)}">
+                        <img th:src="${dossierQrcode}" alt="Code du dossier"/>
+                    </p>
                 </div>
                 </td>
                 <td class="code">

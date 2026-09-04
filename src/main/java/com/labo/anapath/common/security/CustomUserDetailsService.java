@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.stream.Stream;
 import java.util.UUID;
 
 /**
@@ -75,9 +76,31 @@ public class CustomUserDetailsService implements UserDetailsService {
      * @param user entité utilisateur dont on extrait les permissions
      * @return liste de slugs de permissions sans doublons
      */
+    /**
+     * Les droits effectifs : ceux des rôles, et ceux accordés directement.
+     *
+     * <h3>Ce qui manquait</h3>
+     *
+     * <p>Seuls les rôles étaient lus. Or la plateforme sait accorder une
+     * permission à une personne en particulier — {@code GET} et {@code PUT}
+     * {@code /users/{id}/permissions} l'administrent, {@code UserResponseDto}
+     * les renvoie, et l'ouverture d'un accès mobile en pose une. Elles étaient
+     * enregistrées, affichées à l'administrateur… et sans le moindre effet.</p>
+     *
+     * <p>C'est la pire forme de défaut d'autorisation : celui qui montre un
+     * droit accordé là où il ne l'est pas. Un administrateur cochait une case,
+     * la voyait cochée, et l'agent butait sur un refus que personne ne savait
+     * expliquer.</p>
+     *
+     * <p>{@code MobileAuthServiceImpl.aLaPermissionMobile} contournait déjà le
+     * problème en interrogeant les deux sources à la main — c'est ce qui a
+     * permis à l'accès mobile de fonctionner malgré tout, et ce qui montre que
+     * le manque était connu sans être traité à la racine.</p>
+     */
     private List<String> extractPermissions(User user) {
-        return user.getRoles().stream()
-                .flatMap(role -> role.getPermissions().stream())
+        return Stream.concat(
+                        user.getRoles().stream().flatMap(role -> role.getPermissions().stream()),
+                        user.getDirectPermissions().stream())
                 .map(permission -> permission.getSlug())
                 .distinct()
                 .toList();

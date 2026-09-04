@@ -1,5 +1,7 @@
 package com.labo.anapath.finance;
 
+import com.labo.anapath.common.NomComplet;
+
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
@@ -202,7 +204,7 @@ public class RefundServiceImpl implements RefundService {
     private String userFullName(UUID userId) {
         if (userId == null) return null;
         return userRepository.findById(userId)
-                .map(u -> u.getFirstname() + " " + u.getLastname())
+                .map(u -> NomComplet.de(u.getLastname(), u.getFirstname()))
                 .orElse(null);
     }
 

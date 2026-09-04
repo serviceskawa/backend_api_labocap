@@ -73,8 +73,22 @@ app:
       ttl-days: ${INVOICE_SHARE_LINK_TTL_DAYS:60}
   jwt:
     secret: ${JWT_SECRET}
-    expiration-ms: ${JWT_EXPIRATION:86400000}
-    refresh-expiration-ms: ${JWT_REFRESH:604800000}
+    # Une session web s'éteint après 15 minutes sans activité.
+    #
+    # Ce n'est pas ce jeton-là qui tenait la session : le front rafraîchit tout
+    # seul sur 401, et le jeton de rafraîchissement vivait sept jours. Un poste
+    # laissé ouvert au comptoir restait donc utilisable une semaine.
+    #
+    # Le jeton d'accès est délibérément bien plus court que la fenêtre : c'est
+    # son expiration qui déclenche le rafraîchissement, donc qui fait glisser la
+    # fenêtre sur l'activité réelle. Cinq minutes laissent trois occasions de la
+    # prolonger avant les quinze.
+    expiration-ms: ${JWT_EXPIRATION:300000}
+    # La fenêtre elle-même. Le rafraîchissement fait tourner le jeton et
+    # blackliste l'ancien : chaque appel repart pour quinze minutes, et quinze
+    # minutes sans le moindre appel ferment la session côté serveur — quoi que
+    # fasse le navigateur.
+    refresh-expiration-ms: ${JWT_REFRESH:900000}
   storage:
     path: ${STORAGE_PATH:/tmp/labo/storage}
     encryption:
@@ -87,6 +101,72 @@ app:
       # échoue si le chiffrement est activé sans elle — mieux vaut un refus au
       # démarrage qu'une erreur sur chaque image, découverte par les utilisateurs.
       key: ${STORAGE_ENCRYPTION_KEY:}
+    # ── Stockage sur S3 ──────────────────────────────────────────────────
+    #
+    # Désactivé par défaut : sans seau configuré, les fichiers restent sur le
+    # disque du serveur et rien ne change.
+    #
+    # Quand il est actif : on ÉCRIT dans le seau, et on LIT d'abord dans le
+    # seau puis sur le disque. Ce repli rend les clichés d'avant la bascule
+    # lisibles sans migration en bloc — et permet de revenir en arrière en
+    # retirant une seule ligne.
+    #
+    # Ce qu'AWS reçoit : des octets DÉJÀ CHIFFRÉS par le serveur. Le seau ne
+    # contient aucune lame lisible. Corollaire à connaître : on ne peut pas
+    # servir ces objets par lien signé au navigateur, qui ne saurait pas les
+    # déchiffrer — les images continuent de passer par l'API.
+    s3:
+      enabled: ${S3_ENABLED:false}
+      bucket: ${S3_BUCKET:}
+      region: ${S3_REGION:eu-west-3}
+      # Un dossier de tête dans le seau, si on le partage avec autre chose.
+      prefix: ${S3_PREFIX:}
+      # Vides, la chaîne d'AWS prend le relais : rôle IAM de la machine,
+      # variables d'environnement, ~/.aws. C'est ce qu'il faut sur une
+      # instance EC2, où poser une clé en dur serait un recul.
+      access-key: ${S3_ACCESS_KEY:}
+      secret-key: ${S3_SECRET_KEY:}
+      # Pour viser MinIO ou un service compatible plutôt qu'AWS.
+      endpoint: ${S3_ENDPOINT:}
+  secrets:
+    # Clé des secrets courts qu'il faut pouvoir remontrer — aujourd'hui le seul
+    # code d'enrôlement mobile, dont le QR se réaffiche à chaque consultation.
+    # 32 octets en base64, « openssl rand -base64 32 ».
+    #
+    # Vide, la fonction s'éteint sans bruit : le code n'est plus conservé de
+    # relisible et l'écran redit simplement qu'il n'y a rien à réafficher. Un
+    # refus au démarrage punirait les installations qui n'en ont jamais voulu.
+    #
+    # À défaut, la clé du chiffrement des fichiers ci-dessus est employée : une
+    # seule clé à garder pour qui en a déjà posé une. Changer la clé rend les
+    # codes existants non réaffichables — ils continuent d'enrôler.
+    key: ${SECRETS_KEY:}
+  appels:
+    # Le relais de voix (coturn). Sans lui, les appels échouent pour tous les
+    # abonnés derrière un NAT d'opérateur — c'est-à-dire la majorité sur données
+    # mobiles. L'application est prévenue par « relaisConfigure » et le dit,
+    # plutôt que de laisser l'appel échouer sans explication.
+    turn-url: ${TURN_URL:}
+    # Le secret partagé avec coturn (« use-auth-secret »). Le serveur en dérive
+    # des identifiants qui expirent : un mot de passe fixe embarqué dans l'APK
+    # ouvrirait le relais à qui le décompile.
+    turn-secret: ${TURN_SECRET:}
+    turn-ttl-secondes: ${TURN_TTL:86400}
+    stun-url: ${STUN_URL:stun:stun.l.google.com:19302}
+  push:
+    # Notifications hors-app (Firebase Cloud Messaging). Clé du compte de
+    # service du projet Firebase, au choix par son contenu ou par son chemin.
+    #
+    # Vide, la fonction s'éteint sans bruit : l'application continue de marquer
+    # les non-lus, seule l'alerte quand elle est fermée manque. Un refus au
+    # démarrage punirait les installations qui n'ont pas de projet Firebase — et
+    # il n'y a rien d'irréversible à perdre ici, contrairement à la clé de
+    # chiffrement des fichiers, qu'on ne peut pas régénérer.
+    #
+    # Le contenu, pour qui passe ses secrets par l'environnement :
+    credentials: ${PUSH_CREDENTIALS:}
+    # ou le chemin d'un fichier monté, pour qui préfère un volume :
+    credentials-file: ${PUSH_CREDENTIALS_FILE:}
   mail:
     from: ${MAIL_FROM}
     from-name: ${MAIL_FROM_NAME:Labo AnaPath}

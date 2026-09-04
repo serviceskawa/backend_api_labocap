@@ -62,6 +62,18 @@ public class Role extends AuditableEntity {
     private Boolean isAssignable = false;
 
     /**
+     * Rôle structurant, dont la suppression est refusée.
+     *
+     * <p>Un indicateur plutôt qu'une liste de noms dans le code : un rôle
+     * renommé garde sa protection, et un laboratoire qui juge un autre rôle
+     * tout aussi structurant peut le protéger sans qu'on publie une version.
+     * La protection ne porte que sur la suppression — renommer un rôle et
+     * changer ses permissions reste le travail normal d'un administrateur.</p>
+     */
+    @Column(name = "is_protected", nullable = false)
+    private Boolean isProtected = false;
+
+    /**
      * Liste des permissions accordées par ce rôle.
      * Chargement paresseux pour éviter les jointures inutiles.
      */

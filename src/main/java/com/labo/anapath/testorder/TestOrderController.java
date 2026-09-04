@@ -50,6 +50,7 @@ import java.util.UUID;
 public class TestOrderController {
 
     private final TestOrderService testOrderService;
+    private final com.labo.anapath.report.ReportService reportService;
 
     /**
      * Retourne la liste paginée des bons d'examen de la branche de l'utilisateur connecté,
@@ -68,6 +69,27 @@ public class TestOrderController {
      * @param principal principal Spring Security contenant le branchId
      * @return page de {@link TestOrderResponseDto}
      */
+    /**
+     * L'état du dossier attaché à une demande, désigné par son code.
+     *
+     * <p>Sert le technicien : scanner le QR d'un bon, ou en saisir le code,
+     * pour savoir de quel patient il s'agit et où en est le dossier. Il ne
+     * reçoit pas le contenu médical — voir {@link com.labo.anapath.report.DossierResumeDto}.</p>
+     *
+     * <p>Distinct de {@code /reports/by-code}, gardé par {@code view-reports} :
+     * chercher une demande d'examen relève de {@code view-test-orders}, le
+     * droit qui correspond au geste. Sans cette distinction, organiser des
+     * prélèvements supposerait d'avoir accès aux diagnostics.</p>
+     */
+    @GetMapping("/by-code/{code}")
+    @PreAuthorize("hasAuthority('view-test-orders')")
+    public ResponseEntity<ApiResponse<com.labo.anapath.report.DossierResumeDto>> findDossierByCode(
+            @PathVariable String code,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                reportService.findResumeByTestOrderCode(code, principal.getBranchId())));
+    }
+
     @GetMapping
     @PreAuthorize("hasAuthority('view-test-orders')")
     public ResponseEntity<ApiResponse<PageResponse<TestOrderResponseDto>>> findAll(
@@ -80,6 +102,8 @@ public class TestOrderController {
             @RequestParam(required = false) UUID attribuateDoctorId,
             @RequestParam(required = false) UUID hospitalId,
             @RequestParam(required = false) Boolean isUrgent,
+            @RequestParam(required = false) Integer annee,
+            @RequestParam(required = false) Boolean enCours,
             @RequestParam(required = false) LocalDate from,
             @RequestParam(required = false) LocalDate to,
             @RequestParam(required = false) String search,
@@ -94,6 +118,8 @@ public class TestOrderController {
         filter.setAttribuateDoctorId(attribuateDoctorId);
         filter.setHospitalId(hospitalId);
         filter.setIsUrgent(isUrgent);
+        filter.setAnnee(annee);
+        filter.setEnCours(enCours);
         filter.setFrom(from);
         filter.setTo(to);
         filter.setSearch(search);
@@ -130,6 +156,8 @@ public class TestOrderController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) TestOrderStatus status,
             @RequestParam(required = false) Boolean isUrgent,
+            @RequestParam(required = false) Integer annee,
+            @RequestParam(required = false) Boolean enCours,
             @RequestParam(required = false) LocalDate from,
             @RequestParam(required = false) LocalDate to,
             @RequestParam(required = false) String search,
@@ -139,6 +167,8 @@ public class TestOrderController {
         TestOrderFilterDto filter = new TestOrderFilterDto();
         filter.setStatus(status);
         filter.setIsUrgent(isUrgent);
+        filter.setAnnee(annee);
+        filter.setEnCours(enCours);
         filter.setFrom(from);
         filter.setTo(to);
         filter.setSearch(search);
@@ -392,6 +422,23 @@ public class TestOrderController {
             @RequestParam("files_name") List<MultipartFile> files,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(testOrderService.uploadImages(id, principal.getBranchId(), files)));
+    }
+
+    /**
+     * Les autres demandes du même patient.
+     *
+     * <p>Gardé par {@code view-test-orders}, comme la consultation d'une
+     * demande : savoir qu'un patient est déjà venu relève du même droit que
+     * consulter le dossier d'où l'on part. Aucun contenu médical n'y figure —
+     * un code, une date, un état.</p>
+     */
+    @GetMapping("/{id}/historique-patient")
+    @PreAuthorize("hasAuthority('view-test-orders')")
+    public ResponseEntity<ApiResponse<List<HistoriquePatientDto>>> historiquePatient(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                testOrderService.historiqueDuPatient(id, principal.getBranchId())));
     }
 
     @GetMapping("/{id}/images")

@@ -10,6 +10,15 @@ server:
 logging:
   level:
     com.labo.anapath: INFO
+    # Les appels restent bavards le temps de la mise en service. Tout leur
+    # diagnostic — poignée de main refusée, participant hors du fil, liaison
+    # ouverte ou perdue — est en DEBUG, donc muet en production : on ne peut
+    # rien observer d'une fonction dont on ne voit que les succès.
+    #
+    # À ramener à INFO quand les appels seront éprouvés : une liaison qui
+    # s'ouvre et se ferme à chaque veille de téléphone finit par remplir le
+    # journal.
+    com.labo.anapath.appel: DEBUG
 
 springdoc:
   api-docs:

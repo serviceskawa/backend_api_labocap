@@ -1,5 +1,7 @@
 package com.labo.anapath.role;
 
+import com.labo.anapath.common.NomComplet;
+
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.BusinessException;
 import com.labo.anapath.common.exception.DuplicateResourceException;
@@ -116,6 +118,16 @@ public class RoleServiceImpl implements RoleService {
     public void delete(UUID id, UUID branchId) {
         Role role = roleRepository.findByIdAndBranchId(id, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Rôle", id));
+        // Un rôle structurant ne se supprime pas, même vide. La règle qui suit
+        // ne protège que les rôles encore attribués : un laboratoire qui
+        // réorganise ses comptes passe par un instant où le rôle n'a plus
+        // personne, et c'est précisément là qu'il était effaçable.
+        if (Boolean.TRUE.equals(role.getIsProtected())) {
+            throw new BusinessException(
+                    "Le rôle « " + role.getName() + " » structure l'organisation du "
+                    + "laboratoire et ne peut pas être supprimé. Ses permissions "
+                    + "restent modifiables.");
+        }
         // Règle métier : un rôle encore attribué à des utilisateurs ne peut pas être supprimé.
         if (userRepository.existsByRoleId(id)) {
             throw new BusinessException(
@@ -168,7 +180,8 @@ public class RoleServiceImpl implements RoleService {
         String creator = resolveCreatorName(role.getCreatedBy());
         return new RoleResponseDto(
                 base.id(), base.name(), base.slug(), base.description(),
-                base.isAssignable(), base.permissions(), creator, base.createdAt());
+                base.isAssignable(), base.isProtected(), base.permissions(),
+                creator, base.createdAt());
     }
 
     private String resolveCreatorName(UUID createdBy) {
@@ -176,7 +189,7 @@ public class RoleServiceImpl implements RoleService {
             return null;
         }
         return userRepository.findById(createdBy)
-                .map(u -> (u.getFirstname() + " " + u.getLastname()).trim())
+                .map(u -> NomComplet.de(u.getLastname(), u.getFirstname()))
                 .orElse(null);
     }
 }

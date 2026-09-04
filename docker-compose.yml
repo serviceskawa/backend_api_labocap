@@ -94,7 +94,57 @@ services:
       # clé publique — pire que pas de chiffrement, puisqu'on le croirait actif.
       STORAGE_ENCRYPTION_ENABLED: ${STORAGE_ENCRYPTION_ENABLED:-false}
       STORAGE_ENCRYPTION_KEY: ${STORAGE_ENCRYPTION_KEY:-}
+      # ─── Stockage des fichiers sur S3 ──────────────────────────────────
+      #
+      # Désactivé par défaut : les fichiers restent sur le volume du serveur.
+      #
+      # Actif : on écrit dans le seau, on lit d'abord le seau puis le volume.
+      # Ce repli rend lisibles les clichés d'avant la bascule sans migration
+      # en bloc — et permet de revenir en arrière en retirant S3_ENABLED.
+      #
+      # ⚠ Le volume « storage » reste nécessaire tant qu'il détient des
+      # fichiers. Le retirer avant d'avoir tout migré rendrait les anciens
+      # dossiers introuvables, sans message d'erreur au démarrage.
+      #
+      # AWS ne reçoit que du chiffré : la clé ci-dessus reste indispensable.
+      S3_ENABLED: ${S3_ENABLED:-false}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_REGION: ${S3_REGION:-eu-west-3}
+      S3_PREFIX: ${S3_PREFIX:-}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+      # Notifications hors-app. Le compte de service Firebase est monté en
+      # lecture seule plutôt que passé par l'environnement : le JSON fait deux
+      # kilo-octets et se retrouverait entier dans « docker inspect ».
+      #
+      # Vide par défaut, et c'est voulu : sans clé le serveur démarre et sert
+      # normalement, muet. Renseigner PUSH_CREDENTIALS_FILE dans .env une fois
+      # le fichier déposé dans ./secrets/.
+      PUSH_CREDENTIALS_FILE: ${PUSH_CREDENTIALS_FILE:-}
+      # Appels audio. Sans relais configuré, l'application le dit à l'écran
+      # plutôt que de laisser l'appel échouer sans explication : sur données
+      # mobiles, la connexion directe passe rarement.
+      TURN_URL: ${TURN_URL:-}
+      TURN_SECRET: ${TURN_SECRET:-}
       # SMTP
+      # ─── Facturation normalisée e-MCF / DGI ────────────────────────────
+      #
+      # Désactivée par défaut. Sans clé, aucune facture ne part à la DGI —
+      # et l'écran le dit plutôt que d'échouer en silence.
+      #
+      # ⚠ La clé porte son usage dans son préfixe :
+      #   fni_test_ → bac à sable, rien n'atteint l'administration
+      #   fni_live_ → factures normalisées RÉELLES, avec valeur fiscale
+      #
+      # Une facture normalisée émise par erreur n'est pas annulable d'un
+      # clic : c'est un document fiscal, et le laboratoire en répond.
+      FLUIDINVOICE_ENABLED: ${FLUIDINVOICE_ENABLED:-false}
+      FLUIDINVOICE_BASE_URL: ${FLUIDINVOICE_BASE_URL:-https://invoice.fluidpay.link/v1}
+      FLUIDINVOICE_API_KEY: ${FLUIDINVOICE_API_KEY:-}
+      # Nom de l'opérateur porté sur la facture normalisée.
+      FLUIDINVOICE_OPERATOR_NAME: ${FLUIDINVOICE_OPERATOR_NAME:-CENTRE ADECHINA ANATOMIE PATHOLOGIQUE}
+      # A = exonéré. La classification fiscale engage le contribuable (art. 168 CGI).
+      FLUIDINVOICE_TAX_GROUP: ${FLUIDINVOICE_TAX_GROUP:-A}
       MAIL_HOST: ${MAIL_HOST:-smtp.mailtrap.io}
       MAIL_PORT: ${MAIL_PORT:-2525}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
@@ -103,6 +153,10 @@ services:
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Labo AnaPath}
     volumes:
       - storage:/var/lib/labo/storage
+      # Les secrets en fichier — aujourd'hui le seul compte de service
+      # Firebase. En lecture seule : l'application n'a aucune raison d'y
+      # écrire, et le lui interdire ferme une porte de plus.
+      - ./secrets:/var/lib/labo/secrets:ro
       # Les sauvegardes doivent survivre au redéploiement : sans volume,
       # elles vivaient dans la couche éphémère du conteneur.
       - backups:/var/lib/labo/backups
@@ -117,6 +171,43 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+
+  # ─── Relais de voix pour les appels (coturn) ──────────────────────────────
+  turn:
+    image: coturn/coturn:4.6
+    container_name: labo-turn
+    restart: unless-stopped
+    # Réseau de l'hôte, et non un réseau Docker : coturn doit annoncer aux
+    # téléphones l'adresse publique à laquelle les joindre. Derrière une
+    # traduction d'adresses Docker, il annoncerait une adresse interne — les
+    # appels s'établiraient puis resteraient muets, ce qui est le symptôme le
+    # plus long à diagnostiquer. C'est aussi ce qui évite de publier les
+    # quarante ports UDP de la plage de relais un par un.
+    network_mode: host
+    volumes:
+      - ./relais/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    # Le secret et l'adresse viennent de .env, jamais du fichier de
+    # configuration : celui-ci est versionné, et le déploiement fait
+    # « git reset --hard ». Inscrits dedans, ils seraient effacés à chaque
+    # mise en production.
+    #
+    # Sans TURN_IP, coturn se replie sur la boucle locale : il démarre, ne
+    # sert personne, et l'API annonce « relais non configuré » — ce que
+    # l'application dit à l'écran. Mieux qu'un conteneur qui refuse de
+    # partir et fait échouer tout le déploiement.
+    command:
+      - "-c"
+      - "/etc/coturn/turnserver.conf"
+      - "--static-auth-secret=${TURN_SECRET:-inactif}"
+      - "--listening-ip=${TURN_IP:-127.0.0.1}"
+      - "--relay-ip=${TURN_IP:-127.0.0.1}"
+      # Le journal sur la sortie standard, pour que « docker logs labo-turn »
+      # montre quelque chose. Par défaut coturn écrit dans un fichier qui,
+      # dans cette image, n'existe nulle part : le conteneur tourne, se dit
+      # sain, et ne raconte rien. Un relais qu'on ne peut pas interroger est
+      # un relais qu'on ne peut pas réparer.
+      - "--log-file=stdout"
+      - "--simple-log"
 
 volumes:
   backups:

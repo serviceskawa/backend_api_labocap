@@ -135,6 +135,18 @@ public class BranchContextFilter extends OncePerRequestFilter {
                 // choisi sa branche. Exiger X-Branch-Id ici renverrait un 428 sur une
                 // route par définition ouverte.
                 || path.startsWith("/api/v1/public/")
+                // Signalisation des appels. Une poignée de main WebSocket ne
+                // porte que les en-têtes que le client peut poser à
+                // l'ouverture, et l'application mobile n'y met que le jeton.
+                // Sans cette exemption, le filtre répondait 428 avant que la
+                // liaison n'existe — sans laisser la moindre trace, puisque
+                // rien du code d'appel n'était atteint.
+                //
+                // La branche n'est pas perdue pour autant : la poignée de main
+                // la lit dans le jeton. Le choix d'une branche parmi plusieurs
+                // est un geste du web ; un appareil mobile est enrôlé sur une
+                // seule et n'en change jamais.
+                || path.startsWith("/ws/")
                 || path.startsWith("/v3/api-docs")
                 || path.startsWith("/swagger-ui")
                 || path.startsWith("/actuator/health");

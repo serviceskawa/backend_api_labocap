@@ -542,8 +542,23 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             @Param("month") Integer month,
             @Param("year") Integer year);
 
-    // Dashboard — comptages par statut de livraison
-    long countByBranchIdAndIsDelivered(UUID branchId, boolean isDelivered);
+    // Dashboard — comptages par statut de livraison, sur la période en cours
+    /**
+     * Les comptes rendus remis, ou non, établis depuis {@code depuis}.
+     *
+     * <p>Borné comme les autres indicateurs de charge : « non remis » comptait
+     * tout l'historique, et un chiffre qui ne redescend jamais cesse d'être
+     * regardé.</p>
+     */
+    @Query("""
+            SELECT COUNT(r) FROM Report r
+            WHERE r.branchId = :branchId
+              AND r.isDelivered = :isDelivered
+              AND r.createdAt >= :depuis
+            """)
+    long countByBranchIdAndIsDelivered(@Param("branchId") UUID branchId,
+                                       @Param("isDelivered") boolean isDelivered,
+                                       @Param("depuis") java.time.LocalDateTime depuis);
 
     /**
      * Compte les comptes rendus de la branche dont le statut fait partie de la liste,

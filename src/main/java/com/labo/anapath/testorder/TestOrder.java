@@ -108,6 +108,32 @@ public class TestOrder extends AuditableEntity {
     @Column(name = "files_name", columnDefinition = "TEXT")
     private String filesName;
 
+    /**
+     * Dates d'ajout des pièces jointes, alignées index par index sur
+     * {@link #filesName}.
+     *
+     * <p>Une liste parallèle plutôt qu'une table : les images sont déjà
+     * stockées comme une liste JSON de noms, et déplacer cela obligerait à
+     * réécrire l'envoi, la suppression et la lecture des deux côtés. Vide pour
+     * les images antérieures — leur date n'existe nulle part et ne s'invente
+     * pas.</p>
+     */
+    @Column(name = "files_added_at", columnDefinition = "TEXT")
+    private String filesAddedAt;
+
+    /**
+     * Dates de retrait des images, même tableau parallèle.
+     *
+     * <p>Une entrée non nulle marque une image retirée. Elle demeure en place :
+     * les points d'entrée adressent les images par leur index, et retirer une
+     * case décalerait toutes les suivantes. Le fichier reste sur le disque.</p>
+     *
+     * <p>Ces clichés montrent ce qui a été reçu au comptoir : les effacer
+     * vraiment ne laisserait pas même la trace qu'ils ont existé.</p>
+     */
+    @Column(name = "files_deleted_at", columnDefinition = "TEXT")
+    private String filesDeletedAt;
+
     /** Option tarifaire spécifique négociée avec le contrat. */
     @Column(name = "option")
     private Boolean option;

@@ -41,6 +41,30 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+
+        <!-- Signalisation des appels. Le fil se rafraîchit par sondage toutes
+             les cinq secondes : très suffisant pour du texte, inutilisable pour
+             établir un appel, qui mettrait dix secondes à démarrer. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+
+        <!-- Stockage des fichiers sur S3. Le contenu y arrive déjà chiffré par
+             le serveur : AWS ne voit jamais une lame en clair. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.31.16</version>
+            <exclusions>
+                <!-- Le client asynchrone n'est pas utilisé : tous les appels au
+                     dépôt sont synchrones, dans le fil de la requête. -->
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
@@ -142,6 +166,15 @@
         </dependency>
 
         <!-- OpenHTMLToPDF (HTML → PDF) -->
+        <!-- Notifications hors-app. Le SDK officiel plutôt qu'un appel HTTP
+             écrit à la main : l'API v1 de FCM exige un jeton OAuth2 signé par
+             le compte de service et renouvelé, ce que ce SDK fait seul. -->
+        <dependency>
+            <groupId>com.google.firebase</groupId>
+            <artifactId>firebase-admin</artifactId>
+            <version>9.3.0</version>
+        </dependency>
+
         <dependency>
             <groupId>com.openhtmltopdf</groupId>
             <artifactId>openhtmltopdf-pdfbox</artifactId>

@@ -40,6 +40,7 @@ class FluidInvoiceServiceImplTest {
     @Mock private FluidInvoiceClient client;
     @Mock private FinanceMapper financeMapper;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private InvoiceService invoiceService;
 
     private FluidInvoiceProperties properties;
     private FluidInvoiceServiceImpl service;
@@ -53,7 +54,8 @@ class FluidInvoiceServiceImplTest {
         properties.setEnabled(true);
         properties.setApiKey("fni_test_xxx");
         service = new FluidInvoiceServiceImpl(
-                invoiceRepository, client, properties, financeMapper, eventPublisher);
+                invoiceRepository, client, properties, financeMapper,
+                eventPublisher, invoiceService);
     }
 
     /** Un avoir portant une ligne, rattaché à l'originale fournie. */
@@ -106,7 +108,7 @@ class FluidInvoiceServiceImplTest {
         when(invoiceRepository.findById(AVOIR_ID)).thenReturn(Optional.of(avoir));
         editeurRepondOk();
 
-        service.normaliser(AVOIR_ID, BRANCHE);
+        service.normaliser(AVOIR_ID, BRANCHE, null);
 
         assertThat(payloadEnvoye().reference()).isEqualTo("345678yghjkhRTY678907654");
     }
@@ -118,7 +120,7 @@ class FluidInvoiceServiceImplTest {
         when(invoiceRepository.findById(AVOIR_ID)).thenReturn(Optional.of(avoir));
         editeurRepondOk();
 
-        service.normaliser(AVOIR_ID, BRANCHE);
+        service.normaliser(AVOIR_ID, BRANCHE, null);
 
         assertThat(payloadEnvoye().reference()).isEqualTo("TEST-PXP6-CJB6");
     }
@@ -130,7 +132,7 @@ class FluidInvoiceServiceImplTest {
         when(invoiceRepository.findById(AVOIR_ID)).thenReturn(Optional.of(avoir));
         editeurRepondOk();
 
-        service.normaliser(AVOIR_ID, BRANCHE);
+        service.normaliser(AVOIR_ID, BRANCHE, null);
 
         assertThat(payloadEnvoye().originalInvoiceId()).isEqualTo("1f41c97a-23a2-4977");
         assertThat(payloadEnvoye().reference()).isNull();
@@ -144,7 +146,7 @@ class FluidInvoiceServiceImplTest {
         Invoice avoir = avoirRattacheA(originale("", "", ""));
         when(invoiceRepository.findById(AVOIR_ID)).thenReturn(Optional.of(avoir));
 
-        assertThatThrownBy(() -> service.normaliser(AVOIR_ID, BRANCHE))
+        assertThatThrownBy(() -> service.normaliser(AVOIR_ID, BRANCHE, null))
                 .isInstanceOf(InvalidOperationException.class)
                 .hasMessageContaining("doit être normalisée avant son avoir");
         verify(client, never()).emettreAvoir(any(), anyString());
@@ -156,7 +158,7 @@ class FluidInvoiceServiceImplTest {
         Invoice avoir = avoirRattacheA(null);
         when(invoiceRepository.findById(AVOIR_ID)).thenReturn(Optional.of(avoir));
 
-        assertThatThrownBy(() -> service.normaliser(AVOIR_ID, BRANCHE))
+        assertThatThrownBy(() -> service.normaliser(AVOIR_ID, BRANCHE, null))
                 .isInstanceOf(InvalidOperationException.class)
                 .hasMessageContaining("rattaché à aucune facture de vente");
         verify(client, never()).emettreAvoir(any(), anyString());

@@ -41,6 +41,31 @@ public class TestOrderFilterDto {
     /** Filtre sur l'urgence du bon. */
     private Boolean isUrgent;
 
+    /**
+     * L'année d'ouverture du dossier — 2026 pour un dossier « 26-0155 ».
+     *
+     * <p>Mesurée sur la date de création et non sur le code, bien que le code
+     * porte l'année et que ce soit lui qu'on prononce : il n'est attribué qu'à
+     * la validation, et les demandes encore en attente n'en ont pas. Un filtre
+     * sur le code les écartait toutes — celles-là mêmes dont l'arriéré
+     * encombre les compteurs.</p>
+     *
+     * <p>Ni sur la date de prélèvement : un prélèvement de décembre enregistré
+     * en janvier relève de la charge de l'année nouvelle, et 244 dossiers de
+     * production sont dans ce cas.</p>
+     */
+    private Integer annee;
+
+    /**
+     * Ne garder que les dossiers encore en cours — ni remis, ni annulés.
+     *
+     * <p>Distinct de {@code status}, qui désigne un état précis : ici on en
+     * écarte deux. Une urgence sur un dossier remis n'appelle plus rien, et
+     * les compter faisait grossir un chiffre que rien ne pouvait plus faire
+     * baisser.</p>
+     */
+    private Boolean enCours;
+
     /** Date de prélèvement minimale (inclusif). */
     private LocalDate from;
 

@@ -7,14 +7,49 @@ import java.util.UUID;
 
 public interface MobileAuthService {
 
-    /** Délivre un code d'enrôlement à usage unique pour un utilisateur. */
+    /**
+     * Ouvre l'accès mobile à un utilisateur, en un seul geste.
+     *
+     * <p>Accorde le droit, engendre un code PIN et un code d'enrôlement, et les
+     * renvoie en clair — la seule et unique fois. Réunir les trois évite qu'un
+     * agent reparte avec un accès à moitié posé, et supprime le tour de passe-
+     * passe qu'exigeait la pose du PIN par l'appareil lui-même.</p>
+     */
+    AccesMobileResponse ouvrirAcces(UUID userId, UUID auteurId, UUID branchId);
+
+    /**
+     * Ferme l'accès : retire le droit, efface le PIN, révoque les appareils.
+     *
+     * <p>Les trois ensemble, car n'en faire qu'un laisserait une porte : un
+     * appareil enrôlé continuerait d'ouvrir des sessions avec un PIN encore
+     * valide, quand bien même le droit aurait disparu.</p>
+     */
+    void fermerAcces(UUID userId, UUID auteurId, UUID branchId);
+
+    /** État de l'accès d'un utilisateur, pour l'écran d'administration. */
+    EtatAccesResponse etatAcces(UUID userId, UUID branchId);
+
+    /**
+     * Délivre un code d'enrôlement pour un utilisateur.
+     *
+     * <p>Valable jusqu'à sa révocation, et pour autant d'appareils qu'il en
+     * faut : il s'éteignait au premier téléphone enrôlé, ce qui obligeait à en
+     * régénérer un dès qu'une installation échouait. Créer un code révoque le
+     * précédent — un seul QR circule à la fois.</p>
+     */
     EnrollmentCodeResponse creerCodeEnrolement(UUID userId, UUID auteurId, UUID branchId);
+
+    /** Éteint le code d'enrôlement d'un utilisateur, sans toucher aux appareils déjà enrôlés. */
+    void revoquerCodeEnrolement(UUID userId, UUID auteurId, UUID branchId);
 
     /** Échange un code d'enrôlement contre l'identité d'un appareil. */
     EnrollResponse enroler(EnrollRequest requete);
 
     /** Ouvre une session depuis un appareil enrôlé, déverrouillé par son PIN. */
     MobileLoginResponse connecter(MobileLoginRequest requete);
+
+    /** Renouvelle une session mobile à partir de son jeton de rafraîchissement. */
+    MobileLoginResponse rafraichir(MobileRefreshRequest requete);
 
     /** Pose ou remplace le code PIN de l'utilisateur courant. */
     void definirPin(UUID userId, String pin);
@@ -23,4 +58,12 @@ public interface MobileAuthService {
     void revoquer(UUID deviceId, UUID auteurId, UUID branchId);
 
     List<DeviceResponse> listerAppareils(UUID branchId);
+
+    /**
+     * Retient le jeton de notification de l'appareil d'où vient l'appel.
+     *
+     * <p>L'appareil est déduit de la session : il n'est pas demandé, et ne peut
+     * donc pas être choisi par l'appelant.</p>
+     */
+    void enregistrerJetonPush(UUID userId, String jeton);
 }

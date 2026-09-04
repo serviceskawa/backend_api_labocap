@@ -1,5 +1,7 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.common.NomComplet;
+
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.BusinessException;
 import com.labo.anapath.common.exception.DuplicateResourceException;
@@ -567,7 +569,7 @@ public class TestOrderServiceImpl implements TestOrderService {
             invoice.setPatient(order.getPatient());
             invoice.setContrat(order.getContrat());
             invoice.setClientName(
-                    order.getPatient().getFirstname() + " " + order.getPatient().getLastname());
+                    NomComplet.de(order.getPatient().getLastname(), order.getPatient().getFirstname()));
             invoice.setClientAddress(order.getPatient().getAdresse());
             invoice.setSubtotal(order.getSubtotal());
             invoice.setDiscount(order.getDiscount());
@@ -579,7 +581,7 @@ public class TestOrderServiceImpl implements TestOrderService {
             // Laravel réécrit aussi l'identité du patient sur la facture existante.
             invoice.setPatient(order.getPatient());
             invoice.setClientName(
-                    order.getPatient().getFirstname() + " " + order.getPatient().getLastname());
+                    NomComplet.de(order.getPatient().getLastname(), order.getPatient().getFirstname()));
             invoice.setClientAddress(order.getPatient().getAdresse());
             invoice.setSubtotal(order.getSubtotal());
             invoice.setDiscount(order.getDiscount());
@@ -928,15 +930,22 @@ public class TestOrderServiceImpl implements TestOrderService {
         // sinon un lot mixte laisserait des images à moitié rangées.
         assertJpegOrPng(files);
         java.util.List<String> existing = parseFilesName(order.getFilesName());
+        java.util.List<String> dates = parseFilesName(order.getFilesAddedAt());
+        // Les images déjà présentes n'ont pas de date : on comble la liste pour
+        // que les index restent alignés, sans prétendre savoir quand elles sont
+        // arrivées.
+        while (dates.size() < existing.size()) dates.add("");
         for (org.springframework.web.multipart.MultipartFile file : files) {
             try {
                 existing.add(fileStorageService.store(file));
+                dates.add(java.time.LocalDateTime.now().toString());
             } catch (java.io.IOException e) {
                 throw new com.labo.anapath.common.exception.BusinessException("Erreur lors du stockage du fichier: " + file.getOriginalFilename());
             }
         }
         try {
             order.setFilesName(objectMapper.writeValueAsString(existing));
+            order.setFilesAddedAt(objectMapper.writeValueAsString(dates));
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new com.labo.anapath.common.exception.BusinessException("Erreur de sérialisation JSON");
         }
@@ -959,15 +968,61 @@ public class TestOrderServiceImpl implements TestOrderService {
         return order.getArchive();
     }
 
+    /** {@inheritDoc} */
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<HistoriquePatientDto> historiqueDuPatient(UUID testOrderId, UUID branchId) {
+        TestOrder depart = testOrderRepository.findByIdAndBranchId(testOrderId, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", testOrderId));
+        if (depart.getPatient() == null) {
+            // Une demande sans patient rattaché n'a pas d'historique — mais elle
+            // se consulte quand même. Rendre la seule demande courante vaut
+            // mieux qu'une erreur : l'écran dira « 1 demande », ce qui est vrai.
+            return java.util.List.of(versHistorique(depart, testOrderId));
+        }
+        return testOrderRepository
+                .findByPatientOrderByCreatedAtDesc(depart.getPatient()).stream()
+                // Le cloisonnement par branche : un patient peut avoir été reçu
+                // sur deux sites, et l'historique ne montre que le sien.
+                .filter(o -> o.getBranchId() != null && o.getBranchId().equals(branchId))
+                .map(o -> versHistorique(o, testOrderId))
+                .toList();
+    }
+
+    private HistoriquePatientDto versHistorique(TestOrder o, UUID courante) {
+        return new HistoriquePatientDto(
+                o.getId(),
+                o.getCode(),
+                o.getCreatedAt(),
+                o.getStatus() == null ? null : o.getStatus().name(),
+                o.getId() != null && o.getId().equals(courante));
+    }
+
     @Override
     @Transactional(readOnly = true)
     public java.util.List<ImageDto> getImages(UUID id, UUID branchId) {
         TestOrder order = testOrderRepository.findByIdAndBranchId(id, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", id));
         java.util.List<String> filenames = parseFilesName(order.getFilesName());
+        java.util.List<String> dates = parseFilesName(order.getFilesAddedAt());
+        java.util.List<String> retraits = parseFilesName(order.getFilesDeletedAt());
         java.util.List<ImageDto> result = new java.util.ArrayList<>();
         for (int i = 0; i < filenames.size(); i++) {
-            result.add(new ImageDto(i, filenames.get(i), fileStorageService.getUrl(filenames.get(i))));
+            // Retirée : on ne la sert plus, mais sa case reste. L'index porté
+            // par le DTO est celui du stockage, et c'est lui que le client
+            // renvoie pour supprimer — le décaler viserait une autre image.
+            if (i < retraits.size() && retraits.get(i) != null
+                    && !retraits.get(i).isBlank()) {
+                continue;
+            }
+            // Les images antérieures à la colonne des dates n'en ont pas : la
+            // liste est plus courte, et l'absence se dit par un nul plutôt que
+            // par une date inventée.
+            String ajoutee = i < dates.size() ? dates.get(i) : null;
+            result.add(new ImageDto(i, filenames.get(i),
+                    fileStorageService.getUrl(filenames.get(i)),
+                    ajoutee == null || ajoutee.isBlank()
+                            ? null : java.time.LocalDateTime.parse(ajoutee)));
         }
         return result;
     }
@@ -981,18 +1036,28 @@ public class TestOrderServiceImpl implements TestOrderService {
         if (index < 0 || index >= filenames.size()) {
             throw new InvalidOperationException("Index d'image invalide: " + index);
         }
-        try {
-            fileStorageService.delete(filenames.get(index));
-        } catch (java.io.IOException e) {
-            log.warn("Impossible de supprimer le fichier physique à l'index {}: {}", index, e.getMessage());
+
+        // Suppression douce. Le fichier reste sur le disque et l'entrée à sa
+        // place : ces clichés montrent ce qui a été reçu au comptoir, et une
+        // suppression contestée plus tard ne doit pas avoir effacé jusqu'au
+        // fait qu'une image ait existé.
+        //
+        // La case surtout ne bouge pas : les points d'entrée adressent les
+        // images par leur index, et la retirer décalerait toutes les suivantes
+        // — le client viserait alors une autre image que celle qu'il voit.
+        java.util.List<String> retraits = parseFilesName(order.getFilesDeletedAt());
+        while (retraits.size() < filenames.size()) retraits.add(null);
+        if (retraits.get(index) != null && !retraits.get(index).isBlank()) {
+            throw new InvalidOperationException("Cette image est déjà retirée.");
         }
-        filenames.remove(index);
+        retraits.set(index, java.time.LocalDateTime.now().toString());
         try {
-            order.setFilesName(objectMapper.writeValueAsString(filenames));
+            order.setFilesDeletedAt(objectMapper.writeValueAsString(retraits));
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new com.labo.anapath.common.exception.BusinessException("Erreur de sérialisation JSON");
         }
         testOrderRepository.save(order);
+        log.info("Image retirée : bon={} index={} fichier={}", id, index, filenames.get(index));
     }
 
     @SuppressWarnings("unchecked")

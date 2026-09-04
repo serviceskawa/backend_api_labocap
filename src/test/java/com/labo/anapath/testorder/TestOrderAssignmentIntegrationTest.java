@@ -104,7 +104,7 @@ class TestOrderAssignmentIntegrationTest {
     }
 
     @Test
-    @DisplayName("POST /test-order-assignments - créé avec code ASS → 201")
+    @DisplayName("POST /test-order-assignments - créé avec code AF → 201")
     void createAssignment_returns201_withCode() {
         String token = loginAndGetToken();
         HttpHeaders headers = new HttpHeaders();
@@ -121,7 +121,7 @@ class TestOrderAssignmentIntegrationTest {
                 new ParameterizedTypeReference<>() {});
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(response.getBody().data().get("code").toString()).startsWith("ASS");
+        assertThat(response.getBody().data().get("code").toString()).startsWith("AF");
 
         UUID id = UUID.fromString(response.getBody().data().get("id").toString());
         assignmentRepository.findById(id).ifPresent(assignmentRepository::delete);

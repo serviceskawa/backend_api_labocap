@@ -1,5 +1,7 @@
 package com.labo.anapath.report;
 
+import com.labo.anapath.common.NomComplet;
+
 import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.setting.SettingApp;
@@ -94,7 +96,7 @@ public class PdfReportServiceImpl implements PdfReportService {
         // Signataires
         if (report.getSignatory1() != null) {
             ctx.setVariable("signator",
-                    report.getSignatory1().getFirstname() + " " + report.getSignatory1().getLastname());
+                    NomComplet.de(report.getSignatory1().getLastname(), report.getSignatory1().getFirstname()));
             ctx.setVariable("signature1", report.getSignatory1().getSignature() != null
                     ? report.getSignatory1().getSignature() : "");
         } else {
@@ -102,11 +104,11 @@ public class PdfReportServiceImpl implements PdfReportService {
             ctx.setVariable("signature1", "");
         }
         ctx.setVariable("signatory2Name", report.getSignatory2() != null
-                ? report.getSignatory2().getFirstname() + " " + report.getSignatory2().getLastname() : "");
+                ? NomComplet.de(report.getSignatory2().getLastname(), report.getSignatory2().getFirstname()) : "");
         ctx.setVariable("signatory3Name", report.getSignatory3() != null
-                ? report.getSignatory3().getFirstname() + " " + report.getSignatory3().getLastname() : "");
+                ? NomComplet.de(report.getSignatory3().getLastname(), report.getSignatory3().getFirstname()) : "");
         ctx.setVariable("reviewedBy", report.getReviewedBy() != null
-                ? report.getReviewedBy().getFirstname() + " " + report.getReviewedBy().getLastname() : "");
+                ? NomComplet.de(report.getReviewedBy().getLastname(), report.getReviewedBy().getFirstname()) : "");
 
         // Médecin et hôpital
         ctx.setVariable("doctorName", report.getTestOrder() != null && report.getTestOrder().getDoctor() != null

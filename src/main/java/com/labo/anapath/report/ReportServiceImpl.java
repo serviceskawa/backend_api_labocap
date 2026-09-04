@@ -1,5 +1,7 @@
 package com.labo.anapath.report;
 
+import com.labo.anapath.common.NomComplet;
+
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.email.EmailService;
 import com.labo.anapath.common.email.NotificationSettings;
@@ -10,6 +12,8 @@ import com.labo.anapath.setting.SettingReportTemplateRepository;
 import com.labo.anapath.testorder.TestOrderRepository;
 import com.labo.anapath.user.User;
 import com.labo.anapath.user.UserRepository;
+import com.labo.anapath.mobile.MobileDevice;
+import org.springframework.security.access.AccessDeniedException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -47,6 +51,12 @@ public class ReportServiceImpl implements ReportService {
     private final EmailService emailService;
     private final NotificationSettings notificationSettings;
     private final ApplicationEventPublisher eventPublisher;
+    private final com.labo.anapath.mobile.MobileDeviceRepository mobileDeviceRepository;
+    private final com.labo.anapath.mobile.SignatureAppareil signatureAppareil;
+    private final com.labo.anapath.mobile.ProvenanceRequete provenanceRequete;
+    private final com.labo.anapath.testorder.TestOrderAssignmentDetailRepository assignmentDetailRepository;
+    /** Pour relire les étiquettes, rangées en tableau JSON sur la ligne d'affectation. */
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     @Override
     @Transactional(readOnly = true)
@@ -107,6 +117,37 @@ public class ReportServiceImpl implements ReportService {
         return findDetailById(report.getId(), branchId);
     }
 
+    /** {@inheritDoc} */
+    @Override
+    @Transactional(readOnly = true)
+    public DossierResumeDto findResumeByTestOrderCode(String code, UUID branchId) {
+        // On réutilise la lecture complète plutôt que d'écrire une seconde
+        // requête : le cloisonnement par branche, le nom du patient et le
+        // journal y sont déjà traités, et deux chemins de lecture finiraient
+        // par diverger. Seule la restitution est réduite.
+        ReportDetailDto detail = findDetailByTestOrderCode(code, branchId);
+        return new DossierResumeDto(
+                detail.id(),
+                detail.code(),
+                detail.testOrderId(),
+                detail.testOrderCode(),
+                detail.patientName(),
+                detail.titleName(),
+                detail.status(),
+                detail.isDelivered(),
+                detail.retrieverName(),
+                detail.retrieverRelation(),
+                detail.retrieverSignature(),
+                detail.demandeCreatedAt(),
+                detail.deliveryDate(),
+                detail.assignedToName(),
+                detail.assignmentCode(),
+                detail.assignmentDate(),
+                detail.assignmentLabels(),
+                detail.assignmentNote(),
+                detail.assignmentLotNote());
+    }
+
     @Override
     @Transactional(readOnly = true)
     public ReportDetailDto findDetailById(UUID id, UUID branchId) {
@@ -121,15 +162,17 @@ public class ReportServiceImpl implements ReportService {
                 .map(l -> new ReportDetailDto.LogReportDto(
                         l.getAction(),
                         l.getDescription(),
-                        l.getUser() != null ? l.getUser().getFirstname() + " " + l.getUser().getLastname() : null,
+                        l.getUser() != null ? NomComplet.de(l.getUser().getLastname(), l.getUser().getFirstname()) : null,
                         l.getCreatedAt()))
                 .toList();
 
         String patientName = null;
         if (report.getTestOrder() != null && report.getTestOrder().getPatient() != null) {
             var p = report.getTestOrder().getPatient();
-            patientName = p.getFirstname() + " " + p.getLastname();
+            patientName = NomComplet.de(p.getLastname(), p.getFirstname());
         }
+
+        Affectation affectation = affectationDe(report);
 
         return new ReportDetailDto(
                 report.getId(), report.getCode(),
@@ -144,19 +187,67 @@ public class ReportServiceImpl implements ReportService {
                 report.getStatus(),
                 report.isDelivered(), report.isCalled(),
                 report.getReceiverName(),
+                report.getRetrieverName(),
+                report.getRetrieverRelation(),
+                report.getRetrieverSignature(),
+                report.getTestOrder() != null ? report.getTestOrder().getCreatedAt() : null,
                 report.getSignatureDate(), report.getDeliveryDate(), report.getCallDate(),
                 report.getSignatory1() != null ? report.getSignatory1().getId() : null,
-                report.getSignatory1() != null ? report.getSignatory1().getFirstname() + " " + report.getSignatory1().getLastname() : null,
+                report.getSignatory1() != null ? NomComplet.de(report.getSignatory1().getLastname(), report.getSignatory1().getFirstname()) : null,
                 report.getSignatory2() != null ? report.getSignatory2().getId() : null,
-                report.getSignatory2() != null ? report.getSignatory2().getFirstname() + " " + report.getSignatory2().getLastname() : null,
+                report.getSignatory2() != null ? NomComplet.de(report.getSignatory2().getLastname(), report.getSignatory2().getFirstname()) : null,
                 report.getSignatory3() != null ? report.getSignatory3().getId() : null,
-                report.getSignatory3() != null ? report.getSignatory3().getFirstname() + " " + report.getSignatory3().getLastname() : null,
+                report.getSignatory3() != null ? NomComplet.de(report.getSignatory3().getLastname(), report.getSignatory3().getFirstname()) : null,
                 report.getReviewedBy() != null ? report.getReviewedBy().getId() : null,
-                report.getReviewedBy() != null ? report.getReviewedBy().getFirstname() + " " + report.getReviewedBy().getLastname() : null,
+                report.getReviewedBy() != null ? NomComplet.de(report.getReviewedBy().getLastname(), report.getReviewedBy().getFirstname()) : null,
                 report.getTags().stream().map(Tag::getName).toList(),
                 report.getTags().stream().map(Tag::getId).toList(),
                 logDtos,
+                affectation.nom(), affectation.code(), affectation.date(),
+                affectation.etiquettes(), affectation.note(), affectation.noteDuLot(),
                 report.getCreatedAt(), report.getUpdatedAt());
+    }
+
+    /**
+     * Ce que le suivi montre d'une affectation.
+     *
+     * <p>Chez qui, sous quel code, quand — et ce qui accompagne le prélèvement :
+     * ses étiquettes, la note écrite pour cette demande, et celle du lot
+     * entier. Les deux notes sont distinctes et le restent : l'une vise un
+     * dossier, l'autre une série.</p>
+     */
+    private record Affectation(String nom, String code, java.time.LocalDate date,
+                               java.util.List<String> etiquettes,
+                               String note, String noteDuLot) {
+        static final Affectation AUCUNE =
+                new Affectation(null, null, null, java.util.List.of(), null, null);
+    }
+
+    /**
+     * L'affectation d'une demande, si elle en a une.
+     *
+     * <p>Lecture tolérante : une demande non encore affectée est le cas normal
+     * au comptoir, pas une anomalie. Elle rend des nuls, que l'écran traduit en
+     * « pas encore affectée » plutôt qu'en erreur.</p>
+     */
+    private Affectation affectationDe(Report report) {
+        if (report.getTestOrder() == null) return Affectation.AUCUNE;
+        return assignmentDetailRepository.findByTestOrderId(report.getTestOrder().getId())
+                .filter(d -> d.getTestOrderAssignment() != null)
+                .map(d -> {
+                    var a = d.getTestOrderAssignment();
+                    return new Affectation(
+                            a.getUser() == null ? null
+                                    : NomComplet.de(a.getUser().getLastname(),
+                                                    a.getUser().getFirstname()),
+                            a.getCode(),
+                            a.getDate(),
+                            com.labo.anapath.testorder.Etiquettes.decoder(
+                                    objectMapper, d.getLabels()),
+                            d.getNote(),
+                            a.getNote());
+                })
+                .orElse(Affectation.AUCUNE);
     }
 
     @Override
@@ -297,7 +388,7 @@ public class ReportServiceImpl implements ReportService {
                             l.getDescription(),
                             l.getCreatedAt(),
                             user != null
-                                    ? (user.getFirstname() + " " + user.getLastname()).trim()
+                                    ? NomComplet.de(user.getLastname(), user.getFirstname())
                                     : null,
                             report != null ? report.getId() : null,
                             report != null ? report.getCode() : null,
@@ -386,7 +477,7 @@ public class ReportServiceImpl implements ReportService {
         if (reviewer.getEmail() == null || reviewer.getEmail().isBlank()) {
             return;
         }
-        String reviewerName = (reviewer.getFirstname() + " " + reviewer.getLastname()).trim();
+        String reviewerName = NomComplet.de(reviewer.getLastname(), reviewer.getFirstname());
         String reportTitle = report.getTitleReport() != null
                 ? report.getTitleReport().getName()
                 : report.getCode();
@@ -545,8 +636,7 @@ public class ReportServiceImpl implements ReportService {
                 .map(trace -> new ModificationApresSignatureDto(
                         trace.getUser() != null ? trace.getUser().getId() : null,
                         trace.getUser() != null
-                                ? (trace.getUser().getFirstname() + " "
-                                    + trace.getUser().getLastname()).trim()
+                                ? NomComplet.de(trace.getUser().getLastname(), trace.getUser().getFirstname())
                                 : "Utilisateur supprimé",
                         trace.getCreatedAt(),
                         champsDepuisDescription(trace.getDescription())))
@@ -588,7 +678,7 @@ public class ReportServiceImpl implements ReportService {
     private void tracerModificationApresSignature(Report report, List<String> champs, UUID userId) {
         User auteur = userRepository.findById(userId).orElse(null);
         String nomAuteur = auteur != null
-                ? (auteur.getFirstname() + " " + auteur.getLastname()).trim()
+                ? NomComplet.de(auteur.getLastname(), auteur.getFirstname())
                 : "Utilisateur inconnu";
         String listeChamps = String.join(", ", champs);
 
@@ -608,8 +698,7 @@ public class ReportServiceImpl implements ReportService {
             String nomLabo = notificationSettings.labName(report.getBranchId());
             String codeDemande = report.getTestOrder() != null ? report.getTestOrder().getCode() : "";
             String signataire = report.getSignatory1() != null
-                    ? (report.getSignatory1().getFirstname() + " "
-                        + report.getSignatory1().getLastname()).trim()
+                    ? NomComplet.de(report.getSignatory1().getLastname(), report.getSignatory1().getFirstname())
                     : "";
             for (String destinataire : notificationSettings.adminEmails(report.getBranchId())) {
                 emailService.sendPostSignatureChangeAlert(destinataire, report.getCode(),
@@ -644,6 +733,12 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional
     public ReportResponseDto validate(UUID id, UUID userId) {
+        return validate(id, userId, null);
+    }
+
+    @Override
+    @Transactional
+    public ReportResponseDto validate(UUID id, UUID userId, ValidationSigneeDto preuve) {
         Report report = reportRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
         if (report.getStatus() == ReportStatus.VALIDATED || report.getStatus() == ReportStatus.DELIVERED) {
@@ -653,10 +748,72 @@ public class ReportServiceImpl implements ReportService {
         report.setStatus(ReportStatus.VALIDATED);
         report.setSignatureDate(LocalDateTime.now());
         report.setDeliveryDate(LocalDateTime.now());
+
+        // Une session ouverte depuis un téléphone enrôlé DOIT signer. Sans cette
+        // exigence, il suffirait à l'application d'omettre la preuve pour
+        // retomber au niveau de garantie du web, et le dispositif ne tiendrait
+        // que par la bonne volonté du client. Le web, lui, n'a pas de clé et
+        // continue de valider sur la seule foi de sa session.
+        UUID appareilDeLaSession = provenanceRequete.appareilCourant();
+        if (appareilDeLaSession != null && preuve == null) {
+            throw new AccessDeniedException(
+                    "Une validation depuis l'application mobile doit être signée par l'appareil.");
+        }
+        if (preuve != null && appareilDeLaSession != null
+                && !appareilDeLaSession.equals(preuve.deviceId())) {
+            throw new AccessDeniedException(
+                    "La preuve ne provient pas de l'appareil ayant ouvert la session.");
+        }
+
+        if (preuve != null) {
+            verifierEtAttacherLaPreuve(report, userId, preuve);
+        }
+
         Report saved = reportRepository.save(report);
-        logAction(id, "Validé", userId);
+        logAction(id, preuve != null ? "Validé (signé par appareil)" : "Validé", userId);
         signalerValidation(statutInitial, saved, userId);
         return reportMapper.toResponseDto(saved);
+    }
+
+    /**
+     * Contrôle la preuve d'appareil, puis l'attache au compte-rendu.
+     *
+     * <p>Quatre conditions, toutes nécessaires : l'appareil existe et n'est pas
+     * révoqué ; il appartient bien à l'auteur de l'acte ; l'horodatage signé est
+     * frais ; et la signature vérifie contre la clé publique déposée à
+     * l'enrôlement. Le condensé est <strong>recomposé par le serveur</strong> et
+     * jamais repris du client — sans quoi il suffirait d'envoyer un message
+     * quelconque avec sa propre signature.</p>
+     *
+     * <p>Une preuve invalide fait échouer la validation. La traiter comme
+     * absente reviendrait à offrir un moyen simple de contourner l'exigence,
+     * puisqu'il suffirait d'envoyer n'importe quoi.</p>
+     */
+    private void verifierEtAttacherLaPreuve(Report report, UUID userId, ValidationSigneeDto preuve) {
+        MobileDevice appareil = mobileDeviceRepository.findByIdAndRevokedAtIsNull(preuve.deviceId())
+                .orElseThrow(() -> new AccessDeniedException("Appareil inconnu ou révoqué."));
+
+        if (!appareil.getUserId().equals(userId)) {
+            throw new AccessDeniedException("Cet appareil n'appartient pas à l'auteur de la validation.");
+        }
+        // Horloge décalée : ce n'est pas un refus de droit mais une condition
+        // qu'on peut corriger, et le dire ne renseigne personne d'utile.
+        // AccessDeniedException aurait donné « Accès refusé » — le porteur du
+        // téléphone aurait cherché du côté de ses permissions pendant des heures.
+        if (!signatureAppareil.horodatageAcceptable(preuve.signedAt())) {
+            throw new InvalidOperationException(
+                    "L'heure de l'appareil s'écarte trop de celle du serveur. "
+                            + "Activez la mise à l'heure automatique, puis réessayez.");
+        }
+
+        String condense = signatureAppareil.condense(report.getId(), userId, preuve.signedAt());
+        if (!signatureAppareil.verifier(appareil.getPublicKey(), condense, preuve.signature())) {
+            throw new AccessDeniedException("Signature d'appareil invalide.");
+        }
+
+        report.setSigningDeviceId(appareil.getId());
+        report.setDeviceSignature(preuve.signature());
+        report.setDeviceSignedAt(preuve.signedAt());
     }
 
     @Override
@@ -721,6 +878,7 @@ public class ReportServiceImpl implements ReportService {
         report.setCalled(true);
         report.setCallDate(LocalDateTime.now());
         report.setRetrieverName(dto.getSignatorName());
+        report.setRetrieverRelation(dto.getRelation());
         report.setRetrieverSignature(dto.getSignature());
         // Cohérence de statut, comme dans deliver() et markDelivered().
         //

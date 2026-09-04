@@ -1,5 +1,7 @@
 package com.labo.anapath.finance;
 
+import com.labo.anapath.common.NomComplet;
+
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
@@ -113,7 +115,7 @@ public class InvoicePdfServiceImpl implements InvoicePdfService {
         // Client (dénormalisé sur la facture, repli sur le patient).
         String clientName = invoice.getClientName();
         if ((clientName == null || clientName.isBlank()) && invoice.getPatient() != null) {
-            clientName = (invoice.getPatient().getFirstname() + " " + invoice.getPatient().getLastname()).trim();
+            clientName = NomComplet.de(invoice.getPatient().getLastname(), invoice.getPatient().getFirstname());
         }
         ctx.setVariable("clientName", clientName != null ? clientName : "");
         // Adresse dénormalisée de la facture (la facture imprimée affiche `client_address`).
@@ -132,7 +134,10 @@ public class InvoicePdfServiceImpl implements InvoicePdfService {
         for (InvoiceDetail d : invoice.getDetails()) {
             lines.add(new PdfLine(
                     i++,
-                    d.getTestName() != null ? d.getTestName() : "",
+                    // Le nom personnalisé s'il y en a un : c'est le même
+                    // libellé qui doit paraître ici et dans la déclaration à
+                    // la DGI, sinon le papier ne correspond plus au déclaré.
+                    d.nomAFacturer() != null ? d.nomAFacturer() : "",
                     1,
                     money(d.getPrice()),
                     money(d.getDiscount()),
@@ -151,7 +156,7 @@ public class InvoicePdfServiceImpl implements InvoicePdfService {
         if (invoice.getCreatedBy() != null) {
             var creator = userRepository.findById(invoice.getCreatedBy()).orElse(null);
             if (creator != null) {
-                operatorName = (creator.getFirstname() + " " + creator.getLastname()).trim();
+                operatorName = NomComplet.de(creator.getLastname(), creator.getFirstname());
                 String sig = creator.getSignature();
                 if (sig != null && !sig.isBlank()) {
                     // La reprise a conservé des NOMS de fichiers, pas des base64 :
@@ -176,6 +181,18 @@ public class InvoicePdfServiceImpl implements InvoicePdfService {
         // QR de l'en-tête, toujours présent sur la facture imprimée. Encode le même
         // contenu que le reçu à l'écran : le code normalisé, ou le nom du centre à défaut.
         ctx.setVariable("headerQrcode", buildHeaderQrcode(invoice));
+
+        // Second QR, dédié au dossier : c'est celui que l'application mobile lit.
+        //
+        // Le QR d'en-tête ne peut pas servir à cela. Il porte le code normalisé
+        // DGI — une obligation fiscale à laquelle on ne touche pas — et retombe,
+        // quand la facture n'est pas normalisée, sur le nom du centre, c'est-à-dire
+        // sur une constante identique d'une facture à l'autre.
+        //
+        // Or la facture est le papier que le patient présente au comptoir pour
+        // retirer son résultat. Sans ce second code, l'agent devrait recopier la
+        // référence à la main devant lui.
+        ctx.setVariable("dossierQrcode", buildDossierQrcode(invoice));
 
         String html = com.labo.anapath.common.pdf.PdfHtmlUtil.toXhtml(
                 templateEngine.process("pdf/facture", ctx));
@@ -225,6 +242,33 @@ public class InvoicePdfServiceImpl implements InvoicePdfService {
             return qrCodeService.generateBase64(content, 100, 105, ErrorCorrectionLevel.H);
         } catch (Exception e) {
             log.warn("QR d'en-tête non généré pour la facture {} : {}", invoice.getId(), e.getMessage());
+            return "";
+        }
+    }
+
+    /**
+     * QR du dossier : le code de la demande d'examen, tel quel.
+     *
+     * <p><b>Avec son tiret</b>, contrairement au texte imprimé juste à côté que
+     * l'habitude Laravel affiche sans (« 260003 »). La recherche par code est
+     * exacte : « 260003 » ne trouverait rien. Ce qui se scanne doit être ce qui
+     * est stocké, non ce qui se lit.</p>
+     *
+     * <p>Vide pour les factures sans demande rattachée — prestations et
+     * consultations —, auquel cas le gabarit n'affiche rien.</p>
+     */
+    private String buildDossierQrcode(Invoice invoice) {
+        if (invoice.getTestOrder() == null || invoice.getTestOrder().getCode() == null
+                || invoice.getTestOrder().getCode().isBlank()) {
+            return "";
+        }
+        try {
+            return qrCodeService.generateBase64(
+                    invoice.getTestOrder().getCode(), 100, 105, ErrorCorrectionLevel.H);
+        } catch (Exception e) {
+            // Un QR manquant ne doit pas empêcher d'imprimer une facture : le code
+            // reste lisible en clair juste à côté, et l'agent peut le saisir.
+            log.warn("QR de dossier non généré pour la facture {} : {}", invoice.getId(), e.getMessage());
             return "";
         }
     }

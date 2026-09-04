@@ -64,11 +64,91 @@
         table.infos th { text-align: left; width: 25%; font-weight: bold; }
         table.infos td { width: 25%; }
         hr.sep { margin-top: 15px; border: none; border-top: 1px solid #0070C1; }
+        /* ------------------------------------------------------------------
+           Contenu rédigé dans l'éditeur — jumeau de `.rte-content`
+
+           Les mêmes règles vivent dans `globals.css` du frontend. Ce qu'un
+           médecin met en forme à l'écran doit sortir tel quel ici : deux
+           moteurs, un seul jeu de valeurs. Toute modification faite là-bas
+           doit l'être ici.
+
+           Sans elles, le moteur appliquait sa feuille par défaut (CSS 2.1) :
+           paragraphes espacés de 1,12 em au lieu de 0,3 — plus de trois fois
+           l'écart voulu —, listes retraitées de 40 px au lieu de 22,
+           citations décalées de 40 px de chaque côté et sans filet, et `pre`
+           en `white-space: pre`, où une ligne longue sortait de la feuille.
+
+           Tout est en `em` : l'éditeur compose en 14 px, ce document en 13.
+           Chaque moteur part de sa base, les proportions se correspondent.
+           ------------------------------------------------------------------ */
         .content { font-size: 13px; }
-        table.sign { width: 100%; margin-top: 40px; }
+        .content h1, .content h2, .content h3,
+        .content h4, .content h5, .content h6 {
+            font-weight: bold;
+            margin: 0.55em 0 0.3em;
+            line-height: 1.25;
+        }
+        .content h1 { font-size: 1.6em; }
+        .content h2 { font-size: 1.32em; }
+        .content h3 { font-size: 1.15em; }
+        .content h4 { font-size: 1.05em; }
+        .content h5 { font-size: 1em; }
+        .content h6 { font-size: 0.92em; }
+        .content ul { list-style: disc; padding-left: 1.7em; margin: 0.45em 0; }
+        .content ol { list-style: decimal; padding-left: 1.7em; margin: 0.45em 0; }
+        .content li { margin: 0.1em 0; }
+        .content a { color: #2563eb; text-decoration: underline; }
+        .content p { margin: 0.3em 0; }
+        .content blockquote {
+            border-left: 3px solid #d1d5db;
+            padding-left: 0.85em;
+            color: #4b5563;
+            font-style: italic;
+            margin: 0.55em 0;
+        }
+        .content pre {
+            background-color: #f3f4f6;
+            padding: 0.55em 0.85em;
+            font-family: monospace;
+            font-size: 0.93em;
+            white-space: pre-wrap;
+            margin: 0.55em 0;
+        }
+        .content hr { border: none; border-top: 1px solid #d1d5db; margin: 0.85em 0; }
+        .content table { border-collapse: collapse; margin: 0.55em 0; }
+        .content th, .content td { border: 1px solid #d1d5db; padding: 0.25em 0.5em; }
+        /* Le bloc de signature ne se coupe pas.
+           Mesuré dans le PDF produit : sans cette règle, un compte rendu dont le
+           texte s'arrête près du bas de page laissait « Signé électroniquement
+           par : » sur une feuille et le nom du signataire sur la suivante. Une
+           mention d'attribution séparée de la personne qu'elle désigne n'a pas
+           sa place sur un document médical.
+
+           La marge haute est ramenée de 40 à 24 px pour la même raison. Le
+           moteur la compte pour décider si le bloc tient, puis l'abandonne en
+           tête de page suivante — vérifié : la signature repartie y est tracée
+           dès le haut du cadre. Ces points ne servaient donc qu'à provoquer le
+           renvoi qu'ils ne compensaient pas. */
+        table.sign { width: 100%; margin-top: 24px; page-break-inside: avoid; }
         table.sign td { vertical-align: bottom; font-size: 13px; width: 50%; text-align: left; }
         .sign-name { font-weight: bold; }
         .sign-space { min-height: 45px; }
+        /* La signature tient dans l'espace qui lui est réservé.
+           Le gabarit ne posait qu'une largeur : la hauteur suivait le rapport
+           d'aspect du fichier de chaque médecin. Mesuré dans le PDF produit, une
+           signature carrée sortait à 63,8 pt de haut pour 33,75 réservés — elle
+           gonflait le bloc de trente points et le faisait basculer en page
+           suivante là où une signature en bandeau tenait. La pagination du
+           compte rendu dépendait donc du fichier téléversé, ce que rien
+           n'indiquait. Le plafond la rend identique pour tous les signataires. */
+        .sign-space img { max-width: 85px; max-height: 45px; }
+        /* La signature tient dans l'espace qui lui est réservé.
+           Le gabarit ne posait qu'une largeur : la hauteur suivait le rapport
+           d'aspect du fichier téléversé par chaque médecin, si bien que la
+           pagination du compte rendu dépendait de la forme de sa signature. Une
+           signature carrée gonflait le bloc de 64 pt et le faisait basculer en
+           page suivante là où une signature en bandeau tenait. Le plafond rend
+           la hauteur du bloc identique pour tous les signataires. */
         /* Pied de page : placé dans la marge basse de CHAQUE page (position: running). */
         .page-footer {
             position: running(pagefooter);
@@ -124,13 +204,13 @@
             <tbody>
                 <tr>
                     <th>Nom :</th>
-                    <td th:text="${patientFirstname}"></td>
+                    <td th:text="${patientLastname}"></td>
                     <th>Date prélèvement :</th>
                     <td th:text="${prelevementDate}"></td>
                 </tr>
                 <tr>
                     <th>Prénoms :</th>
-                    <td th:text="${patientLastname}"></td>
+                    <td th:text="${patientFirstname}"></td>
                     <th>Date d’arrivée labo :</th>
                     <td th:text="${createdAt}"></td>
                 </tr>
@@ -152,12 +232,16 @@
 
     <hr class="sep"/>
 
-    <!-- Contenu (HTML brut : macro / micro / compléments) -->
-    <span class="content" th:utext="${content}"></span>
-    <span class="content" th:utext="${contentMicro}"></span>
+    <!-- Contenu (HTML brut : macro / micro / compléments)
+
+         `div` et non `span` : l'éditeur produit des paragraphes, des listes et
+         des titres, que rien n'autorise à loger dans un élément en ligne. Les
+         marges et le filet des citations ne s'appliquaient pas. -->
+    <div class="content" th:utext="${content}"></div>
+    <div class="content" th:utext="${contentMicro}"></div>
     <th:block th:if="${!#strings.isEmpty(contentSupplementaire)}">
-        <span class="content" th:utext="${contentSupplementaire}"></span>
-        <span class="content" th:utext="${contentSupplementaireMicro}"></span>
+        <div class="content" th:utext="${contentSupplementaire}"></div>
+        <div class="content" th:utext="${contentSupplementaireMicro}"></div>
     </th:block>
 
     <!-- Signatures (uniquement si compte rendu validé) — réplique canva_caap :
@@ -169,7 +253,7 @@
                 <td>
                     <th:block th:if="${!#strings.isEmpty(signator)}">
                         <div class="sign-space">
-                            <img th:if="${!#strings.isEmpty(signature1Img)}" width="85" th:src="${signature1Img}" alt=""/>
+                            <img th:if="${!#strings.isEmpty(signature1Img)}" th:src="${signature1Img}" alt=""/>
                         </div>
                         <span th:text="${signator}"></span>
                     </th:block>

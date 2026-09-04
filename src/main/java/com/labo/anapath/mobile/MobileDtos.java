@@ -74,7 +74,80 @@ public final class MobileDtos {
              * l'agent travaillant toujours depuis le même site.
              */
             UUID branchId,
-            List<String> permissions) {
+            List<String> permissions,
+            /**
+             * Rôles de la personne, par leur slug — « laborantin »,
+             * « secretariat », « docteur »…
+             *
+             * <p>Les parcours de l'application sont spécifiés par métier, non par
+             * permission : « le flux du secrétariat », « le flux des
+             * laborantins ». Déduire le métier d'un ensemble de droits revenait
+             * à traduire la spécification dans une autre langue, et à faire
+             * dépendre l'affichage d'une distribution de permissions qui peut
+             * varier d'un laboratoire à l'autre — un technicien se retrouvait
+             * alors devant un accueil vide.</p>
+             *
+             * <p>Cela ne déplace aucune autorisation : le serveur continue de
+             * vérifier chaque appel contre les permissions. Le rôle dit ce qu'on
+             * montre ; la permission décide de ce qu'on peut faire.</p>
+             */
+            List<String> roles) {
+    }
+
+    /**
+     * Renouvellement d'une session mobile.
+     *
+     * <p>Le jeton voyage dans le corps, là où le web le confie à un cookie
+     * HttpOnly : l'application n'a pas de navigateur, elle range son jeton dans
+     * le trousseau du système et doit pouvoir le présenter explicitement.</p>
+     */
+    public record MobileRefreshRequest(
+            @NotBlank String refreshToken,
+            /**
+             * Appareil qui renouvelle. Sans lui, le jeton reconduit perdrait sa
+             * provenance mobile — et avec elle l'obligation de signer les
+             * validations. Il suffirait alors d'attendre un renouvellement pour
+             * retomber au niveau de garantie du web.
+             */
+            @NotNull UUID deviceId) {
+    }
+
+    /**
+     * Tout ce qu'il faut remettre à un agent pour qu'il mette son téléphone en
+     * service : son code d'enrôlement et son code PIN.
+     *
+     * <p>Les deux n'existent en clair qu'ici, dans cette unique réponse — la base
+     * n'en garde que les empreintes. L'administrateur doit donc les transmettre
+     * aussitôt ; les retrouver plus tard est impossible, il faudra en régénérer.</p>
+     *
+     * <p>Le PIN est engendré par le serveur plutôt que choisi par l'agent :
+     * autrement, un appareil fraîchement enrôlé devrait ouvrir une session pour
+     * poser son code, alors qu'ouvrir une session exige déjà d'en avoir un.
+     * L'agent pourra le changer une fois connecté.</p>
+     */
+    public record AccesMobileResponse(
+            UUID userId,
+            String nomComplet,
+            String codeEnrolement,
+            LocalDateTime codeExpireLe,
+            String pin) {
+    }
+
+    /** État de l'accès mobile d'un utilisateur, pour l'écran d'administration. */
+    public record EtatAccesResponse(
+            UUID userId,
+            boolean acces,
+            boolean pinDefini,
+            List<DeviceResponse> appareils,
+            /**
+             * Le code d'enrôlement vivant, pour réafficher le QR.
+             *
+             * <p>Nul quand il n'y en a pas, quand aucune clé de chiffrement
+             * n'est configurée, ou pour un code délivré avant que la base ne le
+             * conserve : il enrôle encore, mais ne se réaffiche pas.</p>
+             */
+            String codeEnrolement,
+            LocalDateTime codeCreeLe) {
     }
 
     /** Création d'un code d'enrôlement par un administrateur. */
@@ -90,7 +163,7 @@ public final class MobileDtos {
 
     /** Pose ou remplacement du PIN par son porteur. */
     public record PinRequest(
-            @NotBlank @Pattern(regexp = "\\d{4,8}", message = "Le code PIN doit comporter de 4 à 8 chiffres.")
+            @NotBlank @Pattern(regexp = "\\d{4}", message = "Le code PIN comporte quatre chiffres.")
             String pin) {
     }
 

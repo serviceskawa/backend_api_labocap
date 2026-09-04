@@ -549,6 +549,15 @@ public class InvoiceServiceImpl implements InvoiceService {
             throw new InvalidOperationException(
                     "Une facture d'avoir ne peut pas faire l'objet d'un avoir.");
         }
+        // Un avoir contrepasse une déclaration. Tant que la facture n'a pas été
+        // normalisée, rien n'a été déclaré à la DGI : il n'y a donc rien à
+        // contrepasser, et l'on corrige ou l'on annule plutôt qu'on n'émet un
+        // second document fiscal qui ne répond à aucun premier.
+        if (!estNormalisee(vente)) {
+            throw new InvalidOperationException(
+                    "Cette facture n'est pas encore normalisée : un avoir ne peut "
+                    + "contrepasser qu'une facture déclarée.");
+        }
         // L'avoir étant unique par vente, le second serait un doublon comptable.
         invoiceRepository.findFirstByReferenceId(vente.getId()).ifPresent(existant -> {
             throw new InvalidOperationException(
@@ -616,5 +625,67 @@ public class InvoiceServiceImpl implements InvoiceService {
             }
         }
         return "FA" + (year % 100) + seq;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional
+    public InvoiceResponseDto changerLibelleDeLigne(UUID invoiceId, UUID detailId,
+                                                    LibelleDeLigneDto dto, UUID branchId) {
+        Invoice facture = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Facture", invoiceId));
+        // Même isolation que « findById » : une facture d'une autre branche est
+        // introuvable, pas interdite — le second message révélerait son existence.
+        if (!facture.getBranchId().equals(branchId)) {
+            throw new ResourceNotFoundException("Facture", invoiceId);
+        }
+
+        // Une facture déjà déclarée ne change plus de libellés.
+        //
+        // Le document remis au patient et celui déclaré à la DGI portent le même
+        // nom de ligne. Le modifier après la normalisation les ferait diverger :
+        // le papier dirait une chose, l'administration en aurait enregistré une
+        // autre, et rien à l'écran ne signalerait l'écart. Corriger suppose
+        // alors un avoir, pas une retouche.
+        if (estNormalisee(facture)) {
+            throw new InvalidOperationException(
+                    "Cette facture est déjà normalisée : son libellé ne peut plus "
+                    + "être modifié. Il faut passer par un avoir.");
+        }
+
+        InvoiceDetail ligne = facture.getDetails().stream()
+                .filter(d -> detailId.equals(d.getId()))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Ligne de facture", detailId));
+
+        String voulu = dto == null || dto.customTestName() == null
+                ? null : dto.customTestName().trim();
+        // Un libellé vide défait la personnalisation plutôt que de poser une
+        // chaîne blanche : la ligne revient au nom du catalogue.
+        ligne.setCustomTestName(voulu == null || voulu.isEmpty() ? null : voulu);
+
+        invoiceRepository.save(facture);
+        log.info("Libellé de ligne changé : facture={} ligne={} personnalisé={}",
+                facture.getCode(), detailId, ligne.getCustomTestName() != null);
+        return financeMapper.toInvoiceResponseDto(facture);
+    }
+
+    /**
+     * La facture a-t-elle déjà été déclarée ?
+     *
+     * <p>Les trois marques comptent, parce que deux parcours coexistent : la
+     * saisie manuelle héritée de Laravel pose {@code codeNormalise}, la
+     * passerelle pose {@code codeMecef} et {@code fluidinvoiceId}. N'en
+     * regarder qu'une laisserait passer les factures déclarées par l'autre
+     * chemin.</p>
+     */
+    private boolean estNormalisee(Invoice facture) {
+        return renseigne(facture.getCodeMecef())
+                || renseigne(facture.getFluidinvoiceId())
+                || renseigne(facture.getCodeNormalise());
+    }
+
+    private static boolean renseigne(String v) {
+        return v != null && !v.isBlank();
     }
 }

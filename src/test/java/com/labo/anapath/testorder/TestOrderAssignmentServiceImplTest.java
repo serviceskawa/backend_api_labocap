@@ -22,6 +22,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -62,21 +63,23 @@ class TestOrderAssignmentServiceImplTest {
         TestOrderAssignment a = new TestOrderAssignment();
         a.setBranchId(BRANCH_ID);
         a.setUser(buildUser());
-        a.setCode("ASS26-0001");
+        a.setCode("AF26-0001");
         a.setDate(LocalDate.now());
         a.setDetails(new ArrayList<>());
+        a.setId(ASSIGNMENT_ID);
         return a;
     }
 
     @Test
-    @DisplayName("create - génère code ASS format et persiste")
+    @DisplayName("create - génère un code AF de l'année et persiste")
     void createAssignment_generatesUniqueCode() {
         AssignmentRequestDto dto = new AssignmentRequestDto();
         dto.setUserId(USER_ID);
         dto.setDate(LocalDate.now());
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(buildUser()));
-        when(assignmentRepository.countByBranchId(BRANCH_ID)).thenReturn(0L);
+        when(assignmentRepository.findMaxSequenceForYear(eq(BRANCH_ID), any()))
+                .thenReturn(3);
         when(assignmentRepository.save(any())).thenAnswer(inv -> {
             TestOrderAssignment a = inv.getArgument(0);
             a.setDetails(new ArrayList<>());
@@ -88,7 +91,10 @@ class TestOrderAssignmentServiceImplTest {
         ArgumentCaptor<TestOrderAssignment> captor = ArgumentCaptor.forClass(TestOrderAssignment.class);
         verify(assignmentRepository).save(captor.capture());
 
-        assertThat(captor.getValue().getCode()).matches("ASS\\d{2}-\\d{4}");
+        // AF, comme les 250 affectations du laboratoire — et la séquence
+        // reprend après la dernière de l'année, pas après le total historique.
+        String annee = String.valueOf(java.time.LocalDate.now().getYear() % 100);
+        assertThat(captor.getValue().getCode()).isEqualTo("AF" + annee + "-0004");
         assertThat(result).isNotNull();
     }
 
@@ -116,7 +122,7 @@ class TestOrderAssignmentServiceImplTest {
 
         when(assignmentRepository.findById(ASSIGNMENT_ID)).thenReturn(Optional.of(assignment));
         when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(detailRepository.existsByTestOrderId(ORDER_ID)).thenReturn(false);
+        when(detailRepository.findByTestOrderId(ORDER_ID)).thenReturn(Optional.empty());
         when(detailRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(macroRepository.findByTestOrderId(any())).thenReturn(Optional.empty());
         when(macroRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -135,7 +141,7 @@ class TestOrderAssignmentServiceImplTest {
     }
 
     @Test
-    @DisplayName("addDetail - déjà affecté → met à jour macro existante sans recréer de détail")
+    @DisplayName("addDetail - déjà dans ce lot → met à jour la macro sans recréer de détail")
     void addDetail_alreadyAssigned_updatesMacroOnly() {
         TestOrder order = buildOrder();
         TestOrderAssignment assignment = buildAssignment();
@@ -143,13 +149,13 @@ class TestOrderAssignmentServiceImplTest {
         existingMacro.setAllStepsTrue();
         TestOrderAssignmentDetail existingDetail = new TestOrderAssignmentDetail();
         existingDetail.setTestOrder(order);
+        existingDetail.setTestOrderAssignment(assignment);
 
         AssignmentDetailRequestDto dto = new AssignmentDetailRequestDto();
         dto.setTestOrderId(ORDER_ID);
 
         when(assignmentRepository.findById(ASSIGNMENT_ID)).thenReturn(Optional.of(assignment));
         when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
-        when(detailRepository.existsByTestOrderId(ORDER_ID)).thenReturn(true);
         when(detailRepository.findByTestOrderId(ORDER_ID)).thenReturn(Optional.of(existingDetail));
         when(macroRepository.findByTestOrderId(any())).thenReturn(Optional.of(existingMacro));
         when(macroRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -157,7 +163,8 @@ class TestOrderAssignmentServiceImplTest {
         service.addDetail(ASSIGNMENT_ID, dto);
 
         verify(macroRepository).save(any());
-        // Le détailRepository.save ne doit pas être appelé (déjà affecté)
+        // Rien à réécrire : la demande est déjà dans ce lot, et aucune étiquette
+        // n'accompagne la reprise.
         org.mockito.Mockito.verify(detailRepository, org.mockito.Mockito.never()).save(any());
     }
 
@@ -170,5 +177,35 @@ class TestOrderAssignmentServiceImplTest {
         service.findAllImmuno(0, 20, BRANCH_ID);
 
         verify(assignmentRepository).findImmuno(any(), any());
+    }
+
+    @Test
+    @DisplayName("create - saute un numéro déjà attribué plutôt que de le rejouer")
+    void create_sauteUnCodeDejaPris() {
+        AssignmentRequestDto dto = new AssignmentRequestDto();
+        dto.setUserId(USER_ID);
+
+        String annee = String.valueOf(LocalDate.now().getYear() % 100);
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(buildUser()));
+        when(assignmentRepository.findMaxSequenceForYear(eq(BRANCH_ID), any()))
+                .thenReturn(7);
+        // Le 0008 a existé puis été supprimé : son numéro figure sur un
+        // bordereau, le réattribuer créerait deux affectations homonymes.
+        when(assignmentRepository.existsByCodeIncludingDeleted("AF" + annee + "-0008"))
+                .thenReturn(true);
+        when(assignmentRepository.existsByCodeIncludingDeleted("AF" + annee + "-0009"))
+                .thenReturn(false);
+        when(assignmentRepository.save(any())).thenAnswer(inv -> {
+            TestOrderAssignment a = inv.getArgument(0);
+            a.setDetails(new ArrayList<>());
+            return a;
+        });
+
+        service.create(dto, BRANCH_ID);
+
+        ArgumentCaptor<TestOrderAssignment> captor =
+                ArgumentCaptor.forClass(TestOrderAssignment.class);
+        verify(assignmentRepository).save(captor.capture());
+        assertThat(captor.getValue().getCode()).isEqualTo("AF" + annee + "-0009");
     }
 }

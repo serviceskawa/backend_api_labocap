@@ -62,7 +62,11 @@ public class UserController {
      * qu'ils ont déjà pour éditer un compte rendu.</p>
      */
     @GetMapping("/signataires")
-    @PreAuthorize("hasAuthority('edit-reports')")
+    // Le technicien qui compose une affectation doit choisir son destinataire.
+    // Il n'a pas `edit-reports` — et ne doit pas l'avoir, ce droit permettant de
+    // réécrire un diagnostic. La permission d'affectation suffit à justifier la
+    // lecture de cette liste, qui ne porte qu'un nom et un état d'activité.
+    @PreAuthorize("hasAnyAuthority('edit-reports','manage-test-order-assignments')")
     public ResponseEntity<ApiResponse<List<SignataireDto>>> signataires() {
         return ResponseEntity.ok(ApiResponse.success(
                 userRepository.findSignataires().stream().map(SignataireDto::de).toList()));

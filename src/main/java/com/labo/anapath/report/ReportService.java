@@ -26,6 +26,26 @@ public interface ReportService {
      */
     ReportDetailDto findDetailByTestOrderCode(String code, UUID branchId);
 
+    /**
+     * L'état d'un dossier désigné par le code de sa demande, sans le contenu
+     * médical.
+     *
+     * <p>Sert le technicien, qui doit savoir de quel patient il s'agit et où en
+     * est le dossier, mais n'a pas à lire le diagnostic. Voir
+     * {@link DossierResumeDto}.</p>
+     */
+    DossierResumeDto findResumeByTestOrderCode(String code, UUID branchId);
+
+    /**
+     * Valide un compte-rendu en y attachant, le cas échéant, la preuve d'appareil.
+     *
+     * <p>{@code preuve} nul : comportement d'origine, la validation ne s'adosse
+     * qu'à la session ouverte — c'est le cas du web. Non nul : la preuve est
+     * vérifiée strictement et une preuve fausse fait échouer l'acte, faute de
+     * quoi l'exigence se contournerait en envoyant n'importe quoi.</p>
+     */
+    ReportResponseDto validate(UUID id, UUID userId, ValidationSigneeDto preuve);
+
     ReportResponseDto create(ReportRequestDto dto, UUID branchId);
 
     ReportResponseDto createOrUpdate(ReportRequestDto dto, UUID branchId);

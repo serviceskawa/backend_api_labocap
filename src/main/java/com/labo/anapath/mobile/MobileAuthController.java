@@ -29,10 +29,62 @@ public class MobileAuthController {
     private final MobileAuthService mobileAuthService;
 
     /**
+     * Ouvre l'accès mobile à un utilisateur, en un seul geste.
+     *
+     * <p>Accorde le droit, engendre son code PIN et son code d'enrôlement, et
+     * les renvoie en clair — <strong>la seule et unique fois</strong>. La base
+     * n'en garde que les empreintes : les retrouver plus tard est impossible,
+     * il faudra rouvrir l'accès pour en régénérer.</p>
+     */
+    @PostMapping("/access/{userId}")
+    @PreAuthorize("hasAuthority('edit-users')")
+    public ResponseEntity<ApiResponse<AccesMobileResponse>> ouvrirAcces(
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Accès mobile ouvert",
+                mobileAuthService.ouvrirAcces(userId, principal.getId(), principal.getBranchId())));
+    }
+
+    /** Ferme l'accès : retire le droit, efface le PIN, révoque les appareils. */
+    @DeleteMapping("/access/{userId}")
+    @PreAuthorize("hasAuthority('edit-users')")
+    public ResponseEntity<ApiResponse<Void>> fermerAcces(
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        mobileAuthService.fermerAcces(userId, principal.getId(), principal.getBranchId());
+        return ResponseEntity.ok(ApiResponse.success("Accès mobile fermé", null));
+    }
+
+    /**
+     * État de l'accès d'un utilisateur : droit, PIN posé, appareils enrôlés.
+     *
+     * <p>Le code d'enrôlement n'accompagne l'état que pour qui peut en créer un.
+     * Consulter la fiche relève de {@code view-users} ; en repartir avec de quoi
+     * enrôler un téléphone relève de {@code edit-users}, et confondre les deux
+     * élargirait l'accès mobile à tout lecteur d'annuaire.</p>
+     */
+    @GetMapping("/access/{userId}")
+    @PreAuthorize("hasAuthority('view-users')")
+    public ResponseEntity<ApiResponse<EtatAccesResponse>> etatAcces(
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        EtatAccesResponse etat = mobileAuthService.etatAcces(userId, principal.getBranchId());
+        boolean peutEnroler = principal.getAuthorities().stream()
+                .anyMatch(a -> "edit-users".equals(a.getAuthority()));
+        if (!peutEnroler) {
+            etat = new EtatAccesResponse(etat.userId(), etat.acces(), etat.pinDefini(),
+                    etat.appareils(), null, etat.codeCreeLe());
+        }
+        return ResponseEntity.ok(ApiResponse.success(etat));
+    }
+
+    /**
      * Délivre un code d'enrôlement pour un utilisateur.
      *
-     * <p>Le code en clair n'est renvoyé qu'ici, une seule fois : la base n'en
-     * garde que l'empreinte. L'administrateur doit le transmettre aussitôt.</p>
+     * <p>Le code en clair n'est renvoyé qu'ici : la base n'en garde que
+     * l'empreinte. Il reste valable jusqu'à sa révocation et sert autant de
+     * fois qu'il le faut, mais en délivrer un nouveau éteint le précédent.</p>
      */
     @PostMapping("/enrollment-codes")
     @PreAuthorize("hasAuthority('edit-users')")
@@ -44,10 +96,61 @@ public class MobileAuthController {
                         requete.userId(), principal.getId(), principal.getBranchId())));
     }
 
+    /**
+     * Éteint le code d'enrôlement d'un utilisateur.
+     *
+     * <p>Les appareils déjà enrôlés continuent de fonctionner : c'est la porte
+     * qu'on ferme, pas les clés déjà remises. Pour celles-là,
+     * {@code /devices/{id}/revoke} ou la fermeture de l'accès.</p>
+     */
+    @DeleteMapping("/enrollment-codes/{userId}")
+    @PreAuthorize("hasAuthority('edit-users')")
+    public ResponseEntity<ApiResponse<Void>> revoquerCode(
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        mobileAuthService.revoquerCodeEnrolement(
+                userId, principal.getId(), principal.getBranchId());
+        return ResponseEntity.ok(ApiResponse.success("Code d'enrôlement révoqué", null));
+    }
+
+    /**
+     * Enregistre le jeton de notification de l'appareil connecté.
+     *
+     * <p>L'appareil vient du jeton de session, jamais du corps de la requête :
+     * accepter un identifiant d'appareil permettrait de détourner les
+     * notifications de quelqu'un d'autre vers son propre téléphone.</p>
+     *
+     * <p>Appelé à chaque connexion et non une seule fois : le jeton change tout
+     * seul — réinstallation, effacement des données, décision du système — et
+     * un jeton périmé ne se signale que par des notifications qui n'arrivent
+     * plus.</p>
+     */
+    @PostMapping("/push-token")
+    public ResponseEntity<ApiResponse<Void>> enregistrerJetonPush(
+            @RequestBody java.util.Map<String, String> corps,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        mobileAuthService.enregistrerJetonPush(principal.getId(), corps.get("token"));
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
     /** Échange un code d'enrôlement contre l'identité d'un appareil. Public. */
     @PostMapping("/enroll")
     public ResponseEntity<ApiResponse<EnrollResponse>> enroler(@Valid @RequestBody EnrollRequest requete) {
         return ResponseEntity.ok(ApiResponse.success("Appareil enrôlé", mobileAuthService.enroler(requete)));
+    }
+
+    /**
+     * Renouvelle la session sans redemander le PIN. Public.
+     *
+     * <p>Le jeton est présenté dans le corps et non par cookie : c'est la même
+     * rotation que le web — jeton consommé mis en liste noire — mais l'application
+     * range le sien dans le trousseau du système et doit pouvoir le fournir.</p>
+     */
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<MobileLoginResponse>> rafraichir(
+            @Valid @RequestBody MobileRefreshRequest requete) {
+        return ResponseEntity.ok(ApiResponse.success("Session renouvelée",
+                mobileAuthService.rafraichir(requete)));
     }
 
     /** Ouvre une session depuis un appareil enrôlé. Public. */

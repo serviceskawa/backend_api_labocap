@@ -1,5 +1,7 @@
 package com.labo.anapath.mobile;
 
+import com.labo.anapath.common.NomComplet;
+
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.common.exception.UnauthorizedException;
 import com.labo.anapath.common.security.CustomUserDetailsService;
@@ -49,9 +51,6 @@ public class MobileAuthServiceImpl implements MobileAuthService {
     /** Durée du gel. Assez long pour ruiner une attaque, assez court pour ne pas punir une méprise. */
     private static final int MINUTES_VERROU = 15;
 
-    /** Un code d'enrôlement se transmet et s'emploie dans la foulée. */
-    private static final int HEURES_VALIDITE_CODE = 24;
-
     /** Droit d'employer l'application, attribué utilisateur par utilisateur. */
     private static final String PERMISSION_MOBILE = "use-mobile-app";
 
@@ -64,6 +63,156 @@ public class MobileAuthServiceImpl implements MobileAuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final JwtProperties jwtProperties;
     private final CustomUserDetailsService userDetailsService;
+    private final com.labo.anapath.auth.AuthService authService;
+    private final com.labo.anapath.role.PermissionRepository permissionRepository;
+    private final com.labo.anapath.common.security.ChiffreurDeSecrets chiffreur;
+    private final ProvenanceRequete provenanceRequete;
+
+    @Override
+    @Transactional
+    public AccesMobileResponse ouvrirAcces(UUID userId, UUID auteurId, UUID branchId) {
+        User user = userRepository.findByIdAndBranchId(userId, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", userId));
+
+        var droit = permissionRepository.findBySlug(PERMISSION_MOBILE)
+                .orElseThrow(() -> new com.labo.anapath.common.exception.InvalidOperationException(
+                        "La permission « " + PERMISSION_MOBILE + " » est absente de cette base. "
+                                + "La migration V65 n'a probablement pas été appliquée."));
+
+        // Permission directe et non ajoutée à un rôle : l'accès se donne
+        // nommément, c'est l'exigence posée dès le départ. Un rôle l'ouvrirait
+        // à tous ceux qui le portent, d'un coup et sans qu'on l'ait voulu.
+        boolean deja = user.getDirectPermissions().stream()
+                .anyMatch(p -> p.getId().equals(droit.getId()));
+        if (!deja) {
+            user.getDirectPermissions().add(droit);
+        }
+
+        // Le PIN naît ici, avec l'accès. Le faire choisir par l'agent supposerait
+        // qu'il ouvre d'abord une session — or ouvrir une session exige déjà d'en
+        // avoir un. Il pourra le changer une fois connecté.
+        String pin = genererPin();
+        user.setPinHash(passwordEncoder.encode(pin));
+        user.setPinFailedAttempts((short) 0);
+        user.setPinLockedUntil(null);
+        userRepository.save(user);
+
+        revoquerLesCodesVivants(user.getId(), auteurId);
+        String code = genererCode();
+        MobileEnrollmentCode ligne = new MobileEnrollmentCode(
+                user.getId(), passwordEncoder.encode(code), null, auteurId);
+        // Scellé à côté de l'empreinte : celle-ci valide l'enrôlement, celui-là
+        // permet de remontrer le QR. Nul si aucune clé n'est configurée — on
+        // retombe alors sur le comportement d'avant, code affiché une fois.
+        ligne.setCodeChiffre(chiffreur.chiffrer(code));
+        codeRepository.save(ligne);
+
+        log.info("Accès mobile ouvert pour userId={} par userId={}", userId, auteurId);
+        // Seul instant où ces deux secrets existent en clair.
+        return new AccesMobileResponse(
+                user.getId(),
+                NomComplet.de(user.getLastname(), user.getFirstname()),
+                code, null, pin);
+    }
+
+    @Override
+    @Transactional
+    public void fermerAcces(UUID userId, UUID auteurId, UUID branchId) {
+        User user = userRepository.findByIdAndBranchId(userId, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", userId));
+
+        // Les trois d'un coup. Retirer le seul droit laisserait un appareil
+        // enrôlé et un PIN valides : la session suivante serait refusée, certes,
+        // mais le téléphone garderait de quoi signer et il suffirait de rendre le
+        // droit pour que tout reparte, à l'insu de qui l'a fermé.
+        user.getDirectPermissions().removeIf(p -> PERMISSION_MOBILE.equals(p.getSlug()));
+        user.setPinHash(null);
+        user.setPinFailedAttempts((short) 0);
+        user.setPinLockedUntil(null);
+        userRepository.save(user);
+
+        LocalDateTime maintenant = LocalDateTime.now();
+        for (MobileDevice appareil : deviceRepository.findByUserIdOrderByEnrolledAtDesc(userId)) {
+            if (appareil.estActif()) {
+                appareil.setRevokedAt(maintenant);
+                appareil.setRevokedBy(auteurId);
+                deviceRepository.save(appareil);
+            }
+        }
+
+        // Le code aussi. Un code désormais sans échéance qui survivrait à la
+        // fermeture de l'accès attendrait qu'on rende le droit pour enrôler de
+        // nouveau — c'est exactement ce que fermer doit empêcher.
+        revoquerLesCodesVivants(userId, auteurId);
+
+        log.warn("Accès mobile fermé pour userId={} par userId={}", userId, auteurId);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional
+    public void enregistrerJetonPush(UUID userId, String jeton) {
+        UUID appareilId = provenanceRequete.appareilCourant();
+        if (appareilId == null) {
+            // Session web : rien à enregistrer. Un jeton de notification
+            // appartient à un téléphone, pas à un navigateur.
+            return;
+        }
+        if (jeton == null || jeton.isBlank()) return;
+
+        deviceRepository.findByIdAndRevokedAtIsNull(appareilId).ifPresent(appareil -> {
+            // L'appareil doit être celui de la personne connectée. Sans cette
+            // vérification, un jeton volé permettrait de détourner les
+            // notifications d'un autre vers son propre téléphone.
+            if (!appareil.getUserId().equals(userId)) return;
+            appareil.setPushToken(jeton.trim());
+            appareil.setPushTokenAt(LocalDateTime.now());
+            deviceRepository.save(appareil);
+        });
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional
+    public void revoquerCodeEnrolement(UUID userId, UUID auteurId, UUID branchId) {
+        // Le cloisonnement par branche vaut ici comme ailleurs : révoquer se
+        // fait sur les siens.
+        userRepository.findByIdAndBranchId(userId, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", userId));
+        revoquerLesCodesVivants(userId, auteurId);
+        log.warn("Code d'enrôlement révoqué pour userId={} par userId={}", userId, auteurId);
+    }
+
+    /** Éteint les codes encore valables d'un utilisateur. */
+    private void revoquerLesCodesVivants(UUID userId, UUID auteurId) {
+        for (MobileEnrollmentCode code : codeRepository.findByUserIdOrderByCreatedAtDesc(userId)) {
+            if (code.estUtilisable()) {
+                code.revoquer(auteurId);
+                codeRepository.save(code);
+            }
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public EtatAccesResponse etatAcces(UUID userId, UUID branchId) {
+        User user = userRepository.findByIdAndBranchId(userId, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", userId));
+
+        MobileEnrollmentCode vivant = codeRepository
+                .findByUserIdOrderByCreatedAtDesc(userId).stream()
+                .filter(MobileEnrollmentCode::estUtilisable)
+                .findFirst()
+                .orElse(null);
+
+        return new EtatAccesResponse(
+                userId,
+                aLaPermissionMobile(userId),
+                user.getPinHash() != null,
+                DeviceResponse.de(deviceRepository.findByUserIdOrderByEnrolledAtDesc(userId)),
+                vivant == null ? null : chiffreur.dechiffrer(vivant.getCodeChiffre()),
+                vivant == null ? null : vivant.getCreatedAt());
+    }
 
     @Override
     @Transactional
@@ -80,14 +229,27 @@ public class MobileAuthServiceImpl implements MobileAuthService {
                             + "Accordez-le avant d'enrôler un appareil.");
         }
 
+        // Un seul code vivant par personne. Sans cela, chaque régénération
+        // laisserait le précédent valable : les anciens QR distribués ou
+        // photographiés continueraient d'enrôler, et révoquer n'aurait plus de
+        // sens puisqu'il faudrait révoquer chacun d'eux.
+        revoquerLesCodesVivants(user.getId(), auteurId);
+
         String code = genererCode();
-        LocalDateTime expiration = LocalDateTime.now().plusHours(HEURES_VALIDITE_CODE);
-        codeRepository.save(new MobileEnrollmentCode(
-                user.getId(), passwordEncoder.encode(code), expiration, auteurId));
+        // Sans échéance : la validité tient désormais à la révocation. Un délai
+        // de quelques heures obligeait à régénérer pour un agent qui installait
+        // son téléphone le lendemain.
+        MobileEnrollmentCode ligne = new MobileEnrollmentCode(
+                user.getId(), passwordEncoder.encode(code), null, auteurId);
+        // Scellé à côté de l'empreinte : celle-ci valide l'enrôlement, celui-là
+        // permet de remontrer le QR. Nul si aucune clé n'est configurée — on
+        // retombe alors sur le comportement d'avant, code affiché une fois.
+        ligne.setCodeChiffre(chiffreur.chiffrer(code));
+        codeRepository.save(ligne);
 
         log.info("Code d'enrôlement mobile créé pour userId={} par userId={}", user.getId(), auteurId);
         // Seul instant où le code existe en clair — la base n'en garde que l'empreinte.
-        return new EnrollmentCodeResponse(code, expiration);
+        return new EnrollmentCodeResponse(code, null);
     }
 
     @Override
@@ -97,7 +259,7 @@ public class MobileAuthServiceImpl implements MobileAuthService {
                 .orElseThrow(() -> new UnauthorizedException("Code d'enrôlement invalide."));
 
         MobileEnrollmentCode code = codeRepository
-                .findByUserIdAndUsedAtIsNullOrderByCreatedAtDesc(user.getId())
+                .findByUserIdOrderByCreatedAtDesc(user.getId())
                 .stream()
                 .filter(MobileEnrollmentCode::estUtilisable)
                 .filter(c -> passwordEncoder.matches(requete.code().trim(), c.getCodeHash()))
@@ -113,8 +275,10 @@ public class MobileAuthServiceImpl implements MobileAuthService {
         MobileDevice appareil = deviceRepository.save(new MobileDevice(
                 user.getId(), user.getBranchId(), requete.label().trim(), requete.publicKey()));
 
-        code.setUsedAt(LocalDateTime.now());
-        code.setDeviceId(appareil.getId());
+        // Le code n'est plus consommé : il note l'usage et reste vivant. Un
+        // second téléphone, ou une réinstallation après échec, s'enrôle avec le
+        // même QR.
+        code.noterUnUsage(appareil.getId());
         codeRepository.save(code);
 
         log.info("Appareil mobile enrôlé : deviceId={} userId={}", appareil.getId(), user.getId());
@@ -164,13 +328,72 @@ public class MobileAuthServiceImpl implements MobileAuthService {
 
         log.info("Connexion mobile réussie : deviceId={} userId={}", appareil.getId(), user.getId());
         return new MobileLoginResponse(
-                jwtTokenProvider.generateToken(principal),
-                jwtTokenProvider.generateRefreshToken(user.getId()),
-                jwtProperties.getExpirationMs() / 1000,
+                jwtTokenProvider.generateToken(principal, appareil.getId()),
+                jwtTokenProvider.generateRefreshToken(user.getId(), true),
+                jwtProperties.getMobileExpirationMs() / 1000,
                 user.getId(),
-                user.getFirstname() + " " + user.getLastname(),
+                NomComplet.de(user.getLastname(), user.getFirstname()),
                 user.getBranchId(),
-                permissions);
+                permissions,
+                rolesDe(user));
+    }
+
+    /**
+     * Renouvelle la session sans redemander le PIN.
+     *
+     * <p>Délègue à {@code AuthService.refresh}, qui valide le jeton, vérifie son
+     * type, refuse ceux déjà révoqués et met le jeton consommé en liste noire.
+     * Réécrire cette rotation ici aurait signifié la maintenir en double, et
+     * qu'un correctif de sécurité appliqué d'un côté manque de l'autre.</p>
+     *
+     * <p>Seul l'emballage change : le web renvoie ses jetons par cookies
+     * HttpOnly, l'application les reçoit dans le corps.</p>
+     */
+    @Override
+    @Transactional
+    public MobileLoginResponse rafraichir(MobileRefreshRequest requete) {
+        var reponse = authService.refresh(requete.refreshToken());
+
+        UUID userId = jwtTokenProvider.extractUserId(reponse.accessToken());
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UnauthorizedException("Session invalide."));
+
+        // L'appareil est revalidé à chaque renouvellement, et le jeton reconduit
+        // reporte sa provenance. Sans cela, il perdrait la revendication posée à
+        // la connexion, et avec elle l'obligation de signer les validations : il
+        // aurait suffi d'attendre un renouvellement pour s'en affranchir.
+        MobileDevice appareil = deviceRepository.findByIdAndRevokedAtIsNull(requete.deviceId())
+                .orElseThrow(() -> new UnauthorizedException("Appareil inconnu ou révoqué."));
+        if (!appareil.getUserId().equals(userId)) {
+            throw new UnauthorizedException("Cet appareil n'appartient pas au titulaire de la session.");
+        }
+        appareil.setLastSeenAt(LocalDateTime.now());
+        deviceRepository.save(appareil);
+
+        // Le droit d'employer l'application est revérifié à chaque renouvellement :
+        // le retirer à quelqu'un doit le mettre dehors au plus tard à l'expiration
+        // du jeton courant, sans attendre qu'il se déconnecte de lui-même.
+        if (!aLaPermissionMobile(userId)) {
+            throw new UnauthorizedException("Cet utilisateur n'a plus accès à l'application mobile.");
+        }
+
+        UserPrincipal principal = (UserPrincipal) userDetailsService.loadUserById(userId);
+        return new MobileLoginResponse(
+                // Réémis avec la revendication d'appareil : celui d'AuthService
+                // ne la porte pas, puisqu'il sert aussi le web.
+                jwtTokenProvider.generateToken(principal, appareil.getId()),
+                // Réémis lui aussi : celui d'AuthService porte la fenêtre du
+                // web, quinze minutes. L'appliquer à un téléphone réclamerait
+                // le code PIN quatre fois par heure, là où la politique dit une
+                // fois par heure au laboratoire et deux fois par jour au
+                // comptoir.
+                jwtTokenProvider.generateRefreshToken(userId, true),
+                jwtProperties.getMobileExpirationMs() / 1000,
+                userId,
+                NomComplet.de(user.getLastname(), user.getFirstname()),
+                user.getBranchId(),
+                principal.getAuthorities().stream().map(a -> a.getAuthority()).toList(),
+                rolesDe(user));
     }
 
     @Override
@@ -237,6 +460,20 @@ public class MobileAuthServiceImpl implements MobileAuthService {
      * d'un coup à quelques comptes les centaines de permissions directes déjà
      * enregistrées. Ce redressement-là mérite sa propre décision.</p>
      */
+    /**
+     * Les slugs des rôles d'une personne.
+     *
+     * <p>L'application choisit ses parcours d'après le métier, comme les
+     * spécifications les décrivent. Les autorisations, elles, restent
+     * gouvernées par les permissions et vérifiées à chaque appel.</p>
+     */
+    private List<String> rolesDe(User user) {
+        return user.getRoles().stream()
+                .map(r -> r.getSlug())
+                .filter(java.util.Objects::nonNull)
+                .toList();
+    }
+
     private boolean aLaPermissionMobile(UUID userId) {
         User user = userRepository.findById(userId).orElse(null);
         if (user == null) {
@@ -248,6 +485,27 @@ public class MobileAuthServiceImpl implements MobileAuthService {
         boolean enDirect = user.getDirectPermissions().stream()
                 .anyMatch(p -> PERMISSION_MOBILE.equals(p.getSlug()));
         return parRole || enDirect;
+    }
+
+    /**
+     * Code PIN à six chiffres, tiré au hasard.
+     *
+     * <p>Quatre chiffres, à la demande du laboratoire : c'est ce qu'un agent
+     * saisit sans hésiter entre deux patients. Dix mille combinaisons seulement,
+     * mais le gel après cinq échecs limite à vingt tentatives par heure — il
+     * faudrait des semaines pour parcourir l'espace —, et il faut de surcroît
+     * posséder le téléphone enrôlé. Le code seul n'ouvre rien.</p>
+     *
+     * <p>Aucune règle d'exclusion — ni suites, ni répétitions. Le tirage est
+     * uniforme et l'agent ne le choisit pas : écarter « 123456 » ne ferait que
+     * réduire l'espace pour un gain nul.</p>
+     */
+    private String genererPin() {
+        StringBuilder sb = new StringBuilder(4);
+        for (int i = 0; i < 4; i++) {
+            sb.append(ALEA.nextInt(10));
+        }
+        return sb.toString();
     }
 
     /**

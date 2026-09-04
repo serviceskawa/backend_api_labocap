@@ -29,7 +29,8 @@ class StorageEncryptionBackfillTest {
     Path racine;
 
     private StorageEncryptionBackfill tache(FileCipher c) {
-        return new StorageEncryptionBackfill(racine.toString(), StoredFilesFixture.fournisseur(c));
+        return new StorageEncryptionBackfill(racine.toString(), StoredFilesFixture.fournisseur(c),
+                new DepotDisque(racine.toString()));
     }
 
     private static byte[] image(int taille) {
@@ -209,7 +210,8 @@ class StorageEncryptionBackfillTest {
         // comme « tout est déjà chiffré ». Le refus lève l'ambiguïté.
         var t = new StorageEncryptionBackfill(
                 racine.resolve("nexiste-pas").toString(),
-                StoredFilesFixture.fournisseur(StoredFilesFixture.chiffreurAleatoire()));
+                StoredFilesFixture.fournisseur(StoredFilesFixture.chiffreurAleatoire()),
+                new DepotDisque(racine.toString()));
 
         assertThatThrownBy(() -> t.rattraper(true, 0))
                 .isInstanceOf(InvalidOperationException.class)

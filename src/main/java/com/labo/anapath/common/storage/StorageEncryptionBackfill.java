@@ -61,14 +61,17 @@ public class StorageEncryptionBackfill {
 
     private final Path racine;
     private final ObjectProvider<FileCipher> chiffreur;
+    private final DepotDisque disque;
 
     /** Deux rattrapages simultanés se disputeraient les mêmes fichiers. */
     private final AtomicBoolean enCours = new AtomicBoolean(false);
 
     public StorageEncryptionBackfill(@Value("${app.storage.path:/tmp/labo/storage}") String racine,
-                                     ObjectProvider<FileCipher> chiffreur) {
+                                     ObjectProvider<FileCipher> chiffreur,
+                                     DepotDisque disque) {
         this.racine = Paths.get(racine).toAbsolutePath().normalize();
         this.chiffreur = chiffreur;
+        this.disque = disque;
     }
 
     /**
@@ -110,7 +113,10 @@ public class StorageEncryptionBackfill {
 
     private Bilan parcourir(boolean simulation, int limite) {
         FileCipher c = chiffreur.getObject();
-        StoredFiles sonde = new StoredFiles(chiffreur);
+        // Disque seul : ce rattrapage parcourt le dossier de stockage et
+        // réécrit sur place. Lui donner le dépôt distant enverrait la version
+        // chiffrée dans le seau en laissant le clair ici.
+        StoredFiles sonde = StoredFiles.surLeDisqueSeul(chiffreur, disque);
         int examines = 0, deja = 0, faits = 0, echecs = 0;
         long octets = 0;
         List<String> details = new ArrayList<>();

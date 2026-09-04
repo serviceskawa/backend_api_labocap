@@ -78,6 +78,25 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Gère la réaffectation d'une demande déjà confiée à un autre médecin.
+     *
+     * <p>Journalisée en information et non en avertissement : refuser une
+     * réaffectation non confirmée est le fonctionnement attendu, pas un
+     * incident. La noter en avertissement ferait chercher un défaut là où il
+     * n'y a qu'une question posée à l'utilisateur.</p>
+     *
+     * @param ex exception levée
+     * @return réponse 409 nommant le médecin en place
+     */
+    @ExceptionHandler(ReaffectationNonConfirmeeException.class)
+    public ResponseEntity<ApiResponse<Object>> handleReaffectation(
+            ReaffectationNonConfirmeeException ex) {
+        log.info("Réaffectation à confirmer : {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
      * Gère les opérations structurellement invalides dans le contexte courant.
      *
      * @param ex exception levée
@@ -127,8 +146,21 @@ public class GlobalExceptionHandler {
      * @return réponse 403 avec un message générique
      */
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ApiResponse<Object>> handleAccessDenied(AccessDeniedException ex) {
-        log.warn("Access denied: {}", ex.getMessage());
+    public ResponseEntity<ApiResponse<Object>> handleAccessDenied(
+            AccessDeniedException ex, jakarta.servlet.http.HttpServletRequest requete) {
+        // Le chemin et la personne, pas seulement « Access Denied ».
+        //
+        // Sans eux, la ligne n'apprend rien : on sait qu'un refus a eu lieu,
+        // jamais lequel. Neuf refus identiques dans un journal ne se
+        // distinguent pas d'un seul répété, et rien ne dit s'ils viennent d'un
+        // agent qui n'a pas le droit ou d'une route mal configurée.
+        Object qui = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication() == null
+                ? "anonyme"
+                : org.springframework.security.core.context.SecurityContextHolder
+                        .getContext().getAuthentication().getName();
+        log.warn("Accès refusé : {} {} par {} — {}",
+                requete.getMethod(), requete.getRequestURI(), qui, ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.error("Accès refusé : vous n'avez pas les droits nécessaires."));
     }

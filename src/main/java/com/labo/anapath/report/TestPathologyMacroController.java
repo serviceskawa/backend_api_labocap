@@ -1,5 +1,7 @@
 package com.labo.anapath.report;
 
+import com.labo.anapath.common.NomComplet;
+
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.InvalidOperationException;
@@ -439,7 +441,7 @@ public class TestPathologyMacroController {
                 .filter(o -> !assignedOrderIds.contains(o.getId()))
                 .map(o -> {
                     String patientName = o.getPatient() != null
-                            ? o.getPatient().getFirstname() + " " + o.getPatient().getLastname()
+                            ? NomComplet.de(o.getPatient().getLastname(), o.getPatient().getFirstname())
                             : "";
                     String typeTitle = o.getTypeOrder() != null ? o.getTypeOrder().getTitle() : null;
                     String typeSlug = o.getTypeOrder() != null ? o.getTypeOrder().getSlug() : null;

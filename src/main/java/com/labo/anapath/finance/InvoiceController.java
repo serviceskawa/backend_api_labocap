@@ -232,9 +232,11 @@ public class InvoiceController {
     @PreAuthorize("hasAuthority('edit-invoices')")
     public ResponseEntity<ApiResponse<InvoiceResponseDto>> normalize(
             @PathVariable UUID id,
+            @RequestBody(required = false) InvoiceStatusUpdateDto corps,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success("Facture normalisée",
-                fluidInvoiceService.normaliser(id, principal.getBranchId())));
+                fluidInvoiceService.normaliser(id, principal.getBranchId(),
+                        corps == null ? null : corps.getPayment())));
     }
 
     /**
@@ -283,5 +285,28 @@ public class InvoiceController {
             @AuthenticationPrincipal UserPrincipal principal) {
         invoiceService.delete(id, principal.getBranchId());
         return ResponseEntity.ok(ApiResponse.success("Facture supprimée", null));
+    }
+
+    /**
+     * Change le libellé d'une ligne de facture.
+     *
+     * <p>Le nom du catalogue reste enregistré : il dit quelle analyse a été
+     * rendue, et c'est sur lui que reposent les statistiques. Seul l'affichage
+     * change — sur le document imprimé comme dans la déclaration à la DGI, qui
+     * portent ainsi le même mot.</p>
+     *
+     * <p>Un libellé vide défait la personnalisation. Une facture déjà
+     * normalisée est refusée : corriger suppose alors un avoir.</p>
+     */
+    @PutMapping("/{invoiceId}/details/{detailId}/libelle")
+    @PreAuthorize("hasAuthority('edit-invoices')")
+    public ResponseEntity<ApiResponse<InvoiceResponseDto>> changerLibelleDeLigne(
+            @PathVariable UUID invoiceId,
+            @PathVariable UUID detailId,
+            @RequestBody LibelleDeLigneDto dto,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success("Libellé mis à jour",
+                invoiceService.changerLibelleDeLigne(
+                        invoiceId, detailId, dto, principal.getBranchId())));
     }
 }
