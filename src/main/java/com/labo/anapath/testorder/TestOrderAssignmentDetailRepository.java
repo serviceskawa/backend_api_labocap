@@ -123,11 +123,36 @@ public interface TestOrderAssignmentDetailRepository extends JpaRepository<TestO
               AND d.deletedAt IS NULL
               AND d.remplaceeLe IS NULL
               AND (d.docteurStatus <> 'termine' OR a.date >= :depuis)
-              AND (:debutAnnee IS NULL OR o.createdAt >= :debutAnnee)
-              AND (:finAnnee IS NULL OR o.createdAt < :finAnnee)
             ORDER BY a.date ASC, d.createdAt ASC
             """)
     List<TestOrderAssignmentDetail> fileDuMedecin(
+            @Param("docteurId") UUID docteurId,
+            @Param("depuis") java.time.LocalDate depuis);
+
+    /**
+     * La même file, bornée à une année.
+     *
+     * <p>Une seconde requête plutôt qu'un paramètre facultatif dans la
+     * première. La forme {@code (:borne IS NULL OR colonne >= :borne)} paraît
+     * économique et ne fonctionne pas : PostgreSQL ne sait pas typer un
+     * paramètre qu'on ne lui présente que dans un test de nullité, et rejette
+     * la requête entière — {@code could not determine data type of parameter}.
+     * L'échec est à l'exécution, sur le serveur de production, et aucun test
+     * hors base ne l'aurait montré.</p>
+     */
+    @Query("""
+            SELECT d FROM TestOrderAssignmentDetail d
+            JOIN FETCH d.testOrderAssignment a
+            LEFT JOIN FETCH d.testOrder o
+            WHERE a.user.id = :docteurId
+              AND d.deletedAt IS NULL
+              AND d.remplaceeLe IS NULL
+              AND (d.docteurStatus <> 'termine' OR a.date >= :depuis)
+              AND o.createdAt >= :debutAnnee
+              AND o.createdAt < :finAnnee
+            ORDER BY a.date ASC, d.createdAt ASC
+            """)
+    List<TestOrderAssignmentDetail> fileDuMedecinPourLannee(
             @Param("docteurId") UUID docteurId,
             @Param("depuis") java.time.LocalDate depuis,
             @Param("debutAnnee") java.time.LocalDateTime debutAnnee,

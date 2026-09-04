@@ -376,11 +376,12 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
         // production traîne 3 574 dossiers ouverts dont aucun de l'année :
         // trier au retour reviendrait à en faire descendre trois mille cinq
         // cents pour n'en afficher aucun, sur une connexion mobile.
-        LocalDateTime debut = annee == null
-                ? null : LocalDate.of(annee, 1, 1).atStartOfDay();
-        var lignes = detailRepository.fileDuMedecin(
-                docteurId, LocalDate.now(), debut,
-                debut == null ? null : debut.plusYears(1));
+        var lignes = annee == null
+                ? detailRepository.fileDuMedecin(docteurId, LocalDate.now())
+                : detailRepository.fileDuMedecinPourLannee(
+                        docteurId, LocalDate.now(),
+                        LocalDate.of(annee, 1, 1).atStartOfDay(),
+                        LocalDate.of(annee + 1, 1, 1).atStartOfDay());
 
         // Les comptes rendus en une seule requête : un par ligne ferait une
         // trentaine d'allers-retours pour un écran d'accueil.
