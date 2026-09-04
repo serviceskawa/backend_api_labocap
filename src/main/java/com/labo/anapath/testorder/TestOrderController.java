@@ -102,6 +102,8 @@ public class TestOrderController {
             @RequestParam(required = false) UUID attribuateDoctorId,
             @RequestParam(required = false) UUID hospitalId,
             @RequestParam(required = false) Boolean isUrgent,
+            @RequestParam(required = false) Integer annee,
+            @RequestParam(required = false) Boolean enCours,
             @RequestParam(required = false) LocalDate from,
             @RequestParam(required = false) LocalDate to,
             @RequestParam(required = false) String search,
@@ -116,6 +118,8 @@ public class TestOrderController {
         filter.setAttribuateDoctorId(attribuateDoctorId);
         filter.setHospitalId(hospitalId);
         filter.setIsUrgent(isUrgent);
+        filter.setAnnee(annee);
+        filter.setEnCours(enCours);
         filter.setFrom(from);
         filter.setTo(to);
         filter.setSearch(search);
@@ -152,6 +156,8 @@ public class TestOrderController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) TestOrderStatus status,
             @RequestParam(required = false) Boolean isUrgent,
+            @RequestParam(required = false) Integer annee,
+            @RequestParam(required = false) Boolean enCours,
             @RequestParam(required = false) LocalDate from,
             @RequestParam(required = false) LocalDate to,
             @RequestParam(required = false) String search,
@@ -161,6 +167,8 @@ public class TestOrderController {
         TestOrderFilterDto filter = new TestOrderFilterDto();
         filter.setStatus(status);
         filter.setIsUrgent(isUrgent);
+        filter.setAnnee(annee);
+        filter.setEnCours(enCours);
         filter.setFrom(from);
         filter.setTo(to);
         filter.setSearch(search);
