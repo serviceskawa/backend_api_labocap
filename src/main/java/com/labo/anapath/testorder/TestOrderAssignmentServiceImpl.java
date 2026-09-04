@@ -152,12 +152,137 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
                 detail.getRemplaceeLe());
     }
 
+    /**
+     * Une page de la file, filtrée au serveur.
+     *
+     * <p>Le tri reprend celui de la file entière : par date de lot puis par
+     * ordre d'ajout. Un tri stable est ici une condition de correction et non
+     * un confort — sans lui, deux pages successives peuvent montrer deux fois
+     * la même ligne et jamais une autre.</p>
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<DemandeDuMedecinDto> pageDeLaFile(
+            UUID docteurId, FiltreFileDuMedecin filtre, int page, int taille) {
+        var tri = org.springframework.data.domain.Sort
+                .by("testOrderAssignment.date").ascending()
+                .and(org.springframework.data.domain.Sort.by("createdAt").ascending());
+        var lignes = detailRepository.findAll(
+                SpecificationFileDuMedecin.filtrer(
+                        docteurId, LocalDate.now(), joursAvantAlerte, filtre),
+                PageRequest.of(page, taille, tri));
+        var etats = etatsDesComptesRendus(lignes.getContent());
+        return PageResponse.of(lignes.map(d -> versDemandeDuMedecin(d, etats)));
+    }
+
+    /**
+     * La répartition du périmètre entre les trois états.
+     *
+     * <p>Trois comptages plutôt qu'un regroupement : chacun est un COUNT sur un
+     * index, et le regroupement aurait demandé de projeter puis de retrouver
+     * les états absents — un état sans dossier doit s'afficher à zéro, pas
+     * disparaître.</p>
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public ResumeFileDto resumeDeLaFile(UUID docteurId, FiltreFileDuMedecin filtre) {
+        var perimetre = filtre.sansStatutDuMedecin();
+        return new ResumeFileDto(
+                compter(docteurId, perimetre, DocteurStatus.A_TRAITER),
+                compter(docteurId, perimetre, DocteurStatus.PRIS_EN_CHARGE),
+                compter(docteurId, perimetre, DocteurStatus.TERMINE),
+                compterSelon(docteurId, perimetre, true, null),
+                compterSelon(docteurId, perimetre, null, true),
+                compterParStatutDemande(docteurId, perimetre, TestOrderStatus.PENDING),
+                compterParStatutDemande(docteurId, perimetre, TestOrderStatus.VALIDATED),
+                compterParStatutDemande(docteurId, perimetre, TestOrderStatus.DELIVERED));
+    }
+
+    /** Le périmètre, compté sous un état de demande imposé. */
+    private long compterParStatutDemande(UUID docteurId,
+                                         FiltreFileDuMedecin perimetre,
+                                         TestOrderStatus statut) {
+        return detailRepository.count(SpecificationFileDuMedecin.filtrer(
+                docteurId, LocalDate.now(), joursAvantAlerte,
+                new FiltreFileDuMedecin(perimetre.annee(), perimetre.lot(), null,
+                        statut.name(), perimetre.urgents(), perimetre.enRetard(),
+                        perimetre.demandes(), null)));
+    }
+
+    /** Le périmètre, compté sous un critère d'urgence ou de retard imposé. */
+    private long compterSelon(UUID docteurId, FiltreFileDuMedecin perimetre,
+                              Boolean urgents, Boolean enRetard) {
+        return detailRepository.count(SpecificationFileDuMedecin.filtrer(
+                docteurId, LocalDate.now(), joursAvantAlerte,
+                new FiltreFileDuMedecin(perimetre.annee(), perimetre.lot(), null,
+                        perimetre.statutDemande(), urgents, enRetard,
+                        perimetre.demandes(), null)));
+    }
+
+    private long compter(UUID docteurId, FiltreFileDuMedecin perimetre,
+                         DocteurStatus statut) {
+        return detailRepository.count(SpecificationFileDuMedecin.filtrer(
+                docteurId, LocalDate.now(), joursAvantAlerte,
+                new FiltreFileDuMedecin(perimetre.annee(), perimetre.lot(),
+                        statut.valeur(), perimetre.statutDemande(),
+                        perimetre.urgents(), perimetre.enRetard(),
+                        perimetre.demandes(), null)));
+    }
+
+    /**
+     * Les lots présents dans la file du médecin.
+     *
+     * <p>Pour que le filtre par lot n'offre que des choix qui existent. Il se
+     * déduisait des lignes reçues, ce qui était juste tant que la file
+     * descendait d'un bloc : depuis qu'elle est paginée, il n'aurait proposé
+     * que les lots de la première page.</p>
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> lotsDeLaFile(UUID docteurId, Integer annee) {
+        return detailRepository.findAll(SpecificationFileDuMedecin.filtrer(
+                        docteurId, LocalDate.now(), joursAvantAlerte,
+                        new FiltreFileDuMedecin(annee, null, null, null,
+                                null, null, null, null)))
+                .stream()
+                .map(d -> d.getTestOrderAssignment() == null
+                        ? null : d.getTestOrderAssignment().getCode())
+                .filter(c -> c != null && !c.isBlank())
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
     /** Combien de dossiers de la file précèdent l'année demandée. */
     @Override
     @Transactional(readOnly = true)
     public long arriereDuMedecin(UUID docteurId, int annee) {
         return detailRepository.compterAnterieures(
                 docteurId, LocalDate.now(), LocalDate.of(annee, 1, 1).atStartOfDay());
+    }
+
+    /**
+     * L'état du compte rendu de chaque demande d'un lot de lignes.
+     *
+     * <p>Une seule requête : un appel par ligne ferait une trentaine
+     * d'allers-retours pour un écran d'accueil.</p>
+     */
+    private java.util.Map<UUID, String> etatsDesComptesRendus(
+            java.util.List<TestOrderAssignmentDetail> lignes) {
+        var idsDemandes = lignes.stream()
+                .map(TestOrderAssignmentDetail::getTestOrder)
+                .filter(java.util.Objects::nonNull)
+                .map(TestOrder::getId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        if (idsDemandes.isEmpty()) return java.util.Map.of();
+        return reportRepository.findByTestOrder_IdIn(idsDemandes).stream()
+                .filter(r -> r.getTestOrder() != null && r.getStatus() != null)
+                .collect(java.util.stream.Collectors.toMap(
+                        r -> r.getTestOrder().getId(),
+                        r -> r.getStatus().name(),
+                        (a, b) -> a));
     }
 
     /** Le médecin d'une ligne d'affectation, nom de famille en tête. */
@@ -383,23 +508,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
                         LocalDate.of(annee, 1, 1).atStartOfDay(),
                         LocalDate.of(annee + 1, 1, 1).atStartOfDay());
 
-        // Les comptes rendus en une seule requête : un par ligne ferait une
-        // trentaine d'allers-retours pour un écran d'accueil.
-        var idsDemandes = lignes.stream()
-                .map(TestOrderAssignmentDetail::getTestOrder)
-                .filter(java.util.Objects::nonNull)
-                .map(TestOrder::getId)
-                .filter(java.util.Objects::nonNull)
-                .distinct()
-                .toList();
-        java.util.Map<UUID, String> etatsComptesRendus = idsDemandes.isEmpty()
-                ? java.util.Map.of()
-                : reportRepository.findByTestOrder_IdIn(idsDemandes).stream()
-                        .filter(r -> r.getTestOrder() != null && r.getStatus() != null)
-                        .collect(java.util.stream.Collectors.toMap(
-                                r -> r.getTestOrder().getId(),
-                                r -> r.getStatus().name(),
-                                (a, b) -> a));
+        var etatsComptesRendus = etatsDesComptesRendus(lignes);
 
         return lignes.stream()
                 .map(d -> versDemandeDuMedecin(d, etatsComptesRendus))

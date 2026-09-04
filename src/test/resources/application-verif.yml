@@ -1,0 +1,20 @@
+# Profil de vérification : une base PostgreSQL réelle, montée à la main.
+#
+# Testcontainers ne trouve pas le socket de Docker Desktop depuis un conteneur,
+# ce qui prive toute cette suite de base de données. Ce profil permet de pointer
+# les tests sur une base démarrée séparément, le temps que l'intégration
+# continue en fournisse une.
+spring:
+  datasource:
+    url: ${VERIF_DB_URL:jdbc:postgresql://pg-verif:5432/labo}
+    username: ${VERIF_DB_USER:labo}
+    password: ${VERIF_DB_PASSWORD:labo}
+  # Flyway est éteint : les migrations ne savent pas bâtir la base depuis rien
+  # — V10 suppose des tables que le dump Laravel apportait, et que le dépôt ne
+  # contient pas. Le schéma de cette base de vérification est copié de la
+  # production, structure seule.
+  flyway:
+    enabled: false
+  jpa:
+    hibernate:
+      ddl-auto: validate

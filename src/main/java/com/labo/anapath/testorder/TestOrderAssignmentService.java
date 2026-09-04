@@ -83,6 +83,16 @@ public interface TestOrderAssignmentService {
     java.util.List<DemandeDuMedecinDto> fileDuMedecin(java.util.UUID docteurId,
                                                       Integer annee);
 
+    /** Une page de la file, filtrée au serveur. */
+    com.labo.anapath.common.dto.PageResponse<DemandeDuMedecinDto> pageDeLaFile(
+            java.util.UUID docteurId, FiltreFileDuMedecin filtre, int page, int taille);
+
+    /** Les lots présents dans la file, pour n'offrir au filtre que ce qui existe. */
+    java.util.List<String> lotsDeLaFile(java.util.UUID docteurId, Integer annee);
+
+    /** La répartition du périmètre courant entre les trois états. */
+    ResumeFileDto resumeDeLaFile(java.util.UUID docteurId, FiltreFileDuMedecin filtre);
+
     /** Combien de dossiers de sa file datent d'avant l'année donnée. */
     long arriereDuMedecin(java.util.UUID docteurId, int annee);
 
