@@ -111,14 +111,25 @@ public class DashboardServiceImpl implements DashboardService {
         long contrats = contratRepository.countByBranchId(branchId);
         long tests = labTestRepository.countByBranchId(branchId);
         long toCount = testOrderRepository.countByBranchId(branchId);
+        // Les quatre indicateurs de charge portent sur l'année en cours.
+        //
+        // Ils comptaient tout l'historique, et disaient donc surtout l'arriéré :
+        // 331 dossiers sans compte rendu dont 237 antérieurs à cette année, 242
+        // demandes en attente qui traînent depuis 2023. Un indicateur de charge
+        // qui ne peut plus redescendre n'est plus lu, et le travail du jour s'y
+        // perdait. Les totaux cumulés — patients, contrats, examens — restent
+        // cumulés juste au-dessus : eux répondent à « combien depuis toujours ».
+        LocalDateTime debutDAnnee =
+                java.time.LocalDate.now().withDayOfYear(1).atStartOfDay();
         // finishTest = reports livrés, noFinishTest = reports non livrés
-        long finishTest = reportRepository.countByBranchIdAndIsDelivered(branchId, true);
-        long noFinishTest = reportRepository.countByBranchIdAndIsDelivered(branchId, false);
+        long finishTest = reportRepository.countByBranchIdAndIsDelivered(branchId, true, debutDAnnee);
+        long noFinishTest = reportRepository.countByBranchIdAndIsDelivered(branchId, false, debutDAnnee);
         // noSaveTest = test_orders sans report
-        long noSaveTest = testOrderRepository.countByBranchIdAndReportIsNull(branchId);
+        long noSaveTest = testOrderRepository.countByBranchIdAndReportIsNull(branchId, debutDAnnee);
         // noFinishWeek = testorders pending depuis > 3 semaines
         LocalDateTime threeWeeksAgo = LocalDateTime.now().minusWeeks(3);
-        long noFinishWeek = testOrderRepository.countByBranchIdAndStatusPendingAndCreatedAtBefore(branchId, threeWeeksAgo);
+        long noFinishWeek = testOrderRepository.countByBranchIdAndStatusPendingAndCreatedAtBefore(
+                branchId, threeWeeksAgo, debutDAnnee);
 
         return new DashboardDto.SecretariatStats(patients, contrats, tests, toCount,
                 finishTest, noFinishTest, noSaveTest, noFinishWeek);

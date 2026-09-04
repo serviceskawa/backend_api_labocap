@@ -448,6 +448,8 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
                 etatCompteRendu,
                 estEnRetard(demande, etatCompteRendu),
                 estMarqueUrgent(demande),
+                demande == null || demande.getCreatedAt() == null
+                        ? null : demande.getCreatedAt().getYear(),
                 decoderEtiquettes(d.getLabels()),
                 d.getNote(),
                 lot == null ? null : lot.getCode(),

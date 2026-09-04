@@ -84,16 +84,34 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
                                              @Param("start") LocalDateTime start,
                                              @Param("end") LocalDateTime end);
 
+    /**
+     * Les dossiers sans aucun compte rendu, ouverts depuis {@code depuis}.
+     *
+     * <p>La borne existe parce que le chiffre servait d'indicateur de charge et
+     * n'en était plus un : il comptait 331 dossiers, dont 237 ouverts avant
+     * cette année. Le travail à faire aujourd'hui s'y perdait, et le nombre ne
+     * pouvait plus redescendre.</p>
+     */
     @Query(value = """
             SELECT COUNT(*) FROM test_orders t
             WHERE t.branch_id = :branchId AND t.deleted_at IS NULL
+              AND t.created_at >= :depuis
               AND NOT EXISTS (SELECT 1 FROM reports r WHERE r.test_order_id = t.id AND r.deleted_at IS NULL)
             """, nativeQuery = true)
-    long countByBranchIdAndReportIsNull(@Param("branchId") UUID branchId);
+    long countByBranchIdAndReportIsNull(@Param("branchId") UUID branchId,
+                                        @Param("depuis") LocalDateTime depuis);
 
-    @Query("SELECT COUNT(t) FROM TestOrder t WHERE t.branchId = :branchId AND t.status = com.labo.anapath.testorder.TestOrderStatus.PENDING AND t.createdAt < :before")
+    /** Les demandes en attente depuis trop longtemps, ouvertes depuis {@code depuis}. */
+    @Query("""
+            SELECT COUNT(t) FROM TestOrder t
+            WHERE t.branchId = :branchId
+              AND t.status = com.labo.anapath.testorder.TestOrderStatus.PENDING
+              AND t.createdAt < :before
+              AND t.createdAt >= :depuis
+            """)
     long countByBranchIdAndStatusPendingAndCreatedAtBefore(@Param("branchId") UUID branchId,
-                                                            @Param("before") LocalDateTime before);
+                                                            @Param("before") LocalDateTime before,
+                                                            @Param("depuis") LocalDateTime depuis);
 
     /**
      * Demandes d'examen sans macro depuis plus de {@code days} jours (alerte
