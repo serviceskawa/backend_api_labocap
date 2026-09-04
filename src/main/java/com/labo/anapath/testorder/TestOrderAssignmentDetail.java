@@ -11,6 +11,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "test_order_assignment_details")
 @Getter
@@ -57,6 +59,22 @@ public class TestOrderAssignmentDetail extends AuditableEntity {
      */
     @Column(name = "docteur_status", nullable = false, length = 20)
     private String docteurStatus = DocteurStatus.A_TRAITER.valeur();
+
+    /**
+     * Le moment où cette affectation a cédé la place à une autre.
+     *
+     * <p>{@code null} tant qu'elle vaut. Une demande réaffectée garde sa ligne
+     * précédente, datée : c'est elle qui dit à qui le dossier était confié
+     * d'abord, et le supprimer effacerait la seule trace de ce qu'on a fait du
+     * dossier avant qu'il n'arrive chez le médecin actuel.</p>
+     */
+    @Column(name = "remplacee_le")
+    private LocalDateTime remplaceeLe;
+
+    /** Vraie tant que cette ligne désigne le médecin en charge du dossier. */
+    public boolean estCourante() {
+        return remplaceeLe == null && getDeletedAt() == null;
+    }
 
     /** Le statut, relu. Une valeur inconnue rend « à traiter ». */
     public DocteurStatus statutDuMedecin() {

@@ -88,6 +88,23 @@ public class TestOrderAssignmentController {
      * sélecteurs. Sous la permission d'écriture : cet écran n'existe que pour
      * modifier.</p>
      */
+    /**
+     * À qui une demande a été confiée, dans l'ordre.
+     *
+     * <p>Sous la permission de lecture : savoir qui détient un dossier est une
+     * consultation, y compris pour qui n'a pas le droit de composer des lots.
+     * C'est aussi ce que l'écran interroge avant de proposer une réaffectation,
+     * pour pouvoir nommer le médecin en place dans sa question.</p>
+     */
+    @GetMapping("/demandes/{demandeId}/historique")
+    @PreAuthorize("hasAuthority('view-test-order-assignments')")
+    public ResponseEntity<ApiResponse<HistoriqueAffectationDto>> historique(
+            @PathVariable UUID demandeId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                assignmentService.historiqueDe(demandeId, principal.getBranchId())));
+    }
+
     @GetMapping("/labels/catalogue")
     @PreAuthorize("hasAuthority('manage-test-order-assignments')")
     public ResponseEntity<ApiResponse<java.util.List<EtiquetteDto>>> catalogue(

@@ -23,4 +23,17 @@ public class AssignmentDetailRequestDto {
 
     private String note;
     private LocalDate date;
+
+    /**
+     * L'accord explicite pour retirer la demande au médecin qui l'a.
+     *
+     * <p>Faux par défaut, et le serveur refuse sans lui : la réaffectation est
+     * permise, elle ne doit simplement pas se produire par inadvertance. Poser
+     * la question côté écran seulement laisserait passer tout appel qui ne
+     * passe pas par cet écran.</p>
+     *
+     * <p>Sans effet quand la demande n'est affectée à personne, ou qu'elle est
+     * déjà dans ce lot.</p>
+     */
+    private boolean confirmerReaffectation;
 }

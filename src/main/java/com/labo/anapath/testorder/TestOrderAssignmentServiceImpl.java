@@ -5,6 +5,7 @@ import com.labo.anapath.common.NomComplet;
 import com.labo.anapath.branch.Branch;
 import com.labo.anapath.branch.BranchRepository;
 import com.labo.anapath.common.dto.PageResponse;
+import com.labo.anapath.common.exception.ReaffectationNonConfirmeeException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.report.TestPathologyMacro;
 import com.labo.anapath.report.TestPathologyMacroRepository;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -85,10 +87,41 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
         TestOrder order = testOrderRepository.findById(dto.getTestOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", dto.getTestOrderId()));
 
-        boolean alreadyAssigned = detailRepository.existsByTestOrderId(dto.getTestOrderId());
+        Optional<TestOrderAssignmentDetail> courante =
+                detailRepository.findByTestOrderId(dto.getTestOrderId());
+        boolean memeLot = courante
+                .map(c -> c.getTestOrderAssignment() != null
+                        && assignmentId.equals(c.getTestOrderAssignment().getId()))
+                .orElse(false);
 
         TestOrderAssignmentDetail detail;
-        if (!alreadyAssigned) {
+        if (memeLot) {
+            detail = courante.get();
+            // Une demande déjà présente dans ce lot voyait ses étiquettes
+            // ignorées : ni enregistrées sur la ligne, ni versées au catalogue.
+            // Or c'est précisément en la reprenant qu'on précise quels
+            // prélèvements partent cette fois-ci.
+            if (dto.getLabels() != null && !dto.getLabels().isEmpty()) {
+                detail.setLabels(encoderEtiquettes(dto.getLabels()));
+                enrichirLeCatalogue(detail.getBranchId(), dto.getLabels());
+                detailRepository.save(detail);
+            }
+        } else {
+            if (courante.isPresent()) {
+                if (!dto.isConfirmerReaffectation()) {
+                    throw new ReaffectationNonConfirmeeException(
+                            order.getCode(), medecinDe(courante.get()));
+                }
+                // La ligne précédente reste, datée. C'est elle qui dira plus
+                // tard à qui le dossier avait d'abord été confié — l'effacer
+                // rendrait l'historique muet sur tout ce qui précède le
+                // médecin actuel.
+                TestOrderAssignmentDetail precedente = courante.get();
+                precedente.setRemplaceeLe(LocalDateTime.now());
+                detailRepository.save(precedente);
+                log.info("Demande {} réaffectée : {} → lot {}",
+                        order.getCode(), medecinDe(precedente), assignment.getCode());
+            }
             detail = new TestOrderAssignmentDetail();
             detail.setBranchId(assignment.getBranchId());
             detail.setTestOrderAssignment(assignment);
@@ -98,18 +131,6 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
             detail.setLabels(encoderEtiquettes(dto.getLabels()));
             enrichirLeCatalogue(assignment.getBranchId(), dto.getLabels());
             detailRepository.save(detail);
-        } else {
-            detail = detailRepository.findByTestOrderId(dto.getTestOrderId())
-                    .orElseGet(TestOrderAssignmentDetail::new);
-            // Une demande déjà affectée voyait ses étiquettes ignorées : ni
-            // enregistrées sur la ligne, ni versées au catalogue. Or c'est
-            // précisément en la réaffectant qu'on précise quels prélèvements
-            // partent cette fois-ci.
-            if (dto.getLabels() != null && !dto.getLabels().isEmpty()) {
-                detail.setLabels(encoderEtiquettes(dto.getLabels()));
-                enrichirLeCatalogue(detail.getBranchId(), dto.getLabels());
-                detailRepository.save(detail);
-            }
         }
 
         Optional<TestPathologyMacro> existingMacro = macroRepository.findByTestOrderId(order.getId());
@@ -127,7 +148,58 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
         }
 
         return new AssignmentDetailResponseDto(detail.getId(), order.getId(), order.getCode(),
-                statutDe(order), decoderEtiquettes(detail.getLabels()), detail.getNote());
+                statutDe(order), decoderEtiquettes(detail.getLabels()), detail.getNote(),
+                detail.getRemplaceeLe());
+    }
+
+    /** Le médecin d'une ligne d'affectation, nom de famille en tête. */
+    private static String medecinDe(TestOrderAssignmentDetail detail) {
+        TestOrderAssignment lot = detail.getTestOrderAssignment();
+        if (lot == null || lot.getUser() == null) return "un médecin inconnu";
+        return NomComplet.de(lot.getUser().getLastname(), lot.getUser().getFirstname());
+    }
+
+    /**
+     * À qui la demande a été confiée, dans l'ordre.
+     *
+     * <p>Rend une liste vide plutôt qu'une erreur pour une demande jamais
+     * affectée : au comptoir, c'est le cas de toutes celles qui viennent
+     * d'arriver.</p>
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public HistoriqueAffectationDto historiqueDe(UUID demandeId, UUID branchId) {
+        TestOrder demande = testOrderRepository.findByIdAndBranchId(demandeId, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", demandeId));
+        List<HistoriqueAffectationDto.EtapeAffectationDto> etapes =
+                detailRepository.historiqueDe(demandeId).stream()
+                        .map(this::versEtape)
+                        .toList();
+        return new HistoriqueAffectationDto(demandeId, demande.getCode(), etapes);
+    }
+
+    private HistoriqueAffectationDto.EtapeAffectationDto versEtape(
+            TestOrderAssignmentDetail detail) {
+        TestOrderAssignment lot = detail.getTestOrderAssignment();
+        User medecin = lot == null ? null : lot.getUser();
+        return new HistoriqueAffectationDto.EtapeAffectationDto(
+                detail.getId(),
+                lot == null ? null : lot.getId(),
+                lot == null ? null : lot.getCode(),
+                lot == null ? null : lot.getDate(),
+                medecin == null ? null : medecin.getId(),
+                medecin == null ? null
+                        : NomComplet.de(medecin.getLastname(), medecin.getFirstname()),
+                // Le nom de qui a composé le lot, quand l'utilisateur existe
+                // encore. Un compte supprimé ne doit pas faire disparaître
+                // l'étape : c'est le transfert qu'on trace, pas l'agent.
+                lot == null || lot.getCreatedBy() == null ? null
+                        : userRepository.findById(lot.getCreatedBy())
+                                .map(u -> NomComplet.de(u.getLastname(), u.getFirstname()))
+                                .orElse(null),
+                detail.getCreatedAt(),
+                detail.getRemplaceeLe(),
+                detail.getDocteurStatus());
     }
 
     @Override
@@ -143,7 +215,8 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
                         d.getTestOrderCode(),
                         statutDe(d.getTestOrder()),
                         decoderEtiquettes(d.getLabels()),
-                        d.getNote()))
+                        d.getNote(),
+                        d.getRemplaceeLe()))
                 .toList();
         return new AssignmentPrintDto(
                 toDto(assignment),
@@ -200,7 +273,8 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
                 detail.getTestOrderCode(),
                 statutDe(detail.getTestOrder()),
                 decoderEtiquettes(detail.getLabels()),
-                detail.getNote());
+                detail.getNote(),
+                detail.getRemplaceeLe());
     }
 
     @Override
