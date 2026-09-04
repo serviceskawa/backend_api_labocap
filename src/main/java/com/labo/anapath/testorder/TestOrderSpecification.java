@@ -80,6 +80,18 @@ public class TestOrderSpecification {
             if (filter.getIsUrgent() != null) {
                 predicates.add(cb.equal(root.get("isUrgent"), filter.getIsUrgent()));
             }
+            if (filter.getAnnee() != null) {
+                // Le préfixe du code — « 26- » — et non l'année de création :
+                // 328 dossiers repris de l'ancien système portent un code dont
+                // l'année ne coïncide pas avec leur date d'insertion, et c'est
+                // le code que le laboratoire lit et prononce.
+                predicates.add(cb.like(root.get("code"),
+                        String.format("%02d-%%", filter.getAnnee() % 100)));
+            }
+            if (Boolean.TRUE.equals(filter.getEnCours())) {
+                predicates.add(root.get("status").in(
+                        TestOrderStatus.DELIVERED, TestOrderStatus.CANCELLED).not());
+            }
             if (filter.getFrom() != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("prelevementDate"), filter.getFrom()));
             }
