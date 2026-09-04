@@ -123,8 +123,35 @@ public interface TestOrderAssignmentDetailRepository extends JpaRepository<TestO
               AND d.deletedAt IS NULL
               AND d.remplaceeLe IS NULL
               AND (d.docteurStatus <> 'termine' OR a.date >= :depuis)
+              AND (:debutAnnee IS NULL OR o.createdAt >= :debutAnnee)
+              AND (:finAnnee IS NULL OR o.createdAt < :finAnnee)
             ORDER BY a.date ASC, d.createdAt ASC
             """)
-    List<TestOrderAssignmentDetail> fileDuMedecin(@Param("docteurId") UUID docteurId,
-                                                  @Param("depuis") java.time.LocalDate depuis);
+    List<TestOrderAssignmentDetail> fileDuMedecin(
+            @Param("docteurId") UUID docteurId,
+            @Param("depuis") java.time.LocalDate depuis,
+            @Param("debutAnnee") java.time.LocalDateTime debutAnnee,
+            @Param("finAnnee") java.time.LocalDateTime finAnnee);
+
+    /**
+     * Combien de dossiers de la file datent d'avant l'année demandée.
+     *
+     * <p>Un simple nombre, parce que c'est tout ce dont l'écran a besoin pour
+     * proposer « + N des années précédentes ». Les rapatrier pour les compter
+     * ferait transiter, chez un médecin de production, trois mille cinq cents
+     * lignes qu'on n'affiche pas.</p>
+     */
+    @Query("""
+            SELECT COUNT(d) FROM TestOrderAssignmentDetail d
+            JOIN d.testOrderAssignment a
+            LEFT JOIN d.testOrder o
+            WHERE a.user.id = :docteurId
+              AND d.deletedAt IS NULL
+              AND d.remplaceeLe IS NULL
+              AND (d.docteurStatus <> 'termine' OR a.date >= :depuis)
+              AND (o.createdAt IS NULL OR o.createdAt < :debutAnnee)
+            """)
+    long compterAnterieures(@Param("docteurId") UUID docteurId,
+                            @Param("depuis") java.time.LocalDate depuis,
+                            @Param("debutAnnee") java.time.LocalDateTime debutAnnee);
 }
