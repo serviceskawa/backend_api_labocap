@@ -137,4 +137,24 @@ public interface UserRepository extends JpaRepository<User, UUID> {
             ORDER BY u.lastname, u.firstname
             """)
     List<User> findSignataires();
+
+    /**
+     * Les personnes qui exercent au soin : médecins et techniciens.
+     *
+     * <p>Ce sont elles qui figurent dans le fil de chaque dossier, qu'elles y
+     * soient affectées ou non. La discussion porte des échanges cliniques, et
+     * un technicien qui n'a pas composé le lot peut avoir la lame sous les
+     * yeux — l'y faire entrer par une affectation serait un détour.</p>
+     *
+     * <p>Les comptes désactivés sont écartés, à la différence de
+     * {@link #findSignataires()} : là il s'agissait de nommer qui avait signé
+     * autrefois, ici de désigner qui l'on peut interpeller aujourd'hui.</p>
+     */
+    @Query("""
+            SELECT DISTINCT u FROM User u JOIN u.roles r
+            WHERE r.slug IN ('docteur', 'laborantin')
+              AND u.deletedAt IS NULL AND u.isActive = true
+            ORDER BY u.lastname, u.firstname
+            """)
+    List<User> findMetiersDuSoin();
 }

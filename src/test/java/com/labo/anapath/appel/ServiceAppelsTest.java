@@ -48,6 +48,7 @@ class ServiceAppelsTest {
     @Mock private JournalAppelRepository journal;
     @Mock private NotificationsPush notifications;
     @Mock private MobileDeviceRepository appareils;
+    @Mock private com.labo.anapath.discussion.DiscussionService discussionService;
 
     /** Le vrai registre : c'est lui qui porte l'état, le simuler ne prouverait rien. */
     private RegistreDesAppels registre;
@@ -65,7 +66,19 @@ class ServiceAppelsTest {
     void poser() {
         registre = new RegistreDesAppels(new com.fasterxml.jackson.databind.ObjectMapper());
         service = new ServiceAppels(registre, discussions, demandes, utilisateurs,
-                journal, notifications, appareils);
+                journal, notifications, appareils, discussionService);
+        // Appeler ne suppose plus d'être affecté au dossier, mais d'exercer au
+        // soin. L'étranger de ces cas n'est donc plus quelqu'un d'absent du
+        // fil — il n'y a plus d'absent — mais quelqu'un du comptoir.
+        org.mockito.Mockito.lenient()
+                .when(discussionService.exerceUnMetierDuSoin(any())).thenReturn(false);
+        org.mockito.Mockito.lenient()
+                .when(discussionService.exerceUnMetierDuSoin(MEDECIN)).thenReturn(true);
+        org.mockito.Mockito.lenient()
+                .when(discussionService.exerceUnMetierDuSoin(LABO)).thenReturn(true);
+        org.mockito.Mockito.lenient()
+                .when(utilisateurs.findMetiersDuSoin())
+                .thenReturn(List.of(quelquun(MEDECIN), quelquun(LABO)));
 
         fil = new Discussion(DOSSIER, BRANCHE);
         fil.getParticipants().add(new DiscussionParticipant(fil, MEDECIN, "medecin"));
@@ -83,8 +96,17 @@ class ServiceAppelsTest {
         when(appareils.jetonsDe(any())).thenReturn(List.of());
     }
 
+    /** Une personne du soin, réduite à ce que l'appel lui demande : son identité. */
+    private User quelquun(UUID id) {
+        User u = new User();
+        u.setId(id);
+        u.setLastname("AGBO");
+        u.setFirstname("Marc");
+        return u;
+    }
+
     @Test
-    @DisplayName("on ne peut pas appeler sur un fil dont on n'est pas")
+    @DisplayName("qui n'exerce pas au soin ne peut pas appeler")
     void etrangerNePeutPasAppeler() {
         service.appeler(ETRANGER, BRANCHE, DOSSIER, List.of());
 
@@ -95,7 +117,7 @@ class ServiceAppelsTest {
     }
 
     @Test
-    @DisplayName("on ne peut pas sonner quelqu'un d'étranger au fil")
+    @DisplayName("on ne sonne pas quelqu'un qui n'exerce pas au soin")
     void onNeSonnePasUnEtranger() {
         service.appeler(MEDECIN, BRANCHE, DOSSIER, List.of(ETRANGER));
 
@@ -104,7 +126,7 @@ class ServiceAppelsTest {
     }
 
     @Test
-    @DisplayName("appeler sans nommer personne sonne tout le fil")
+    @DisplayName("appeler sans nommer personne sonne tout le soin")
     void appelDeGroupe() {
         service.appeler(MEDECIN, BRANCHE, DOSSIER, List.of());
 
@@ -219,10 +241,17 @@ class ServiceAppelsTest {
     @Test
     @DisplayName("la maille s'arrête à quatre")
     void limiteDeQuatre() {
-        for (int i = 0; i < 6; i++) {
-            fil.getParticipants().add(
-                    new DiscussionParticipant(fil, UUID.randomUUID(), "technicien"));
+        // Sept personnes au soin : c'est l'ordre de grandeur du laboratoire
+        // depuis que le fil les montre toutes, et non plus les deux du dossier.
+        java.util.List<User> soin = new java.util.ArrayList<>(
+                List.of(quelquun(MEDECIN), quelquun(LABO)));
+        for (int i = 0; i < 5; i++) {
+            UUID id = UUID.randomUUID();
+            org.mockito.Mockito.lenient()
+                    .when(discussionService.exerceUnMetierDuSoin(id)).thenReturn(true);
+            soin.add(quelquun(id));
         }
+        when(utilisateurs.findMetiersDuSoin()).thenReturn(soin);
 
         service.appeler(MEDECIN, BRANCHE, DOSSIER, List.of());
         Appel appel = registre.tous().iterator().next();
@@ -231,6 +260,44 @@ class ServiceAppelsTest {
         // liaisons montantes et c'est le réseau du plus faible qui déciderait
         // pour tout le monde.
         assertThat(appel.getConviés()).hasSize(Appel.MAXIMUM - 1);
+    }
+
+    @Test
+    @DisplayName("un médecin non affecté peut appeler sur le dossier")
+    void leNonAffectePeutAppeler() {
+        // Il n'est pas participant enregistré du fil — ni médecin affecté, ni
+        // composeur du lot — et c'est précisément le cas qu'on ouvre : le fil
+        // le montre, il doit donc pouvoir appeler ce qu'il voit.
+        UUID confrere = UUID.randomUUID();
+        org.mockito.Mockito.lenient()
+                .when(discussionService.exerceUnMetierDuSoin(confrere)).thenReturn(true);
+        when(utilisateurs.findMetiersDuSoin())
+                .thenReturn(List.of(quelquun(confrere), quelquun(MEDECIN)));
+
+        service.appeler(confrere, BRANCHE, DOSSIER, List.of());
+
+        assertThat(registre.tous()).hasSize(1);
+        assertThat(registre.tous().iterator().next().getConviés()).containsExactly(MEDECIN);
+    }
+
+    @Test
+    @DisplayName("une sélection explicite est plafonnée elle aussi")
+    void selectionExpliciteAussiPlafonnee() {
+        // Le groupe par défaut était borné, pas la sélection nommée : on
+        // pouvait donc monter à sept en les choisissant un à un, et c'est le
+        // réseau du plus faible qui aurait décidé pour tout le monde.
+        java.util.List<UUID> cibles = new java.util.ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            UUID id = UUID.randomUUID();
+            org.mockito.Mockito.lenient()
+                    .when(discussionService.exerceUnMetierDuSoin(id)).thenReturn(true);
+            cibles.add(id);
+        }
+
+        service.appeler(MEDECIN, BRANCHE, DOSSIER, cibles);
+
+        assertThat(registre.tous().iterator().next().getConviés())
+                .hasSize(Appel.MAXIMUM - 1);
     }
 
     @Test

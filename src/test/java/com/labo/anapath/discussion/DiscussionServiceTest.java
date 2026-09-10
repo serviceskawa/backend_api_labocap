@@ -429,4 +429,25 @@ class DiscussionServiceTest {
         assertThatThrownBy(() -> service.fil(DEMANDE, AUTRUI, BRANCHE))
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
     }
+
+    @Test
+    @DisplayName("lire un fil n'y inscrit pas — écrire, si")
+    void lireNInscritPas() {
+        // L'inscription décide de qui reçoit une notification. Elle se faisait
+        // à l'ouverture, ce qui était sans conséquence tant que deux personnes
+        // seulement pouvaient ouvrir un fil ; depuis qu'il se montre à tout le
+        // soin, un coup d'œil abonnait pour des mois.
+        service.fil(DEMANDE, AUTEUR, BRANCHE);
+        long apresLecture = fil.getParticipants().stream()
+                .filter(p -> p.getUserId().equals(AUTEUR)).count();
+
+        service.poster(DEMANDE,
+                new DiscussionDtos.NouveauMessage("texte", "Je regarde la lame.", null),
+                AUTEUR, BRANCHE);
+        long apresEcriture = fil.getParticipants().stream()
+                .filter(p -> p.getUserId().equals(AUTEUR)).count();
+
+        assertThat(apresLecture).isZero();
+        assertThat(apresEcriture).isOne();
+    }
 }

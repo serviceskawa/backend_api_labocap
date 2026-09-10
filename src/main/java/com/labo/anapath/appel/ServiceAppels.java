@@ -51,6 +51,15 @@ public class ServiceAppels {
     private final MobileDeviceRepository appareils;
 
     /**
+     * Pour la seule question « cette personne exerce-t-elle au soin ».
+     *
+     * <p>Empruntée au service du fil plutôt que réécrite : les deux règles
+     * avaient déjà divergé une fois, l'appel exigeant une affectation que le
+     * fil n'exigeait pas.</p>
+     */
+    private final com.labo.anapath.discussion.DiscussionService discussionService;
+
+    /**
      * Sonne les personnes visées, ou tout le fil si aucune n'est nommée.
      *
      * <p>Un appel n'existe qu'une fois par dossier : si quelqu'un appelle alors
@@ -81,7 +90,14 @@ public class ServiceAppels {
         Appel appel = new Appel(dossier, branche, qui);
         List<UUID> destinataires = cibles.isEmpty()
                 ? participants(fil, qui)
-                : cibles.stream().filter(c -> !c.equals(qui) && estParticipant(fil, c)).toList();
+                // Le même plafond que le groupe par défaut : une sélection
+                // explicite de sept personnes monterait une maille que le
+                // réseau du plus faible ne tiendrait pas.
+                : cibles.stream()
+                        .filter(c -> !c.equals(qui) && estParticipant(fil, c))
+                        .distinct()
+                        .limit(Appel.MAXIMUM - 1L)
+                        .toList();
         if (destinataires.isEmpty()) {
             log.debug("Appel sans destinataire sur le fil {}", dossier);
             return;
@@ -331,14 +347,34 @@ public class ServiceAppels {
         }
     }
 
+    /**
+     * Peut-on appeler, et être appelé, au sujet de ce dossier ?
+     *
+     * <p>La même question que pour le fil, et donc la même réponse : le
+     * métier. Cette méthode exigeait d'être participant enregistré du fil,
+     * c'est-à-dire médecin affecté ou composeur du lot. Depuis que le fil
+     * montre tout le soin, un technicien pouvait y voir un confrère, le
+     * choisir, et l'appel était refusé sans que rien ne l'explique.</p>
+     *
+     * <p>Le paramètre {@code fil} n'est plus lu : il reste pour que la
+     * signature dise de quel dossier on parle, et parce que l'existence du fil
+     * conditionne encore l'appel.</p>
+     */
     private boolean estParticipant(Discussion fil, UUID qui) {
-        return fil.getParticipants().stream()
-                .anyMatch(p -> p.getUserId().equals(qui));
+        return discussionService.exerceUnMetierDuSoin(qui);
     }
 
+    /**
+     * Le groupe par défaut : tout le soin, sauf l'appelant.
+     *
+     * <p>Plafonné parce que la liaison est une maille — chaque téléphone parle
+     * à tous les autres, ce qui tient à quatre et pas au-delà. Le plafond
+     * n'était pas nécessaire tant qu'un fil comptait deux personnes ; il le
+     * devient dès qu'il en montre sept.</p>
+     */
     private List<UUID> participants(Discussion fil, UUID sauf) {
-        return fil.getParticipants().stream()
-                .map(DiscussionParticipant::getUserId)
+        return utilisateurs.findMetiersDuSoin().stream()
+                .map(com.labo.anapath.user.User::getId)
                 .filter(id -> !id.equals(sauf))
                 .distinct()
                 .limit(Appel.MAXIMUM - 1L)
