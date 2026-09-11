@@ -2,6 +2,7 @@ package com.labo.anapath.testorder;
 
 import com.labo.anapath.common.Discipline;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Getter;
@@ -67,6 +68,21 @@ public class TestOrderRequestDto {
 
     /** Option tarifaire spécifique au contrat. */
     private Boolean option;
+
+    /**
+     * L'établissement à facturer à la place du patient, s'il y en a un.
+     *
+     * <p>Les trois champs vont ensemble : sans nom, les deux autres sont
+     * ignorés et la facture reste au patient. Saisie libre — le laboratoire
+     * facture des cliniques qu'il ne reverra pas.</p>
+     */
+    @Size(max = 150, message = "Le nom de l'établissement à facturer est trop long")
+    private String factureANom;
+
+    private String factureAAdresse;
+
+    @Size(max = 50, message = "L'IFU est trop long")
+    private String factureAIfu;
 
     /** Analyses complémentaires affiliées (texte libre). */
     private String testAffiliate;
