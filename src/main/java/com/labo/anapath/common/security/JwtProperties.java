@@ -41,6 +41,17 @@ public class JwtProperties {
     private long refreshExpirationMs;
 
     /**
+     * La même fenêtre, pour un médecin.
+     *
+     * <p>Plus longue que celle des autres postes, et pour une raison de métier :
+     * un pathologiste lit une lame, rédige, revient à l'écran. Ces silences-là
+     * durent, et le déconnecter au milieu lui fait rouvrir une session pour
+     * reprendre une phrase. Au comptoir et au laboratoire, un poste inoccupé
+     * reste à portée de qui passe : la fenêtre y est deux fois plus courte.</p>
+     */
+    private long refreshExpirationMedecinMs = 3_600_000L;
+
+    /**
      * Durée de validité du jeton d'accès d'un appareil mobile.
      *
      * <p>Séparée de la web à dessein. Un téléphone n'est pas un poste laissé

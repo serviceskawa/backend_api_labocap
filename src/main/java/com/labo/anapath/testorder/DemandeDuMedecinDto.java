@@ -79,6 +79,17 @@ public record DemandeDuMedecinDto(
         boolean urgent,
 
         /**
+         * Où en est le travail du médecin — a_traiter, en_relecture, termine.
+         *
+         * <p>Déduit du compte rendu, comme les compteurs de l'accueil. Le champ
+         * {@code docteurStatus} juste au-dessus dit autre chose : un suivi
+         * qu'on coche à la main depuis le web, et que personne ne coche. Un
+         * médecin avait 172 dossiers marqués « à traiter » dont 165 étaient
+         * finis.</p>
+         */
+        String avancement,
+
+        /**
          * L'année d'ouverture du dossier.
          *
          * <p>Envoyée plutôt que déduite du code : le code porte bien l'année,

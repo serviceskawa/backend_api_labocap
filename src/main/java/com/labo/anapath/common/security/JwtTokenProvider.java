@@ -177,10 +177,24 @@ public class JwtTokenProvider {
      *                     pas les quinze minutes du poste de travail
      */
     public String generateRefreshToken(UUID userId, boolean pourAppareil) {
-        Date now = new Date();
-        Date expiry = new Date(now.getTime() + (pourAppareil
+        return generateRefreshToken(userId, java.time.Duration.ofMillis(pourAppareil
                 ? jwtProperties.getMobileRefreshExpirationMs()
                 : jwtProperties.getRefreshExpirationMs()));
+    }
+
+    /**
+     * Le jeton de rafraîchissement, avec une fenêtre choisie par l'appelant.
+     *
+     * <p>La durée est un argument et non une propriété lue ici : elle dépend du
+     * métier de la personne, ce que cette classe n'a pas à connaître. Elle
+     * frappe des jetons ; c'est le service d'authentification qui décide combien
+     * de temps une session peut rester silencieuse.</p>
+     *
+     * @param fenetre le temps d'inactivité au bout duquel la session se ferme
+     */
+    public String generateRefreshToken(UUID userId, java.time.Duration fenetre) {
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + fenetre.toMillis());
 
         return Jwts.builder()
                 .id(UUID.randomUUID().toString())

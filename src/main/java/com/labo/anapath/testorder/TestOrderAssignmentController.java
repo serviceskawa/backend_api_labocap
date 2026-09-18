@@ -88,12 +88,13 @@ public class TestOrderAssignmentController {
             @RequestParam(required = false) Boolean enRetard,
             @RequestParam(required = false) java.util.List<UUID> demandes,
             @RequestParam(required = false) Boolean exclureTermines,
+            @RequestParam(required = false) String avancement,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
                 assignmentService.pageDeLaFile(principal.getId(),
                         new FiltreFileDuMedecin(annee, lot, docteurStatus,
                                 statutDemande, urgents, enRetard, demandes,
-                                exclureTermines),
+                                exclureTermines, avancement),
                         page, size)));
     }
 
@@ -124,11 +125,12 @@ public class TestOrderAssignmentController {
             @RequestParam(required = false) Boolean urgents,
             @RequestParam(required = false) Boolean enRetard,
             @RequestParam(required = false) java.util.List<UUID> demandes,
+            @RequestParam(required = false) String avancement,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
                 assignmentService.resumeDeLaFile(principal.getId(),
                         new FiltreFileDuMedecin(annee, lot, null, statutDemande,
-                                urgents, enRetard, demandes, null))));
+                                urgents, enRetard, demandes, null, avancement))));
     }
 
     /**

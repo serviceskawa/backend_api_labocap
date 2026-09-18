@@ -76,19 +76,31 @@ final class SpecificationFileDuMedecin {
                 predicats.add(demande.get("status").in(
                         TestOrderStatus.DELIVERED, TestOrderStatus.CANCELLED).not());
             }
+            var etape = Avancement.depuis(filtre.avancement());
+            if (etape != null) {
+                // Une sous-requête par état plutôt qu'une jointure : une demande
+                // peut porter plusieurs comptes rendus, et une jointure la
+                // ferait paraître autant de fois dans la page.
+                predicats.add(switch (etape) {
+                    case A_TRAITER -> cb.not(cb.exists(comptesRendus(
+                            requete, cb, demande, ReportStatus.PENDING_REVIEW,
+                            ReportStatus.VALIDATED, ReportStatus.DELIVERED)));
+                    case EN_RELECTURE -> cb.and(
+                            cb.exists(comptesRendus(requete, cb, demande,
+                                    ReportStatus.PENDING_REVIEW)),
+                            cb.not(cb.exists(comptesRendus(requete, cb, demande,
+                                    ReportStatus.VALIDATED, ReportStatus.DELIVERED))));
+                    case TERMINE -> cb.exists(comptesRendus(requete, cb, demande,
+                            ReportStatus.VALIDATED, ReportStatus.DELIVERED));
+                });
+            }
             if (Boolean.TRUE.equals(filtre.enRetard())) {
                 predicats.add(cb.lessThan(demande.get("createdAt"),
                         aujourdhui.minusDays(joursAvantAlerte).atStartOfDay()));
                 // Un compte rendu validé ou remis solde le retard, quel que
                 // soit l'âge du dossier.
-                var sousRequete = requete.subquery(Long.class);
-                var compteRendu = sousRequete.from(Report.class);
-                sousRequete.select(cb.literal(1L)).where(
-                        cb.equal(compteRendu.get("testOrder").get("id"), demande.get("id")),
-                        cb.isNull(compteRendu.get("deletedAt")),
-                        compteRendu.get("status").in(
-                                ReportStatus.VALIDATED, ReportStatus.DELIVERED));
-                predicats.add(cb.not(cb.exists(sousRequete)));
+                predicats.add(cb.not(cb.exists(comptesRendus(requete, cb, demande,
+                        ReportStatus.VALIDATED, ReportStatus.DELIVERED))));
             }
             if (filtre.demandes() != null) {
                 // Liste vide : aucune demande ne convient. « in() » sans valeur
@@ -99,6 +111,20 @@ final class SpecificationFileDuMedecin {
             }
             return cb.and(predicats.toArray(new Predicate[0]));
         };
+    }
+
+    /** Les comptes rendus vivants d'une demande, dans l'un de ces états. */
+    private static jakarta.persistence.criteria.Subquery<Long> comptesRendus(
+            jakarta.persistence.criteria.CommonAbstractCriteria requete,
+            jakarta.persistence.criteria.CriteriaBuilder cb,
+            jakarta.persistence.criteria.Path<?> demande,
+            ReportStatus... etats) {
+        var sousRequete = requete.subquery(Long.class);
+        var compteRendu = sousRequete.from(Report.class);
+        return sousRequete.select(cb.literal(1L)).where(
+                cb.equal(compteRendu.get("testOrder").get("id"), demande.get("id")),
+                cb.isNull(compteRendu.get("deletedAt")),
+                compteRendu.get("status").in((Object[]) etats));
     }
 
     private static boolean renseigne(String valeur) {

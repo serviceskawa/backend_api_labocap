@@ -171,12 +171,15 @@ public class AuthServiceImpl implements AuthService {
         tokenBlacklistService.blacklist(jti, oldRefreshExpiry);
         UUID userId = jwtTokenProvider.extractUserId(token);
         UserPrincipal userPrincipal = (UserPrincipal) customUserDetailsService.loadUserById(userId);
-        String newAccessToken = jwtTokenProvider.generateToken(userPrincipal);
-        String newRefreshToken = jwtTokenProvider.generateRefreshToken(userId);
-        long expiresIn = jwtProperties.getExpirationMs() / 1000;
-
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UnauthorizedException("Utilisateur non trouvé"));
+        String newAccessToken = jwtTokenProvider.generateToken(userPrincipal);
+        // La fenêtre se recalcule à chaque rafraîchissement : un rôle retiré ou
+        // accordé prend effet au renouvellement suivant, sans attendre une
+        // reconnexion.
+        String newRefreshToken =
+                jwtTokenProvider.generateRefreshToken(userId, fenetreDInactivite(user));
+        long expiresIn = jwtProperties.getExpirationMs() / 1000;
         if (!user.isActive()) {
             throw new UnauthorizedException("Compte désactivé.");
         }
@@ -361,6 +364,34 @@ public class AuthServiceImpl implements AuthService {
      *
      * @return hash hexadécimal SHA-256 du User-Agent, ou {@code null} si non disponible
      */
+    /**
+     * Le silence que la session d'une personne peut supporter.
+     *
+     * <p>Une heure pour un médecin, trente minutes pour tout le reste. Ce n'est
+     * pas une faveur : un pathologiste quitte son écran pour lire une lame et y
+     * revient, et le déconnecter au milieu lui fait rouvrir une session pour
+     * finir une phrase. Un poste du comptoir ou du laboratoire, lui, reste à
+     * portée de qui passe dans le couloir — la fenêtre y est deux fois plus
+     * courte, et c'est le sens de cette différence.</p>
+     *
+     * <p>Le rôle et non la permission : aucune permission ne distingue ces
+     * métiers, et en créer une pour cette seule durée ferait une notion de plus
+     * à tenir dans les rôles. Le slug est celui qu'emploient déjà les autres
+     * règles de métier du serveur.</p>
+     *
+     * <p>Recalculée à chaque rafraîchissement : une session ouverte avant un
+     * changement de rôle suit la nouvelle règle dès le renouvellement suivant,
+     * sans attendre une reconnexion.</p>
+     */
+    private java.time.Duration fenetreDInactivite(User utilisateur) {
+        boolean medecin = utilisateur.getRoles() != null
+                && utilisateur.getRoles().stream()
+                        .anyMatch(r -> "docteur".equalsIgnoreCase(r.getSlug()));
+        return java.time.Duration.ofMillis(medecin
+                ? jwtProperties.getRefreshExpirationMedecinMs()
+                : jwtProperties.getRefreshExpirationMs());
+    }
+
     private String getUserAgentHash() {
         try {
             ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
@@ -439,7 +470,8 @@ public class AuthServiceImpl implements AuthService {
 
         UserPrincipal userPrincipal = (UserPrincipal) customUserDetailsService.loadUserById(userId);
         String accessToken = jwtTokenProvider.generateToken(userPrincipal);
-        String refreshToken = jwtTokenProvider.generateRefreshToken(userId);
+        String refreshToken =
+                jwtTokenProvider.generateRefreshToken(userId, fenetreDInactivite(user));
         long expiresIn = jwtProperties.getExpirationMs() / 1000;
 
         user.setConnect(true);

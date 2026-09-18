@@ -73,7 +73,8 @@ app:
       ttl-days: ${INVOICE_SHARE_LINK_TTL_DAYS:60}
   jwt:
     secret: ${JWT_SECRET}
-    # Une session web s'éteint après 15 minutes sans activité.
+    # Une session web s'éteint après trente minutes sans activité, une heure
+    # pour un médecin — voir refresh-expiration-medecin-ms plus bas.
     #
     # Ce n'est pas ce jeton-là qui tenait la session : le front rafraîchit tout
     # seul sur 401, et le jeton de rafraîchissement vivait sept jours. Un poste
@@ -84,11 +85,18 @@ app:
     # fenêtre sur l'activité réelle. Cinq minutes laissent trois occasions de la
     # prolonger avant les quinze.
     expiration-ms: ${JWT_EXPIRATION:300000}
-    # La fenêtre elle-même. Le rafraîchissement fait tourner le jeton et
-    # blackliste l'ancien : chaque appel repart pour quinze minutes, et quinze
-    # minutes sans le moindre appel ferment la session côté serveur — quoi que
-    # fasse le navigateur.
-    refresh-expiration-ms: ${JWT_REFRESH:900000}
+    # La fenêtre elle-même, pour tous les métiers sauf le médecin. Le
+    # rafraîchissement fait tourner le jeton et blackliste l'ancien : chaque
+    # appel repart pour trente minutes, et trente minutes sans le moindre appel
+    # ferment la session côté serveur — quoi que fasse le navigateur.
+    refresh-expiration-ms: ${JWT_REFRESH:1800000}
+    # La même fenêtre pour un médecin : une heure.
+    #
+    # Un pathologiste quitte l'écran pour lire une lame et y revient ; ces
+    # silences-là durent, et le déconnecter au milieu lui fait rouvrir une
+    # session pour finir une phrase. Un poste du comptoir reste à portée de qui
+    # passe dans le couloir, d'où la fenêtre deux fois plus courte au-dessus.
+    refresh-expiration-medecin-ms: ${JWT_REFRESH_MEDECIN:3600000}
   storage:
     path: ${STORAGE_PATH:/tmp/labo/storage}
     encryption:

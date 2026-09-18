@@ -83,19 +83,24 @@ class FileDuMedecinSurBaseTest {
     void chaqueFiltreSeul() {
         assertThatCode(() -> {
             executer(FiltreFileDuMedecin.aucun());
-            executer(new FiltreFileDuMedecin(2026, null, null, null, null, null, null, null));
-            executer(new FiltreFileDuMedecin(null, "AF26-0001", null, null, null, null, null, null));
-            executer(new FiltreFileDuMedecin(null, null, "a_traiter", null, null, null, null, null));
-            executer(new FiltreFileDuMedecin(null, null, null, "VALIDATED", null, null, null, null));
-            executer(new FiltreFileDuMedecin(null, null, null, null, true, null, null, null));
-            executer(new FiltreFileDuMedecin(null, null, null, null, null, true, null, null));
+            executer(new FiltreFileDuMedecin(2026, null, null, null, null, null, null, null, null));
+            executer(new FiltreFileDuMedecin(null, "AF26-0001", null, null, null, null, null, null, null));
+            executer(new FiltreFileDuMedecin(null, null, "a_traiter", null, null, null, null, null, null));
+            executer(new FiltreFileDuMedecin(null, null, null, "VALIDATED", null, null, null, null, null));
+            executer(new FiltreFileDuMedecin(null, null, null, null, true, null, null, null, null));
+            executer(new FiltreFileDuMedecin(null, null, null, null, null, true, null, null, null));
             executer(new FiltreFileDuMedecin(null, null, null, null, null, null,
-                    List.of(UUID.randomUUID()), null));
+                    List.of(UUID.randomUUID()), null, null));
             // « À faire » n'est pas une égalité de statut mais un retrait :
             // c'est la position d'ouverture de l'écran, et elle a sa propre
             // forme SQL.
             executer(new FiltreFileDuMedecin(null, null, null, null, null, null,
-                    null, true));
+                    null, true, null));
+            // L'avancement se lit sur le compte rendu : trois formes de
+            // sous-requête, à éprouver chacune.
+            for (final Avancement etape : Avancement.values()) {
+                executer(FiltreFileDuMedecin.aucun().avecAvancement(etape));
+            }
         }).doesNotThrowAnyException();
     }
 
@@ -104,7 +109,8 @@ class FileDuMedecinSurBaseTest {
     void tousEnsemble() {
         assertThatCode(() -> executer(new FiltreFileDuMedecin(
                 2026, "AF26-0001", "a_traiter", "VALIDATED", true, true,
-                List.of(UUID.randomUUID()), true))).doesNotThrowAnyException();
+                List.of(UUID.randomUUID()), true, "termine")))
+                .doesNotThrowAnyException();
     }
 
     @Test
@@ -113,7 +119,7 @@ class FileDuMedecinSurBaseTest {
         // « IN () » est un SQL invalide : la spécification doit poser une
         // fausseté explicite plutôt que de laisser la liste vide s'écrire.
         assertThatCode(() -> executer(new FiltreFileDuMedecin(
-                null, null, null, null, null, null, List.of(), null)))
+                null, null, null, null, null, null, List.of(), null, null)))
                 .doesNotThrowAnyException();
     }
 
@@ -122,7 +128,7 @@ class FileDuMedecinSurBaseTest {
     void comptage() {
         assertThatCode(() -> depot.count(SpecificationFileDuMedecin.filtrer(
                 UUID.randomUUID(), LocalDate.now(), 18,
-                new FiltreFileDuMedecin(2026, null, "termine", null, true, true, null, null))))
+                new FiltreFileDuMedecin(2026, null, "termine", null, true, true, null, null, null))))
                 .doesNotThrowAnyException();
     }
 }

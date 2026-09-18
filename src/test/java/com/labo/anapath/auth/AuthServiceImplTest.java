@@ -16,6 +16,7 @@ import com.warrenstrange.googleauth.GoogleAuthenticator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -232,7 +233,8 @@ class AuthServiceImplTest {
         when(passwordEncoder.matches("123456", "hashed-code")).thenReturn(true);
         when(customUserDetailsService.loadUserById(USER_ID)).thenReturn(principal);
         when(jwtTokenProvider.generateToken(principal)).thenReturn("access-token");
-        when(jwtTokenProvider.generateRefreshToken(USER_ID)).thenReturn("refresh-token");
+        when(jwtTokenProvider.generateRefreshToken(eq(USER_ID), any(java.time.Duration.class)))
+                .thenReturn("refresh-token");
         when(jwtProperties.getExpirationMs()).thenReturn(86_400_000L);
         when(userMapper.toResponseDto(user)).thenReturn(
                 new UserResponseDto(USER_ID, "Admin", "Test", "admin@test.com", null, null, null, true,
@@ -247,6 +249,75 @@ class AuthServiceImplTest {
         assertThat(response.accessToken()).isEqualTo("access-token");
         assertThat(response.refreshToken()).isEqualTo("refresh-token");
         assertThat(response.requires2fa()).isNull();
+    }
+
+    @Test
+    @DisplayName("la session d'un médecin supporte une heure de silence")
+    void fenetreDUnMedecin() {
+        assertThat(fenetreObtenuePour("docteur")).isEqualTo(java.time.Duration.ofHours(1));
+    }
+
+    @Test
+    @DisplayName("celle des autres métiers, trente minutes")
+    void fenetreDesAutresMetiers() {
+        // Un poste du comptoir ou du laboratoire reste à portée de qui passe
+        // dans le couloir ; celui du médecin est le sien.
+        assertThat(fenetreObtenuePour("caissier"))
+                .isEqualTo(java.time.Duration.ofMinutes(30));
+        assertThat(fenetreObtenuePour("laborantin"))
+                .isEqualTo(java.time.Duration.ofMinutes(30));
+        assertThat(fenetreObtenuePour("secretariat"))
+                .isEqualTo(java.time.Duration.ofMinutes(30));
+    }
+
+    @Test
+    @DisplayName("sans rôle connu, la fenêtre courte s'applique")
+    void fenetreSansRole() {
+        // Le doute ferme plus tôt qu'il n'ouvre : c'est l'inverse de ce que
+        // décide l'affichage d'un bouton, et pour la même raison — ici le pire
+        // cas est une session qui reste ouverte sur un poste abandonné.
+        assertThat(fenetreObtenuePour(null)).isEqualTo(java.time.Duration.ofMinutes(30));
+    }
+
+    /** Fait ouvrir une session à quelqu'un de ce métier, et rend la fenêtre émise. */
+    private java.time.Duration fenetreObtenuePour(String slugDuRole) {
+        User user = buildUserWith2fa();
+        if (slugDuRole != null) {
+            com.labo.anapath.role.Role role = new com.labo.anapath.role.Role();
+            role.setSlug(slugDuRole);
+            user.setRoles(new java.util.ArrayList<>(List.of(role)));
+        }
+        UserPrincipal principal = buildPrincipal(user);
+
+        when(jwtTokenProvider.validateToken("temp-token")).thenReturn(true);
+        when(jwtTokenProvider.extractType("temp-token")).thenReturn("2fa-challenge");
+        when(jwtTokenProvider.extractUserId("temp-token")).thenReturn(USER_ID);
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        TwoFa twoFa = new TwoFa(USER_ID, BRANCH_ID, "hashed-code");
+        twoFa.setCreatedAt(LocalDateTime.now());
+        when(twoFaRepository.findByUserId(USER_ID)).thenReturn(Optional.of(twoFa));
+        when(passwordEncoder.matches("123456", "hashed-code")).thenReturn(true);
+        when(customUserDetailsService.loadUserById(USER_ID)).thenReturn(principal);
+        // Les deux durées sont posées à chaque fois ; une seule sert selon le
+        // métier, et c'est bien le propos du test.
+        org.mockito.Mockito.lenient()
+                .when(jwtProperties.getRefreshExpirationMs()).thenReturn(1_800_000L);
+        org.mockito.Mockito.lenient()
+                .when(jwtProperties.getRefreshExpirationMedecinMs()).thenReturn(3_600_000L);
+
+        TwoFactorVerifyRequest request = new TwoFactorVerifyRequest();
+        request.setTempToken("temp-token");
+        request.setCode("123456");
+        authService.challenge(request);
+
+        ArgumentCaptor<java.time.Duration> fenetre =
+                ArgumentCaptor.forClass(java.time.Duration.class);
+        // « atLeastOnce » et la dernière valeur : un test peut ouvrir plusieurs
+        // sessions de suite pour comparer des métiers.
+        verify(jwtTokenProvider, org.mockito.Mockito.atLeastOnce())
+                .generateRefreshToken(eq(USER_ID), fenetre.capture());
+        java.util.List<java.time.Duration> vues = fenetre.getAllValues();
+        return vues.get(vues.size() - 1);
     }
 
     @Test
