@@ -1,5 +1,6 @@
 package com.labo.anapath.finance;
 
+import com.labo.anapath.common.NomComplet;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
@@ -48,6 +49,8 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final SettingInvoiceRepository settingInvoiceRepository;
     private final FinanceMapper financeMapper;
     private final com.labo.anapath.report.QrCodeService qrCodeService;
+    private final InvoiceClientInfoHistoryRepository invoiceClientInfoHistoryRepository;
+    private final com.labo.anapath.user.UserRepository userRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -600,6 +603,76 @@ public class InvoiceServiceImpl implements InvoiceService {
         log.info("Avoir {} créé pour la facture {}", saved.getCode(), vente.getCode());
         return financeMapper.toInvoiceResponseDto(
                 invoiceRepository.findById(saved.getId()).orElse(saved));
+    }
+
+    @Override
+    @Transactional
+    public InvoiceResponseDto refreshClientInfo(UUID invoiceId, UUID branchId, UUID userId) {
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Facture", invoiceId));
+
+        if (!branchId.equals(invoice.getBranchId())) {
+            throw new ResourceNotFoundException("Facture", invoiceId);
+        }
+        if (invoice.getPatient() == null) {
+            throw new InvalidOperationException(
+                    "Cette facture n'est rattachée à aucun patient : rien à actualiser.");
+        }
+
+        String newClientName = NomComplet.de(
+                invoice.getPatient().getLastname(), invoice.getPatient().getFirstname());
+        String newClientAddress = invoice.getPatient().getAdresse();
+
+        InvoiceClientInfoHistory history = new InvoiceClientInfoHistory();
+        history.setBranchId(branchId);
+        history.setInvoice(invoice);
+        history.setUserId(userId);
+        history.setOldClientName(invoice.getClientName());
+        history.setNewClientName(newClientName);
+        history.setOldClientAddress(invoice.getClientAddress());
+        history.setNewClientAddress(newClientAddress);
+        invoiceClientInfoHistoryRepository.save(history);
+
+        invoice.setClientName(newClientName);
+        invoice.setClientAddress(newClientAddress);
+        Invoice saved = invoiceRepository.save(invoice);
+
+        log.info("Informations client de la facture {} actualisées par l'utilisateur {}",
+                saved.getCode(), userId);
+        return financeMapper.toInvoiceResponseDto(
+                invoiceRepository.findById(saved.getId()).orElse(saved));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<InvoiceClientInfoHistoryDto> getClientInfoHistory(UUID invoiceId, UUID branchId) {
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Facture", invoiceId));
+        if (!branchId.equals(invoice.getBranchId())) {
+            throw new ResourceNotFoundException("Facture", invoiceId);
+        }
+        return invoiceClientInfoHistoryRepository.findByInvoiceIdOrderByCreatedAtDesc(invoiceId)
+                .stream()
+                .map(h -> new InvoiceClientInfoHistoryDto(
+                        h.getId(),
+                        h.getUserId(),
+                        userFullName(h.getUserId()),
+                        h.getOldClientName(),
+                        h.getNewClientName(),
+                        h.getOldClientAddress(),
+                        h.getNewClientAddress(),
+                        h.getCreatedAt()))
+                .toList();
+    }
+
+    /** « Prénom Nom » de l'auteur d'une action, vide si l'utilisateur n'existe plus. */
+    private String userFullName(UUID userId) {
+        if (userId == null) {
+            return null;
+        }
+        return userRepository.findById(userId)
+                .map(u -> NomComplet.de(u.getLastname(), u.getFirstname()))
+                .orElse(null);
     }
 
     /**
