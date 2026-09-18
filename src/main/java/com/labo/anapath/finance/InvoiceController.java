@@ -270,6 +270,30 @@ public class InvoiceController {
                 invoiceService.createCreditNote(id, principal.getBranchId())));
     }
 
+    /**
+     * Réécrit le nom/adresse client de la facture avec les informations
+     * courantes du patient rattaché. Action volontaire et tracée : la facture
+     * ne se met jamais à jour toute seule.
+     */
+    @PostMapping("/{id}/refresh-client-info")
+    @PreAuthorize("hasAuthority('edit-invoices')")
+    public ResponseEntity<ApiResponse<InvoiceResponseDto>> refreshClientInfo(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success("Informations client actualisées",
+                invoiceService.refreshClientInfo(id, principal.getBranchId(), principal.getId())));
+    }
+
+    /** Historique des actualisations du nom/adresse client de cette facture. */
+    @GetMapping("/{id}/client-info-history")
+    @PreAuthorize("hasAuthority('view-invoices')")
+    public ResponseEntity<ApiResponse<java.util.List<InvoiceClientInfoHistoryDto>>> getClientInfoHistory(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                invoiceService.getClientInfoHistory(id, principal.getBranchId())));
+    }
+
     @GetMapping("/check-code")
     @PreAuthorize("hasAuthority('view-invoices')")
     public ResponseEntity<ApiResponse<Map<String, Boolean>>> checkCode(

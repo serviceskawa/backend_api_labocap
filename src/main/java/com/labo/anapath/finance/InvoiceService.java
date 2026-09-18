@@ -108,6 +108,29 @@ public interface InvoiceService {
     InvoiceResponseDto createCreditNote(UUID invoiceId, UUID branchId);
 
     /**
+     * Réécrit le nom/adresse client de la facture avec les informations
+     * courantes du patient rattaché. Action explicite et tracée : la facture
+     * ne se met jamais à jour toute seule, seul ce déclenchement volontaire le
+     * fait, en conservant une trace de qui l'a fait, quand, et les valeurs
+     * avant/après.
+     *
+     * @param invoiceId facture à actualiser
+     * @param branchId  branche de l'utilisateur
+     * @param userId    utilisateur ayant déclenché l'actualisation
+     * @return la facture avec le nom/adresse client à jour
+     */
+    InvoiceResponseDto refreshClientInfo(UUID invoiceId, UUID branchId, UUID userId);
+
+    /**
+     * Historique des actualisations du nom/adresse client de cette facture,
+     * du plus récent au plus ancien.
+     *
+     * @param invoiceId facture concernée
+     * @param branchId  branche de l'utilisateur
+     */
+    List<InvoiceClientInfoHistoryDto> getClientInfoHistory(UUID invoiceId, UUID branchId);
+
+    /**
      * Change le libellé d'une ligne de facture.
      *
      * <p>Le nom du catalogue reste intact : c'est la trace de l'analyse

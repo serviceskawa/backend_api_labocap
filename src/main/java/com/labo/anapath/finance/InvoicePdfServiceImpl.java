@@ -112,16 +112,16 @@ public class InvoicePdfServiceImpl implements InvoicePdfService {
                         ? invoice.getReference().getCode() : "");
         ctx.setVariable("codeNormalise", invoice.getCodeNormalise() != null ? invoice.getCodeNormalise() : "");
 
-        // Nom/adresse : priorité au patient rattaché, lu en direct (jamais figé),
-        // repli sur les valeurs dénormalisées de la facture (facturation groupée par contrat).
-        String clientName = invoice.getPatient() != null
-                ? NomComplet.de(invoice.getPatient().getLastname(), invoice.getPatient().getFirstname())
-                : invoice.getClientName();
+        // Nom/adresse dénormalisés sur la facture au moment de l'émission : un
+        // document comptable ne doit pas changer tout seul. Une actualisation
+        // n'est possible que via l'action explicite et tracée
+        // `refreshClientInfo` (voir InvoiceServiceImpl), jamais automatiquement ici.
+        String clientName = invoice.getClientName();
+        if ((clientName == null || clientName.isBlank()) && invoice.getPatient() != null) {
+            clientName = NomComplet.de(invoice.getPatient().getLastname(), invoice.getPatient().getFirstname());
+        }
         ctx.setVariable("clientName", clientName != null ? clientName : "");
-        String clientAddress = invoice.getPatient() != null && invoice.getPatient().getAdresse() != null
-                ? invoice.getPatient().getAdresse()
-                : invoice.getClientAddress();
-        ctx.setVariable("clientAddress", clientAddress != null ? clientAddress : "");
+        ctx.setVariable("clientAddress", invoice.getClientAddress() != null ? invoice.getClientAddress() : "");
         ctx.setVariable("patientCode",
                 invoice.getPatient() != null && invoice.getPatient().getCode() != null
                         ? invoice.getPatient().getCode() : "");
