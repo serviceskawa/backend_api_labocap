@@ -8,6 +8,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
@@ -44,6 +45,8 @@ class NormalisationEtEncaissementTest {
     @Mock private FluidInvoiceClient client;
     @Mock private FinanceMapper financeMapper;
     @Mock private InvoiceService invoiceService;
+    /** La normalisation publie InvoiceValidatedEvent : le SMS de facture s'y branche. */
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     private FluidInvoiceServiceImpl service;
     private Invoice facture;
@@ -52,7 +55,7 @@ class NormalisationEtEncaissementTest {
     void poser() {
         service = new FluidInvoiceServiceImpl(
                 invoiceRepository, client, new FluidInvoiceProperties(),
-                financeMapper, invoiceService);
+                financeMapper, eventPublisher, invoiceService);
 
         facture = new Invoice();
         facture.setId(FACTURE);

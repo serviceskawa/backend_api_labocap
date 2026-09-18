@@ -108,8 +108,16 @@ public class InvoiceDetail {
      * clavier ne doit pas remplacer le libellé du catalogue par du vide.</p>
      */
     public String nomAFacturer() {
-        return customTestName != null && !customTestName.isBlank()
-                ? customTestName.trim()
-                : testName;
+        if (customTestName != null && !customTestName.isBlank()) {
+            return customTestName.trim();
+        }
+        if (testName != null && !testName.isBlank()) {
+            return testName;
+        }
+        // Dernier recours : le libellé du catalogue. Des lignes reprises du
+        // Laravel d'origine n'ont pas de test_name, et un nom vide fait rejeter
+        // la déclaration à la DGI (VALIDATION_ERROR sur Items[].Name) — alors
+        // que l'examen facturé est parfaitement connu par sa référence.
+        return labTest != null ? labTest.getName() : null;
     }
 }

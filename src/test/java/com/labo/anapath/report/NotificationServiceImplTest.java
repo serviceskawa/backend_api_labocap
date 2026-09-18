@@ -1,6 +1,9 @@
 package com.labo.anapath.report;
 
 import com.labo.anapath.common.exception.ResourceNotFoundException;
+import com.labo.anapath.common.notification.OurVoiceClient;
+import com.labo.anapath.common.notification.SmsSender;
+import com.labo.anapath.common.notification.SmsTemplates;
 import com.labo.anapath.patient.Patient;
 import com.labo.anapath.setting.SettingApp;
 import com.labo.anapath.setting.SettingAppRepository;
@@ -36,6 +39,8 @@ class NotificationServiceImplTest {
     @Mock private SettingAppRepository settingAppRepository;
     @Mock private UserRepository userRepository;
     @Mock private OurVoiceClient ourVoiceClient;
+    @Mock private SmsSender smsSender;
+    @Mock private SmsTemplates smsTemplates;
 
     @InjectMocks
     private NotificationServiceImpl service;
@@ -180,7 +185,7 @@ class NotificationServiceImplTest {
     }
 
     @Test
-    @DisplayName("sendSms - téléphone préfixé avec 229 envoyé à OurVoice (RÈGLE R7)")
+    @DisplayName("sendSms - téléphone préfixé avec 229 confié à la passerelle (RÈGLE R7)")
     void sendSms_prefixesPhoneWith229() {
         Report report = buildReport("fr", "97000002");
         when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
@@ -188,21 +193,40 @@ class NotificationServiceImplTest {
 
         SmsResponseDto result = service.sendSms(REPORT_ID, USER_ID);
 
-        verify(ourVoiceClient).sms(any(), any(), eq("22997000002"), any());
+        verify(smsSender).envoyer(eq("22997000002"), any(), eq(SmsSender.SOURCE_RESULTAT), any());
         assertThat(result.status()).isEqualTo("sent");
     }
 
     @Test
-    @DisplayName("sendSms - sender_id fixe envoyé à OurVoice")
-    void sendSms_sendsSenderIdCorrectly() {
+    @DisplayName("sendSms - le SMS part par la passerelle SMS, jamais par l'appel vocal")
+    void sendSms_neDeclencheAucunAppelVocal() {
         Report report = buildReport("fr", "97000003");
         when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
         mockSettings();
 
         service.sendSms(REPORT_ID, USER_ID);
 
-        // Le sender_id fixe est géré dans OurVoiceClient — on vérifie juste que sms() est appelé
-        verify(ourVoiceClient).sms(any(), eq("test-token"), eq("22997000003"), any());
+        verify(smsSender).envoyer(any(), any(), any(), any());
+        // OurVoice ne sert plus qu'à la voix : un SMS ne doit pas passer par lui.
+        verify(ourVoiceClient, org.mockito.Mockito.never()).call(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("sendSms - clé d'idempotence tirée au sort, pour que la relance passe")
+    void sendSms_cleDIdempotenceVariableEntreDeuxEnvois() {
+        // Le renvoi manuel d'un avis est un besoin de l'écran de suivi : une clé
+        // stable ferait écarter le second envoi comme un doublon.
+        Report report = buildReport("fr", "97000004");
+        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
+        mockSettings();
+
+        service.sendSms(REPORT_ID, USER_ID);
+        service.sendSms(REPORT_ID, USER_ID);
+
+        ArgumentCaptor<UUID> cles = ArgumentCaptor.forClass(UUID.class);
+        verify(smsSender, org.mockito.Mockito.times(2))
+                .envoyer(any(), any(), eq(SmsSender.SOURCE_RESULTAT), cles.capture());
+        assertThat(cles.getAllValues().get(0)).isNotEqualTo(cles.getAllValues().get(1));
     }
 
     @Test

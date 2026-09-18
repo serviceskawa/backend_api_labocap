@@ -152,6 +152,22 @@ public class Report extends AuditableEntity {
     @Column(name = "call_date")
     private LocalDateTime callDate;
 
+    /**
+     * Date d'envoi de l'avis automatique de disponibilité au patient (appel
+     * OurVoice ou SMS), posée à la validation du compte-rendu.
+     *
+     * <p>{@code null} signifie qu'aucun avis n'est parti — l'état d'un
+     * compte-rendu validé hors de la plage d'appel 8h–18h. C'est sur ce seul
+     * critère que la reprise de 8h choisit qui rappeler ; sans lui, elle
+     * rappellerait des patients déjà prévenus.</p>
+     *
+     * <p><b>À ne pas confondre avec {@link #isCalled}</b>, que l'agent coche à la
+     * main depuis l'écran de suivi et que la remise du compte-rendu pose aussi :
+     * celle-là compte des gestes humains, celle-ci des envois automatiques.</p>
+     */
+    @Column(name = "patient_notified_at")
+    private LocalDateTime patientNotifiedAt;
+
     /** Contenu microscopique du compte-rendu (description des lames). */
     @Column(name = "content_micro", columnDefinition = "TEXT")
     private String contentMicro;

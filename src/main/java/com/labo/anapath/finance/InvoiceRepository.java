@@ -48,6 +48,14 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
 
     Optional<Invoice> findByTestOrderId(UUID testOrderId);
 
+    /**
+     * Retrouve la facture d'un jeton de lien public.
+     *
+     * <p>Seul point d'entrée de la route publique : elle ne connaît que le jeton
+     * reçu par SMS, jamais l'identifiant de la facture ni la branche.</p>
+     */
+    Optional<Invoice> findByShareToken(String shareToken);
+
     List<Invoice> findByTestOrder_IdIn(Collection<UUID> testOrderIds);
 
     Optional<Invoice> findFirstByContratIdOrderByCreatedAtDesc(UUID contratId);

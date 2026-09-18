@@ -1,4 +1,4 @@
-package com.labo.anapath.report;
+package com.labo.anapath.common.notification;
 
 import com.labo.anapath.common.exception.InvalidOperationException;
 import lombok.RequiredArgsConstructor;

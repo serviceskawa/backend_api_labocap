@@ -14,6 +14,7 @@ public record InvoiceResponseDto(
         UUID patientId,
         String patientName,
         String patientCode,
+        String patientAddress,
         UUID contratId,
         String contratName,
         String clientName,

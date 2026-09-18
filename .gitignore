@@ -52,6 +52,7 @@ buildNumber.properties
 
 ### Env ###
 .env
+.env.bak-*
 .env.local
 .env.*.local
 !.env.example

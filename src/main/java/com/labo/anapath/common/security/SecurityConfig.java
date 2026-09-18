@@ -3,6 +3,7 @@ package com.labo.anapath.common.security;
 import com.labo.anapath.common.branch.BranchContextFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpMethod;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -95,6 +96,10 @@ public class SecurityConfig {
                         // d'authentification, avant qu'un JWT n'existe. Liste blanche de
                         // clés côté contrôleur — voir PublicBrandingController.
                         .requestMatchers("/api/v1/public/branding").permitAll()
+                        // Facture téléchargée depuis le lien reçu par SMS. Le client
+                        // n'a pas de compte : l'autorisation tient dans le jeton de
+                        // l'URL, tiré au sort et expirant — voir PublicInvoiceController.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/public/invoices/*").permitAll()
                         // Application mobile : deux chemins seulement s'ouvrent sans
                         // jeton, et chacun exige un secret remis hors ligne — le code
                         // d'enrôlement délivré par un administrateur, puis le PIN du

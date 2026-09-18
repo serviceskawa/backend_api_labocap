@@ -14,6 +14,7 @@ public interface FinanceMapper {
     @Mapping(target = "patientId", source = "patient.id")
     @Mapping(target = "patientName", expression = "java(invoice.getPatient() != null ? invoice.getPatient().getFirstname() + ' ' + invoice.getPatient().getLastname() : null)")
     @Mapping(target = "patientCode", source = "patient.code")
+    @Mapping(target = "patientAddress", source = "patient.adresse")
     @Mapping(target = "contratId", source = "contrat.id")
     @Mapping(target = "contratName", source = "contrat.name")
     @Mapping(target = "clientName", source = "clientName")
@@ -43,7 +44,7 @@ public interface FinanceMapper {
     default InvoiceResponseDto withRefund(InvoiceResponseDto dto, InvoiceRefundDto refund) {
         return new InvoiceResponseDto(
                 dto.id(), dto.code(), dto.testOrderId(), dto.testOrderCode(),
-                dto.patientId(), dto.patientName(), dto.patientCode(),
+                dto.patientId(), dto.patientName(), dto.patientCode(), dto.patientAddress(),
                 dto.contratId(), dto.contratName(),
                 dto.clientName(), dto.clientAddress(), dto.clientContact(), dto.date(), dto.subtotal(),
                 dto.total(), dto.paid(), dto.status(), dto.statusInvoice(), dto.payment(),
@@ -60,7 +61,7 @@ public interface FinanceMapper {
     default InvoiceResponseDto withQrcode(InvoiceResponseDto dto, String qrcode) {
         return new InvoiceResponseDto(
                 dto.id(), dto.code(), dto.testOrderId(), dto.testOrderCode(),
-                dto.patientId(), dto.patientName(), dto.patientCode(),
+                dto.patientId(), dto.patientName(), dto.patientCode(), dto.patientAddress(),
                 dto.contratId(), dto.contratName(),
                 dto.clientName(), dto.clientAddress(), dto.clientContact(), dto.date(), dto.subtotal(),
                 dto.total(), dto.paid(), dto.status(), dto.statusInvoice(), dto.payment(),
