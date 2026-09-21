@@ -619,8 +619,11 @@ public class InvoiceServiceImpl implements InvoiceService {
                     "Cette facture n'est rattachée à aucun patient : rien à actualiser.");
         }
 
+        // Même ordre « Prénom Nom » que `FinanceMapper.patientName`, sinon
+        // l'actualisation réécrit clientName dans un format que la
+        // comparaison ne reconnaît jamais comme « à jour ».
         String newClientName = NomComplet.de(
-                invoice.getPatient().getLastname(), invoice.getPatient().getFirstname());
+                invoice.getPatient().getFirstname(), invoice.getPatient().getLastname());
         String newClientAddress = invoice.getPatient().getAdresse();
 
         InvoiceClientInfoHistory history = new InvoiceClientInfoHistory();

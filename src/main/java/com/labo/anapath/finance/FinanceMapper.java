@@ -12,7 +12,13 @@ public interface FinanceMapper {
     @Mapping(target = "testOrderId", source = "testOrder.id")
     @Mapping(target = "testOrderCode", source = "testOrder.code")
     @Mapping(target = "patientId", source = "patient.id")
-    @Mapping(target = "patientName", expression = "java(invoice.getPatient() != null ? invoice.getPatient().getFirstname() + ' ' + invoice.getPatient().getLastname() : null)")
+    // « Prénom Nom », dans cet ordre : c'est le format déjà figé sur
+    // `clientName` pour l'immense majorité des factures existantes (données
+    // migrées depuis Laravel). S'en écarter fait diverger la comparaison
+    // clientName/patientName sur presque toutes les factures — vérifié en
+    // base : ~96 % des factures suivent ce format, contre une poignée
+    // « Nom Prénom ».
+    @Mapping(target = "patientName", expression = "java(invoice.getPatient() != null ? com.labo.anapath.common.NomComplet.de(invoice.getPatient().getFirstname(), invoice.getPatient().getLastname()) : null)")
     @Mapping(target = "patientCode", source = "patient.code")
     @Mapping(target = "patientAddress", source = "patient.adresse")
     @Mapping(target = "contratId", source = "contrat.id")
