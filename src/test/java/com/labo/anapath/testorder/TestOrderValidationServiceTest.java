@@ -107,8 +107,8 @@ class TestOrderValidationServiceTest {
                 null, null, null, null,
                 null, null, Collections.emptyList(), BRANCH_ID, null,
                 // reportId, reportStatus, reportIsDelivered, invoiceId, archive,
-                // testAffiliate, option, assignedUserName.
-                null, null, false, null, null, null, null, null);
+                // testAffiliate, option, assignedUserName, discipline.
+                null, null, false, null, null, null, null, null, null);
     }
 
     // --- AC3 ---
@@ -256,8 +256,8 @@ class TestOrderValidationServiceTest {
         // sur un bon de biologie, il y reste pour toujours.
         order.setDiscipline(com.labo.anapath.common.Discipline.BIOLOGY);
         when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
-        when(settingRepository.findFirstByBranchIdOrderByCreatedAtAscIdAsc(eq(BRANCH_ID)))
-                .thenReturn(Optional.empty());
+        // Pas de lecture du texte par défaut : il n'a pas de sens en biologie
+        // (voir BonsDeBiologieTest).
         when(testOrderRepository.saveAndFlush(any())).thenAnswer(inv -> {
             order.setCode("EX26-0001");
             return order;
