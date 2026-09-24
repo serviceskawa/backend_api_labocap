@@ -23,6 +23,20 @@ import java.util.UUID;
  */
 record EmpreinteCompteRendu(Map<String, String> valeurs) {
 
+    /**
+     * L'empreinte vaut-elle pour ce compte-rendu ?
+     *
+     * <p>Seulement pour un compte-rendu d'anatomie pathologique déjà signé :
+     * un médecin y est apposé et la validation a posé la date. Les champs
+     * suivis ici sont ceux du compte-rendu rédigé ; un compte-rendu de biologie
+     * n'en a pas, et sa traçabilité après validation suivra ses résultats.</p>
+     */
+    static boolean concerne(Report report) {
+        return report.getDiscipline() == com.labo.anapath.common.Discipline.PATHOLOGY
+                && report.getSignatureDate() != null
+                && report.getSignatory1() != null;
+    }
+
     /** Prend l'empreinte d'un compte-rendu dans son état courant. */
     static EmpreinteCompteRendu de(Report report) {
         Map<String, String> v = new LinkedHashMap<>();

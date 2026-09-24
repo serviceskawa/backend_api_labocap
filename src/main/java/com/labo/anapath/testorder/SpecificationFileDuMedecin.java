@@ -44,6 +44,11 @@ final class SpecificationFileDuMedecin {
             predicats.add(cb.isNull(racine.get("deletedAt")));
             // Une ligne remplacée appartient au médecin précédent.
             predicats.add(cb.isNull(racine.get("remplaceeLe")));
+            // La discipline de la demande. Une ligne sans demande reste dans la
+            // file comme avant : elle n'a pas de discipline à contredire.
+            predicats.add(cb.or(
+                    cb.isNull(demande.get("id")),
+                    cb.equal(demande.get("discipline"), filtre.discipline())));
             // Les dossiers terminés restent visibles le jour même : les retirer
             // à l'instant où on les ferme ferait douter d'avoir enregistré.
             predicats.add(cb.or(

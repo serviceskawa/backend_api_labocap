@@ -1,5 +1,6 @@
 package com.labo.anapath.report;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.NomComplet;
 
 import com.labo.anapath.common.dto.PageResponse;
@@ -61,7 +62,7 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<ReportResponseDto> findAll(int page, int size, UUID branchId) {
-        return PageResponse.of(reportRepository.findByBranchId(branchId,
+        return PageResponse.of(reportRepository.findByBranchIdAndDiscipline(branchId, Discipline.PATHOLOGY,
                 PageRequest.of(page, size, Sort.by("createdAt").descending()))
                 .map(reportMapper::toResponseDto));
     }
@@ -70,13 +71,20 @@ public class ReportServiceImpl implements ReportService {
     @Transactional(readOnly = true)
     public PageResponse<ReportResponseDto> findAll(int page, int size, UUID branchId, Integer month, Integer year, UUID doctorId) {
         return PageResponse.of(reportRepository.findFiltered(branchId, month, year, doctorId,
-                PageRequest.of(page, size))
+                Discipline.PATHOLOGY.name(), PageRequest.of(page, size))
                 .map(reportMapper::toResponseDto));
     }
 
     @Override
     @Transactional(readOnly = true)
     public PageResponse<ReportResponseDto> findAll(int page, int size, UUID branchId, Integer month, Integer year, UUID doctorId, String status, String search) {
+        return findAll(page, size, branchId, month, year, doctorId, status, search, Discipline.PATHOLOGY);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<ReportResponseDto> findAll(int page, int size, UUID branchId, Integer month, Integer year,
+                                                   UUID doctorId, String status, String search, Discipline discipline) {
         String statusParam = null;
         if (status != null && !status.isBlank()) {
             try {
@@ -89,7 +97,7 @@ public class ReportServiceImpl implements ReportService {
         String searchParam = (search != null && !search.isBlank()) ? search.trim() : null;
         return PageResponse.of(reportRepository.findFilteredWithSearch(
                 branchId, month, year, doctorId, statusParam, searchParam,
-                PageRequest.of(page, size))
+                disciplineOuDefaut(discipline).name(), PageRequest.of(page, size))
                 .map(reportMapper::toResponseDto));
     }
 
@@ -205,7 +213,8 @@ public class ReportServiceImpl implements ReportService {
                 logDtos,
                 affectation.nom(), affectation.code(), affectation.date(),
                 affectation.etiquettes(), affectation.note(), affectation.noteDuLot(),
-                report.getCreatedAt(), report.getUpdatedAt());
+                report.getCreatedAt(), report.getUpdatedAt(),
+                report.getDiscipline());
     }
 
     /**
@@ -259,6 +268,7 @@ public class ReportServiceImpl implements ReportService {
         if (!isCreate) {
             report = reportRepository.findById(dto.getReportId())
                     .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", dto.getReportId()));
+            exigerAnatomiePathologique(report);
             // Un compte-rendu livré reste modifiable : voir la note sur
             // `update` ci-dessous — la livraison est un fait matériel, pas un
             // scellé éditorial, et les compléments arrivent après la remise.
@@ -270,6 +280,7 @@ public class ReportServiceImpl implements ReportService {
             }
             report.setTestOrder(testOrderRepository.findById(dto.getTestOrderId())
                     .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", dto.getTestOrderId())));
+            exigerBonDAnatomiePathologique(report.getTestOrder());
         }
 
         // Statut d'avant écriture : c'est la transition vers VALIDATED, et non le
@@ -342,6 +353,18 @@ public class ReportServiceImpl implements ReportService {
             String search, String typeOrderId,
             String dateBegin, String dateEnd,
             Boolean isUrgent, Integer statusFilter, Boolean isLate) {
+        return getSuiviList(branchId, page, size, search, typeOrderId, dateBegin, dateEnd,
+                isUrgent, statusFilter, isLate, Discipline.PATHOLOGY);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<ReportSuiviRowDto> getSuiviList(
+            UUID branchId, int page, int size,
+            String search, String typeOrderId,
+            String dateBegin, String dateEnd,
+            Boolean isUrgent, Integer statusFilter, Boolean isLate,
+            Discipline discipline) {
         var pageRequest = PageRequest.of(page, size);
         var resultPage = reportRepository.findSuiviRows(
                 branchId,
@@ -351,6 +374,7 @@ public class ReportServiceImpl implements ReportService {
                 (dateEnd != null && !dateEnd.isBlank()) ? dateEnd : null,
                 isUrgent, statusFilter,
                 Boolean.TRUE.equals(isLate) ? Boolean.TRUE : null,
+                disciplineOuDefaut(discipline).name(),
                 pageRequest);
 
         return PageResponse.of(resultPage.map(p -> new ReportSuiviRowDto(
@@ -401,9 +425,18 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public ReportSuiviDto getSuivi(UUID branchId, Integer month, Integer year) {
+        return getSuivi(branchId, month, year, Discipline.PATHOLOGY);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ReportSuiviDto getSuivi(UUID branchId, Integer month, Integer year, Discipline discipline) {
+        String nomDiscipline = disciplineOuDefaut(discipline).name();
+        // getExamenStats et countMacrosWithOrders ne comptent que des objets
+        // d'anatomie pathologique (types de demande, macroscopies) : pas de filtre.
         Object[] examenRaw = reportRepository.getExamenStats(branchId, month, year);
-        Object[] rapportRaw = reportRepository.getRapportStats(branchId);
-        Object[] calledRaw = reportRepository.getPatientCalledStats(branchId);
+        Object[] rapportRaw = reportRepository.getRapportStats(branchId, nomDiscipline);
+        Object[] calledRaw = reportRepository.getPatientCalledStats(branchId, nomDiscipline);
         List<Integer> years = reportRepository.findAvailableYears(branchId);
         Long macroCount = reportRepository.countMacrosWithOrders(branchId);
 
@@ -447,6 +480,7 @@ public class ReportServiceImpl implements ReportService {
 
         report.setTestOrder(testOrderRepository.findById(dto.getTestOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", dto.getTestOrderId())));
+        exigerBonDAnatomiePathologique(report.getTestOrder());
 
         if (dto.getTitleId() != null) {
             report.setTitleReport(titleReportRepository.findById(dto.getTitleId())
@@ -511,12 +545,13 @@ public class ReportServiceImpl implements ReportService {
     public ReportResponseDto update(UUID id, ReportRequestDto dto, UUID userId, UUID branchId) {
         Report report = reportRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
+        exigerAnatomiePathologique(report);
 
         // Un compte-rendu est signé dès qu'un médecin y est apposé et que la
         // validation a posé la date. L'empreinte est prise AVANT toute écriture :
         // au-delà, l'état d'origine est perdu et la comparaison impossible.
-        boolean etaitSigne = report.getSignatureDate() != null && report.getSignatory1() != null;
-        EmpreinteCompteRendu empreinte = etaitSigne ? EmpreinteCompteRendu.de(report) : null;
+        EmpreinteCompteRendu empreinte = EmpreinteCompteRendu.concerne(report)
+                ? EmpreinteCompteRendu.de(report) : null;
 
         // Statut d'avant écriture : seule la transition vers VALIDATED prévient le
         // patient — voir signalerValidation.
@@ -630,6 +665,9 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public List<ModificationApresSignatureDto> getModificationsApresSignature(UUID reportId) {
+        // Un compte-rendu inconnu garde le comportement d'origine — une liste
+        // vide — et seul un compte-rendu d'une autre discipline est refusé.
+        reportRepository.findById(reportId).ifPresent(ReportServiceImpl::exigerAnatomiePathologique);
         return logReportRepository
                 .findByReportIdAndActionOrderByCreatedAtAsc(reportId, ACTION_APRES_SIGNATURE)
                 .stream()
@@ -741,6 +779,29 @@ public class ReportServiceImpl implements ReportService {
     public ReportResponseDto validate(UUID id, UUID userId, ValidationSigneeDto preuve) {
         Report report = reportRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
+        // Point d'entrée d'anatomie pathologique (web et mobile) : un compte-rendu
+        // de biologie se valide par son propre circuit, qui appellera le cœur
+        // commun ci-dessous après ses propres contrôles.
+        exigerAnatomiePathologique(report);
+        return validerCompteRendu(report, userId, preuve);
+    }
+
+    /**
+     * Cœur de la validation, commun aux disciplines : passage à VALIDATED,
+     * contrôle de la preuve d'appareil, journal et avis au patient.
+     *
+     * <p>Ne vérifie <b>pas</b> la discipline : c'est à l'appelant de le faire —
+     * {@link #validate(UUID, UUID, ValidationSigneeDto)} pour l'anatomie
+     * pathologique, le futur point d'entrée de biologie pour la sienne. Il
+     * s'exécute dans la transaction de l'appelant.</p>
+     *
+     * @param report compte-rendu déjà chargé
+     * @param userId auteur de la validation
+     * @param preuve preuve d'appareil, ou {@code null} depuis le web
+     * @return le compte-rendu validé
+     */
+    ReportResponseDto validerCompteRendu(Report report, UUID userId, ValidationSigneeDto preuve) {
+        UUID id = report.getId();
         if (report.getStatus() == ReportStatus.VALIDATED || report.getStatus() == ReportStatus.DELIVERED) {
             throw new InvalidOperationException("Le rapport est déjà validé ou livré.");
         }
@@ -994,6 +1055,7 @@ public class ReportServiceImpl implements ReportService {
     public SettingReportTemplate getTemplate(UUID reportId) {
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", reportId));
+        exigerAnatomiePathologique(report);
         if (report.getTemplateId() == null) {
             throw new ResourceNotFoundException("Template", reportId);
         }
@@ -1006,6 +1068,7 @@ public class ReportServiceImpl implements ReportService {
     public ReportResponseDto setTemplate(UUID reportId, UUID templateId) {
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", reportId));
+        exigerAnatomiePathologique(report);
         templateRepository.findById(templateId)
                 .orElseThrow(() -> new ResourceNotFoundException("Template", templateId));
         report.setTemplateId(templateId);
@@ -1048,7 +1111,8 @@ public class ReportServiceImpl implements ReportService {
                 p.getDoctorName(),
                 p.getHospitalId() != null ? UUID.fromString(p.getHospitalId()) : null,
                 p.getHospitalName(), p.getReferenceHospital(),
-                p.getDateCreation(), p.getIsUrgent())).toList();
+                p.getDateCreation(), p.getIsUrgent(),
+                p.getDiscipline() != null ? Discipline.valueOf(p.getDiscipline()) : null)).toList();
 
         return PageResponse.of(new org.springframework.data.domain.PageImpl<>(rows, pageRequest, result.getTotalElements()));
     }
@@ -1059,6 +1123,16 @@ public class ReportServiceImpl implements ReportService {
             UUID branchId, int page, int size,
             String search, String statusFilter,
             String dateBegin, String dateEnd) {
+        return getList(branchId, page, size, search, statusFilter, dateBegin, dateEnd, Discipline.PATHOLOGY);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<ReportListDto> getList(
+            UUID branchId, int page, int size,
+            String search, String statusFilter,
+            String dateBegin, String dateEnd,
+            Discipline discipline) {
         var pageRequest = PageRequest.of(page, size);
         var result = reportRepository.findListRows(
                 branchId,
@@ -1066,6 +1140,7 @@ public class ReportServiceImpl implements ReportService {
                 (statusFilter != null && !statusFilter.isBlank()) ? statusFilter : null,
                 (dateBegin != null && !dateBegin.isBlank()) ? dateBegin : null,
                 (dateEnd != null && !dateEnd.isBlank()) ? dateEnd : null,
+                disciplineOuDefaut(discipline).name(),
                 pageRequest);
 
         var content = result.stream().map(p -> new ReportListDto(
@@ -1094,10 +1169,17 @@ public class ReportServiceImpl implements ReportService {
     @Transactional(readOnly = true)
     public ReportPerformanceDto getPerformanceStats(
             UUID branchId, String doctorId, Integer month, Integer year) {
+        return getPerformanceStats(branchId, doctorId, month, year, Discipline.PATHOLOGY);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ReportPerformanceDto getPerformanceStats(
+            UUID branchId, String doctorId, Integer month, Integer year, Discipline discipline) {
         var stats = reportRepository.getReportPerformanceStats(
                 branchId,
                 (doctorId != null && !doctorId.isBlank()) ? doctorId : null,
-                month, year);
+                month, year, disciplineOuDefaut(discipline).name());
         long total = stats.get("totalReports") != null ? ((Number) stats.get("totalReports")).longValue() : 0L;
         long within = stats.get("withinDeadline") != null ? ((Number) stats.get("withinDeadline")).longValue() : 0L;
         long beyond = stats.get("beyondDeadline") != null ? ((Number) stats.get("beyondDeadline")).longValue() : 0L;
@@ -1105,6 +1187,38 @@ public class ReportServiceImpl implements ReportService {
         double pctWithin = denom > 0 ? Math.round((within * 10000.0) / denom) / 100.0 : 0.0;
         double pctBeyond = denom > 0 ? Math.round((beyond * 10000.0) / denom) / 100.0 : 0.0;
         return new ReportPerformanceDto(total, within, beyond, pctWithin, pctBeyond);
+    }
+
+    /**
+     * Refuse une opération d'anatomie pathologique sur un compte-rendu d'une
+     * autre discipline.
+     *
+     * <p>Rédaction, modèle d'impression, validation et traçabilité après
+     * signature sont propres au compte-rendu rédigé d'anatomie pathologique.
+     * Un compte-rendu de biologie est fait de résultats chiffrés : l'éditer par
+     * ces écrans écraserait son contenu par un texte libre qu'il n'a pas.</p>
+     */
+    static void exigerAnatomiePathologique(Report report) {
+        if (report.getDiscipline() != null && report.getDiscipline() != Discipline.PATHOLOGY) {
+            throw new InvalidOperationException(
+                    "Ce compte-rendu relève de la biologie : il ne se traite pas "
+                            + "depuis les écrans d'anatomie pathologique.");
+        }
+    }
+
+    /** Même garde, au moment de rattacher un compte-rendu rédigé à un bon. */
+    private static void exigerBonDAnatomiePathologique(com.labo.anapath.testorder.TestOrder order) {
+        if (order != null && order.getDiscipline() != null
+                && order.getDiscipline() != Discipline.PATHOLOGY) {
+            throw new InvalidOperationException(
+                    "Ce bon d'examen relève de la biologie : il ne reçoit pas de "
+                            + "compte-rendu rédigé d'anatomie pathologique.");
+        }
+    }
+
+    /** La discipline demandée, ou l'anatomie pathologique si l'appelant n'en donne pas. */
+    private static Discipline disciplineOuDefaut(Discipline discipline) {
+        return discipline != null ? discipline : Discipline.PATHOLOGY;
     }
 
     @Override

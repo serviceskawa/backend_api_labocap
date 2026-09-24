@@ -248,6 +248,38 @@ class TestOrderValidationServiceTest {
         assertThat(reportCaptor.getValue().getStatus()).isEqualTo(ReportStatus.DRAFT);
     }
 
+    @Test
+    @DisplayName("updateStatus - le Report créé hérite de la discipline du bon")
+    void updateStatus_report_herite_discipline_du_bon() {
+        // Aucune donnée de biologie n'existe encore, mais la colonne n'est plus
+        // modifiable après l'insertion : si le compte-rendu naît en PATHOLOGY
+        // sur un bon de biologie, il y reste pour toujours.
+        order.setDiscipline(com.labo.anapath.common.Discipline.BIOLOGY);
+        when(testOrderRepository.findByIdAndBranchId(ORDER_ID, BRANCH_ID)).thenReturn(Optional.of(order));
+        when(settingRepository.findFirstByBranchIdOrderByCreatedAtAscIdAsc(eq(BRANCH_ID)))
+                .thenReturn(Optional.empty());
+        when(testOrderRepository.saveAndFlush(any())).thenAnswer(inv -> {
+            order.setCode("EX26-0001");
+            return order;
+        });
+        when(reportRepository.findByTestOrderId(any())).thenReturn(Optional.empty());
+        when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(logReportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(invoiceRepository.findByTestOrderId(any())).thenReturn(Optional.empty());
+        when(invoiceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(invoiceRepository.findByBranchIdAndCodeNotNullAndYear(any(), anyInt(), any()))
+                .thenReturn(Collections.emptyList());
+        when(testOrderMapper.toResponseDto(any())).thenReturn(responseDto);
+
+        testOrderService.updateStatus(ORDER_ID, "VALIDATED", USER_ID, BRANCH_ID);
+
+        ArgumentCaptor<Report> reportCaptor = ArgumentCaptor.forClass(Report.class);
+        verify(reportRepository).save(reportCaptor.capture());
+        assertThat(reportCaptor.getValue().getDiscipline())
+                .isEqualTo(com.labo.anapath.common.Discipline.BIOLOGY);
+    }
+
     // --- AC5 (mise à jour) ---
 
     @Test

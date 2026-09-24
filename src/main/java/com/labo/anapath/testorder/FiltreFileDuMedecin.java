@@ -1,5 +1,7 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.common.Discipline;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -18,6 +20,7 @@ import java.util.UUID;
  * @param urgents        ne garder que les dossiers marqués urgents et non remis
  * @param enRetard       ne garder que ceux qui dépassent le délai sans compte rendu
  * @param demandes       restreindre à ces demandes précises
+ * @param discipline     la discipline des demandes — anatomie pathologique par défaut
  */
 public record FiltreFileDuMedecin(
         Integer annee,
@@ -56,9 +59,37 @@ public record FiltreFileDuMedecin(
          * <p>Déduit du compte rendu et non du suivi manuel : voir
          * {@link Avancement}.</p>
          */
-        String avancement) {
+        String avancement,
 
-    /** Le filtre qui ne restreint rien. */
+        /**
+         * La discipline des demandes de la file.
+         *
+         * <p>Jamais nulle : un filtre construit sans elle vise l'anatomie
+         * pathologique. Les applications déjà installées ne l'envoient pas, et
+         * doivent continuer de voir la même file.</p>
+         */
+        Discipline discipline) {
+
+    public FiltreFileDuMedecin {
+        if (discipline == null) {
+            discipline = Discipline.PATHOLOGY;
+        }
+    }
+
+    /**
+     * Le filtre d'avant la biologie : même périmètre, anatomie pathologique.
+     *
+     * <p>Conservé pour les appelants qui ne connaissent pas la discipline.</p>
+     */
+    public FiltreFileDuMedecin(Integer annee, String lot, String docteurStatus,
+                               String statutDemande, Boolean urgents, Boolean enRetard,
+                               List<UUID> demandes, Boolean exclureTermines,
+                               String avancement) {
+        this(annee, lot, docteurStatus, statutDemande, urgents, enRetard, demandes,
+                exclureTermines, avancement, Discipline.PATHOLOGY);
+    }
+
+    /** Le filtre qui ne restreint rien — hormis la discipline, anatomie pathologique. */
     public static FiltreFileDuMedecin aucun() {
         return new FiltreFileDuMedecin(null, null, null, null, null, null, null, null, null);
     }
@@ -73,20 +104,20 @@ public record FiltreFileDuMedecin(
     public FiltreFileDuMedecin avecAvancement(Avancement etape) {
         return new FiltreFileDuMedecin(annee, lot, docteurStatus, statutDemande,
                 urgents, enRetard, demandes, exclureTermines,
-                etape == null ? null : etape.valeur());
+                etape == null ? null : etape.valeur(), discipline);
     }
 
     /** Le même périmètre, restreint à un état de la demande. */
     public FiltreFileDuMedecin avecStatutDemande(TestOrderStatus statut) {
         return new FiltreFileDuMedecin(annee, lot, docteurStatus,
                 statut == null ? null : statut.name(), urgents, enRetard,
-                demandes, exclureTermines, avancement);
+                demandes, exclureTermines, avancement, discipline);
     }
 
     /** Le même périmètre, sous un critère d'urgence ou de retard imposé. */
     public FiltreFileDuMedecin avecAlerte(Boolean urgents, Boolean enRetard) {
         return new FiltreFileDuMedecin(annee, lot, docteurStatus, statutDemande,
-                urgents, enRetard, demandes, exclureTermines, avancement);
+                urgents, enRetard, demandes, exclureTermines, avancement, discipline);
     }
 
     /** Le même filtre, sans la restriction de statut du médecin. */
@@ -95,6 +126,6 @@ public record FiltreFileDuMedecin(
         // médecin qu'on décompose, et le garder mettrait « terminées » à zéro.
         return new FiltreFileDuMedecin(
                 annee, lot, null, statutDemande, urgents, enRetard, demandes, null,
-                avancement);
+                avancement, discipline);
     }
 }

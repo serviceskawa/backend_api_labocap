@@ -155,12 +155,12 @@ class ReportServiceImplTest {
         Integer year = 2026;
         UUID doctorId = UUID.randomUUID();
 
-        when(reportRepository.findFiltered(eq(BRANCH_ID), eq(month), eq(year), eq(doctorId), any(Pageable.class)))
+        when(reportRepository.findFiltered(eq(BRANCH_ID), eq(month), eq(year), eq(doctorId), eq("PATHOLOGY"), any(Pageable.class)))
                 .thenReturn(Page.empty());
 
         service.findAll(0, 20, BRANCH_ID, month, year, doctorId);
 
-        verify(reportRepository).findFiltered(eq(BRANCH_ID), eq(month), eq(year), eq(doctorId), any(Pageable.class));
+        verify(reportRepository).findFiltered(eq(BRANCH_ID), eq(month), eq(year), eq(doctorId), eq("PATHOLOGY"), any(Pageable.class));
     }
 
     /**

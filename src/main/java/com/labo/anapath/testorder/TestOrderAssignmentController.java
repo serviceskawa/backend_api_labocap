@@ -1,5 +1,6 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.security.UserPrincipal;
@@ -21,6 +22,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
+/**
+ * Affectations de demandes aux médecins, et file de travail du médecin.
+ *
+ * <p>Les points d'entrée de la file ({@code /mes-demandes…}) acceptent un
+ * paramètre {@code discipline}, anatomie pathologique par défaut : les
+ * applications mobiles déjà installées ne l'envoient pas et doivent continuer
+ * de voir la même file.</p>
+ */
 @RestController
 @RequestMapping("/api/v1/test-order-assignments")
 @RequiredArgsConstructor
@@ -58,9 +67,10 @@ public class TestOrderAssignmentController {
     @PreAuthorize("hasAuthority('view-test-order-assignments')")
     public ResponseEntity<ApiResponse<java.util.List<DemandeDuMedecinDto>>> mesDemandes(
             @RequestParam(required = false) Integer annee,
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                assignmentService.fileDuMedecin(principal.getId(), annee)));
+                assignmentService.fileDuMedecin(principal.getId(), annee, discipline)));
     }
 
     /**
@@ -89,12 +99,13 @@ public class TestOrderAssignmentController {
             @RequestParam(required = false) java.util.List<UUID> demandes,
             @RequestParam(required = false) Boolean exclureTermines,
             @RequestParam(required = false) String avancement,
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
                 assignmentService.pageDeLaFile(principal.getId(),
                         new FiltreFileDuMedecin(annee, lot, docteurStatus,
                                 statutDemande, urgents, enRetard, demandes,
-                                exclureTermines, avancement),
+                                exclureTermines, avancement, discipline),
                         page, size)));
     }
 
@@ -103,9 +114,10 @@ public class TestOrderAssignmentController {
     @PreAuthorize("hasAuthority('view-test-order-assignments')")
     public ResponseEntity<ApiResponse<java.util.List<String>>> lotsDeMaFile(
             @RequestParam(required = false) Integer annee,
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                assignmentService.lotsDeLaFile(principal.getId(), annee)));
+                assignmentService.lotsDeLaFile(principal.getId(), annee, discipline)));
     }
 
     /**
@@ -126,11 +138,12 @@ public class TestOrderAssignmentController {
             @RequestParam(required = false) Boolean enRetard,
             @RequestParam(required = false) java.util.List<UUID> demandes,
             @RequestParam(required = false) String avancement,
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
                 assignmentService.resumeDeLaFile(principal.getId(),
                         new FiltreFileDuMedecin(annee, lot, null, statutDemande,
-                                urgents, enRetard, demandes, null, avancement))));
+                                urgents, enRetard, demandes, null, avancement, discipline))));
     }
 
     /**
@@ -144,9 +157,10 @@ public class TestOrderAssignmentController {
     @PreAuthorize("hasAuthority('view-test-order-assignments')")
     public ResponseEntity<ApiResponse<Long>> arriere(
             @RequestParam int annee,
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                assignmentService.arriereDuMedecin(principal.getId(), annee)));
+                assignmentService.arriereDuMedecin(principal.getId(), annee, discipline)));
     }
 
     /**

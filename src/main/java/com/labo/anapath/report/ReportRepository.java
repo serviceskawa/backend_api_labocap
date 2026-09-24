@@ -1,5 +1,6 @@
 package com.labo.anapath.report;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.dashboard.DashboardDto;
 import com.labo.anapath.dashboard.DashboardProjection;
 import org.springframework.data.domain.Page;
@@ -21,6 +22,9 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
 
     Page<Report> findByBranchId(UUID branchId, Pageable pageable);
 
+    /** Les comptes-rendus d'une discipline dans la branche. */
+    Page<Report> findByBranchIdAndDiscipline(UUID branchId, Discipline discipline, Pageable pageable);
+
     Optional<Report> findByTestOrderId(UUID testOrderId);
 
     /**
@@ -35,6 +39,10 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
      * lancerait des centaines d'appels d'un coup. Trois jours couvrent le cas
      * réel — un week-end prolongé — et rien au-delà : passé ce délai, l'avis se
      * fait au comptoir.</p>
+     *
+     * <p>Sans filtre de discipline, à dessein : prévenir le patient que son
+     * résultat est prêt vaut pour la biologie comme pour l'anatomie
+     * pathologique.</p>
      *
      * @param depuis   date de validation la plus ancienne encore reprise
      * @param pageable plafond du lot ; le tri est porté par la requête
@@ -71,6 +79,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
               AND (:month IS NULL OR EXTRACT(MONTH FROM r.signature_date) = :month)
               AND (:year  IS NULL OR EXTRACT(YEAR  FROM r.signature_date) = :year)
               AND (:doctorId IS NULL OR r.signatory1 = CAST(:doctorId AS uuid))
+              AND r.discipline = :discipline
             ORDER BY r.created_at DESC
             """,
             countQuery = """
@@ -80,6 +89,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
               AND (:month IS NULL OR EXTRACT(MONTH FROM r.signature_date) = :month)
               AND (:year  IS NULL OR EXTRACT(YEAR  FROM r.signature_date) = :year)
               AND (:doctorId IS NULL OR r.signatory1 = CAST(:doctorId AS uuid))
+              AND r.discipline = :discipline
             """,
             nativeQuery = true)
     Page<Report> findFiltered(
@@ -87,6 +97,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             @Param("month") Integer month,
             @Param("year") Integer year,
             @Param("doctorId") UUID doctorId,
+            @Param("discipline") String discipline,
             Pageable pageable);
 
     /**
@@ -120,6 +131,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
               AND (:year     IS NULL OR EXTRACT(YEAR  FROM r.signature_date) = :year)
               AND (:doctorId IS NULL OR r.signatory1 = CAST(:doctorId AS uuid))
               AND (:status   IS NULL OR r.status::text = :status)
+              AND r.discipline = :discipline
               AND (:search   IS NULL OR (
                     unaccent(lower(coalesce(r.code,         ''))) LIKE unaccent(lower('%' || CAST(:search AS text) || '%'))
                  OR unaccent(lower(coalesce(tor.code,       ''))) LIKE unaccent(lower('%' || CAST(:search AS text) || '%'))
@@ -145,6 +157,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
               AND (:year     IS NULL OR EXTRACT(YEAR  FROM r.signature_date) = :year)
               AND (:doctorId IS NULL OR r.signatory1 = CAST(:doctorId AS uuid))
               AND (:status   IS NULL OR r.status::text = :status)
+              AND r.discipline = :discipline
               AND (:search   IS NULL OR (
                     unaccent(lower(coalesce(r.code,         ''))) LIKE unaccent(lower('%' || CAST(:search AS text) || '%'))
                  OR unaccent(lower(coalesce(tor.code,       ''))) LIKE unaccent(lower('%' || CAST(:search AS text) || '%'))
@@ -167,6 +180,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             @Param("doctorId") UUID doctorId,
             @Param("status") String status,
             @Param("search") String search,
+            @Param("discipline") String discipline,
             Pageable pageable);
 
     @Query(value = """
@@ -182,6 +196,9 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             AND (:month IS NULL OR EXTRACT(MONTH FROM tor.created_at) = :month)
             AND (:year  IS NULL OR EXTRACT(YEAR  FROM tor.created_at) = :year)
             """, nativeQuery = true)
+    // Pas de filtre de discipline : la jointure interne sur type_orders et les
+    // titres comptés (Histologie, Immuno, Cytologie) n'existent qu'en anatomie
+    // pathologique.
     Object[] getExamenStats(
             @Param("branchId") UUID branchId,
             @Param("month") Integer month,
@@ -196,8 +213,10 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             JOIN test_orders tor ON tor.id = rep.test_order_id
             LEFT JOIN test_order_assignment_details toad ON toad.test_order_id = rep.test_order_id
             WHERE rep.branch_id = :branchId AND rep.deleted_at IS NULL
+              AND rep.discipline = :discipline
             """, nativeQuery = true)
-    Object[] getRapportStats(@Param("branchId") UUID branchId);
+    Object[] getRapportStats(@Param("branchId") UUID branchId,
+                             @Param("discipline") String discipline);
 
     @Query(value = """
             SELECT
@@ -207,8 +226,10 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
                 SUM(CASE WHEN is_delivered = FALSE THEN 1 ELSE 0 END) AS not_deliver
             FROM reports
             WHERE branch_id = :branchId AND deleted_at IS NULL
+              AND discipline = :discipline
             """, nativeQuery = true)
-    Object[] getPatientCalledStats(@Param("branchId") UUID branchId);
+    Object[] getPatientCalledStats(@Param("branchId") UUID branchId,
+                                   @Param("discipline") String discipline);
 
     @Query(value = """
             SELECT DISTINCT EXTRACT(YEAR FROM created_at)::int AS y
@@ -289,6 +310,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
                    (:statusFilter = 4 AND r.status IN ('VALIDATED','DELIVERED')) OR
                    (:statusFilter = 5 AND r.is_delivered = false))
               AND (:isLate IS NULL OR (r.status = 'DRAFT' AND DATE(r.created_at) <= CURRENT_DATE - 21))
+              AND r.discipline = :discipline
             ORDER BY r.created_at DESC
             """,
             countQuery = """
@@ -321,6 +343,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
                    (:statusFilter = 4 AND r.status IN ('VALIDATED','DELIVERED')) OR
                    (:statusFilter = 5 AND r.is_delivered = false))
               AND (:isLate IS NULL OR (r.status = 'DRAFT' AND DATE(r.created_at) <= CURRENT_DATE - 21))
+              AND r.discipline = :discipline
             """,
             nativeQuery = true)
     Page<ReportSuiviProjection> findSuiviRows(
@@ -332,6 +355,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             @Param("isUrgent") Boolean isUrgent,
             @Param("statusFilter") Integer statusFilter,
             @Param("isLate") Boolean isLate,
+            @Param("discipline") String discipline,
             Pageable pageable);
 
     @Query(value = """
@@ -351,7 +375,8 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
                 COALESCE(h.name, '') as hospitalName,
                 COALESCE(t.reference_hopital, '') as referenceHospital,
                 r.created_at as dateCreation,
-                t.is_urgent as isUrgent
+                t.is_urgent as isUrgent,
+                r.discipline as discipline
             FROM reports r
             JOIN test_orders t ON r.test_order_id = t.id
             JOIN patients p ON t.patient_id = p.id
@@ -477,6 +502,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
               AND (CAST(:statusFilter AS text) IS NULL OR r.status = CAST(:statusFilter AS text))
               AND (CAST(:dateBegin AS text) IS NULL OR DATE(r.created_at) >= CAST(:dateBegin AS date))
               AND (CAST(:dateEnd AS text) IS NULL OR DATE(r.created_at) <= CAST(:dateEnd AS date))
+              AND r.discipline = :discipline
             ORDER BY r.created_at DESC
             """,
             countQuery = """
@@ -506,6 +532,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
               AND (CAST(:statusFilter AS text) IS NULL OR r.status = CAST(:statusFilter AS text))
               AND (CAST(:dateBegin AS text) IS NULL OR DATE(r.created_at) >= CAST(:dateBegin AS date))
               AND (CAST(:dateEnd AS text) IS NULL OR DATE(r.created_at) <= CAST(:dateEnd AS date))
+              AND r.discipline = :discipline
             """,
             nativeQuery = true)
     Page<ReportListProjection> findListRows(
@@ -514,6 +541,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             @Param("statusFilter") String statusFilter,
             @Param("dateBegin") String dateBegin,
             @Param("dateEnd") String dateEnd,
+            @Param("discipline") String discipline,
             Pageable pageable);
 
     @Query(value = """
@@ -535,12 +563,14 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
               AND (:doctorId IS NULL OR a.user_id = CAST(:doctorId AS uuid))
               AND (:month IS NULL OR EXTRACT(MONTH FROM r.signature_date) = :month)
               AND (:year IS NULL OR EXTRACT(YEAR FROM r.signature_date) = :year)
+              AND r.discipline = :discipline
             """, nativeQuery = true)
     java.util.Map<String, Object> getReportPerformanceStats(
             @Param("branchId") UUID branchId,
             @Param("doctorId") String doctorId,
             @Param("month") Integer month,
-            @Param("year") Integer year);
+            @Param("year") Integer year,
+            @Param("discipline") String discipline);
 
     // Dashboard — comptages par statut de livraison, sur la période en cours
     /**
@@ -555,10 +585,12 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             WHERE r.branchId = :branchId
               AND r.isDelivered = :isDelivered
               AND r.createdAt >= :depuis
+              AND r.discipline = :discipline
             """)
     long countByBranchIdAndIsDelivered(@Param("branchId") UUID branchId,
                                        @Param("isDelivered") boolean isDelivered,
-                                       @Param("depuis") java.time.LocalDateTime depuis);
+                                       @Param("depuis") java.time.LocalDateTime depuis,
+                                       @Param("discipline") Discipline discipline);
 
     /**
      * Compte les comptes rendus de la branche dont le statut fait partie de la liste,
@@ -578,11 +610,13 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             WHERE r.branchId = :branchId
               AND r.testOrder IS NOT NULL
               AND r.status IN :statuses
+              AND r.discipline = :discipline
             """)
     long countByBranchIdAndStatusIn(
             @org.springframework.data.repository.query.Param("branchId") UUID branchId,
             @org.springframework.data.repository.query.Param("statuses")
-            java.util.List<com.labo.anapath.report.ReportStatus> statuses);
+            java.util.List<com.labo.anapath.report.ReportStatus> statuses,
+            @Param("discipline") Discipline discipline);
 
     // Dashboard — rapports du jour
     @Query(value = """
@@ -596,8 +630,10 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             LEFT JOIN invoices i ON i.test_order_id = t.id AND i.deleted_at IS NULL
             WHERE t.branch_id = :branchId AND DATE(r.updated_at) = :today
               AND r.deleted_at IS NULL AND t.deleted_at IS NULL
+              AND r.discipline = :discipline
             ORDER BY r.updated_at DESC
             """, nativeQuery = true)
     List<DashboardProjection.ReportToday> findReportsTodayByBranchId(@Param("branchId") UUID branchId,
-                                                               @Param("today") LocalDate today);
+                                                               @Param("today") LocalDate today,
+                                                               @Param("discipline") String discipline);
 }

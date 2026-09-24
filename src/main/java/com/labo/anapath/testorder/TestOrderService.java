@@ -180,9 +180,10 @@ public interface TestOrderService {
      *
      * @param userId   identifiant de l'utilisateur connecté
      * @param branchId identifiant de la branche (isolation multi-tenant)
+     * @param discipline discipline des bons comptés (PATHOLOGY par défaut côté contrôleur)
      * @return DTO de statistiques (total, pending, validated, urgent, late)
      */
-    MyspaceStatsDto getMyspaceStats(UUID userId, UUID branchId);
+    MyspaceStatsDto getMyspaceStats(UUID userId, UUID branchId, com.labo.anapath.common.Discipline discipline);
 
     /**
      * Retourne la liste paginée des bons d'examen assignés à l'utilisateur connecté,
@@ -198,11 +199,13 @@ public interface TestOrderService {
      * @param from        date de début optionnelle (YYYY-MM-DD, sur created_at)
      * @param to          date de fin optionnelle (YYYY-MM-DD, sur created_at)
      * @param search      recherche textuelle optionnelle (code du bon ou nom du patient)
+     * @param discipline  discipline des bons listés (PATHOLOGY par défaut côté contrôleur)
      * @return page de {@link TestOrderResponseDto}
      */
     PageResponse<TestOrderResponseDto> getMyspaceOrders(UUID userId, UUID branchId, int page, int size,
                                                         TestOrderStatus status, UUID typeOrderId,
-                                                        String priority, String from, String to, String search);
+                                                        String priority, String from, String to, String search,
+                                                        com.labo.anapath.common.Discipline discipline);
 
     // -------------------------------------------------------------------------
     // Tarification contractuelle

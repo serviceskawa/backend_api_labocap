@@ -1,5 +1,6 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.dashboard.DashboardDto;
 import com.labo.anapath.dashboard.DashboardProjection;
 import com.labo.anapath.patient.Patient;
@@ -69,6 +70,15 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
 
     long countByBranchId(UUID branchId);
 
+    /**
+     * Nombre de bons d'une discipline dans la branche.
+     *
+     * <p>Le tableau de bord ne compte que l'anatomie pathologique tant que la
+     * répartition par discipline n'y est pas affichée : un total mêlant les deux
+     * changerait sans prévenir un chiffre que le laboratoire suit.</p>
+     */
+    long countByBranchIdAndDiscipline(UUID branchId, Discipline discipline);
+
     /** Nombre de bons d'examen consommés par un contrat (équivalent Laravel {@code $contrat->orders->count()}). */
     long countByContratId(UUID contratId);
 
@@ -79,10 +89,12 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
      */
     java.util.Optional<TestOrder> findByCodeAndBranchId(String code, UUID branchId);
 
-    @Query("SELECT COUNT(t) FROM TestOrder t WHERE t.branchId = :branchId AND t.createdAt >= :start AND t.createdAt <= :end")
+    @Query("SELECT COUNT(t) FROM TestOrder t WHERE t.branchId = :branchId AND t.createdAt >= :start AND t.createdAt <= :end"
+            + " AND t.discipline = :discipline")
     long countByBranchIdAndCreatedAtBetween(@Param("branchId") UUID branchId,
                                              @Param("start") LocalDateTime start,
-                                             @Param("end") LocalDateTime end);
+                                             @Param("end") LocalDateTime end,
+                                             @Param("discipline") Discipline discipline);
 
     /**
      * Les dossiers sans aucun compte rendu, ouverts depuis {@code depuis}.
@@ -96,10 +108,12 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             SELECT COUNT(*) FROM test_orders t
             WHERE t.branch_id = :branchId AND t.deleted_at IS NULL
               AND t.created_at >= :depuis
+              AND t.discipline = :discipline
               AND NOT EXISTS (SELECT 1 FROM reports r WHERE r.test_order_id = t.id AND r.deleted_at IS NULL)
             """, nativeQuery = true)
     long countByBranchIdAndReportIsNull(@Param("branchId") UUID branchId,
-                                        @Param("depuis") LocalDateTime depuis);
+                                        @Param("depuis") LocalDateTime depuis,
+                                        @Param("discipline") String discipline);
 
     /** Les demandes en attente depuis trop longtemps, ouvertes depuis {@code depuis}. */
     @Query("""
@@ -108,21 +122,28 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
               AND t.status = com.labo.anapath.testorder.TestOrderStatus.PENDING
               AND t.createdAt < :before
               AND t.createdAt >= :depuis
+              AND t.discipline = :discipline
             """)
     long countByBranchIdAndStatusPendingAndCreatedAtBefore(@Param("branchId") UUID branchId,
                                                             @Param("before") LocalDateTime before,
-                                                            @Param("depuis") LocalDateTime depuis);
+                                                            @Param("depuis") LocalDateTime depuis,
+                                                            @Param("discipline") Discipline discipline);
 
     /**
      * Demandes d'examen sans macro depuis plus de {@code days} jours (alerte
      * "macro non faite"). Réplique la règle Laravel : test_orders absents de
      * test_pathology_macros et créés il y a plus de N jours.
+     *
+     * <p>Restreinte à une discipline : la macroscopie n'existe qu'en anatomie
+     * pathologique, et un bon de biologie serait signalé à tort « sans macro »
+     * pour toujours.</p>
      */
     @Query(value = """
             SELECT t.* FROM test_orders t
             WHERE t.branch_id = :branchId
               AND t.deleted_at IS NULL
               AND DATE(t.created_at) <= CURRENT_DATE - :days
+              AND t.discipline = :discipline
               AND NOT EXISTS (
                   SELECT 1 FROM test_pathology_macros m
                   WHERE m.test_order_id = t.id AND m.deleted_at IS NULL)
@@ -131,7 +152,8 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             """, nativeQuery = true)
     List<TestOrder> findOverdueWithoutMacro(@Param("branchId") UUID branchId,
                                             @Param("days") int days,
-                                            @Param("maxRows") int maxRows);
+                                            @Param("maxRows") int maxRows,
+                                            @Param("discipline") String discipline);
 
     /**
      * Demandes d'examen dont le compte-rendu n'est toujours pas validé depuis plus de
@@ -151,12 +173,14 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
               AND t.deleted_at IS NULL
               AND r.status NOT IN ('VALIDATED', 'DELIVERED')
               AND DATE(t.created_at) <= CURRENT_DATE - :days
+              AND t.discipline = :discipline
             ORDER BY t.created_at ASC
             LIMIT :maxRows
             """, nativeQuery = true)
     List<ReportNonFaitProjection> findOverdueWithoutReport(@Param("branchId") UUID branchId,
                                                            @Param("days") int days,
-                                                           @Param("maxRows") int maxRows);
+                                                           @Param("maxRows") int maxRows,
+                                                           @Param("discipline") String discipline);
 
     // -------------------------------------------------------------------------
     // Dashboard — top examens
@@ -167,12 +191,14 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             FROM detail_test_orders dto
             JOIN test_orders t ON dto.test_order_id = t.id
             WHERE t.branch_id = :branchId AND t.deleted_at IS NULL
+              AND t.discipline = :discipline
             GROUP BY dto.test_name
             ORDER BY totalDemandes DESC
             LIMIT :limit
             """, nativeQuery = true)
     List<DashboardProjection.TopExamen> getTopExamensByBranchId(@Param("branchId") UUID branchId,
-                                                          @Param("limit") int limit);
+                                                          @Param("limit") int limit,
+                                                          @Param("discipline") String discipline);
 
     // -------------------------------------------------------------------------
     // Dashboard — stats docteurs
@@ -198,12 +224,16 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             JOIN roles ro ON ro.id = ur.role_id AND ro.slug = 'docteur'
             LEFT JOIN test_orders t ON t.attribuate_doctor_id = u.id
                  AND t.branch_id = :branchId AND t.deleted_at IS NULL
+                 -- Dans la jointure et non dans le WHERE : un docteur sans
+                 -- demande de cette discipline doit rester affiché à 0/0.
+                 AND t.discipline = :discipline
             LEFT JOIN reports r ON r.test_order_id = t.id AND r.deleted_at IS NULL
             WHERE u.branch_id = :branchId AND u.deleted_at IS NULL
             GROUP BY u.id, u.lastname, u.firstname
             ORDER BY assigne DESC
             """, nativeQuery = true)
-    List<DashboardProjection.DoctorStat> getDoctorStatsByBranchId(@Param("branchId") UUID branchId);
+    List<DashboardProjection.DoctorStat> getDoctorStatsByBranchId(@Param("branchId") UUID branchId,
+                                                                  @Param("discipline") String discipline);
 
     // -------------------------------------------------------------------------
     // Dashboard — stats mensuelles
@@ -224,9 +254,11 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             JOIN detail_test_orders dto ON dto.test_order_id = t.id
             WHERE t.branch_id = :branchId AND EXTRACT(MONTH FROM t.created_at) = :month
               AND t.deleted_at IS NULL
+              AND t.discipline = :discipline
             """, nativeQuery = true)
     long countByBranchIdAndMonth(@Param("branchId") UUID branchId,
-                                  @Param("month") int month);
+                                  @Param("month") int month,
+                                  @Param("discipline") String discipline);
 
     @Query(value = """
             SELECT COALESCE(SUM(lt.price), 0)
@@ -244,31 +276,44 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             FROM test_orders t
             WHERE t.branch_id = :branchId AND EXTRACT(MONTH FROM t.created_at) = :month
               AND t.deleted_at IS NULL
+              AND t.discipline = :discipline
             """, nativeQuery = true)
     long countPatientsByBranchIdAndMonth(@Param("branchId") UUID branchId,
-                                          @Param("month") int month);
+                                          @Param("month") int month,
+                                          @Param("discipline") String discipline);
 
     @Query(value = """
             SELECT h.name as nom, COUNT(DISTINCT t.patient_id) as totalPatients
             FROM test_orders t JOIN hospitals h ON t.hospital_id = h.id
             WHERE t.branch_id = :branchId AND EXTRACT(MONTH FROM t.created_at) = :month
               AND t.deleted_at IS NULL AND h.deleted_at IS NULL
+              AND t.discipline = :discipline
             GROUP BY h.id, h.name ORDER BY totalPatients DESC
             """, nativeQuery = true)
     List<DashboardProjection.ByItem> countByHospitalAndMonth(@Param("branchId") UUID branchId,
-                                                       @Param("month") int month);
+                                                       @Param("month") int month,
+                                                       @Param("discipline") String discipline);
 
     @Query(value = """
             SELECT d.name as nom, COUNT(DISTINCT t.patient_id) as totalPatients
             FROM test_orders t JOIN doctors d ON t.doctor_id = d.id
             WHERE t.branch_id = :branchId AND EXTRACT(MONTH FROM t.created_at) = :month
               AND t.deleted_at IS NULL AND d.deleted_at IS NULL
+              AND t.discipline = :discipline
             GROUP BY d.id, d.name HAVING COUNT(DISTINCT t.patient_id) > 5
             ORDER BY totalPatients DESC
             """, nativeQuery = true)
     List<DashboardProjection.ByItem> countByDoctorAndMonth(@Param("branchId") UUID branchId,
-                                                     @Param("month") int month);
+                                                     @Param("month") int month,
+                                                     @Param("discipline") String discipline);
 
+    /**
+     * Patients du mois par type de demande.
+     *
+     * <p>Non filtrée par discipline : la jointure interne sur {@code type_orders}
+     * écarte déjà les bons de biologie, qui ne portent pas de type de demande
+     * d'anatomie pathologique.</p>
+     */
     @Query(value = """
             SELECT tp.title as nom, COUNT(DISTINCT t.patient_id) as totalPatients
             FROM test_orders t JOIN type_orders tp ON t.type_order_id = tp.id
@@ -292,11 +337,13 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             LEFT JOIN reports r ON r.test_order_id = t.id AND r.deleted_at IS NULL
             WHERE t.attribuate_doctor_id = :userId
               AND t.branch_id = :branchId AND t.deleted_at IS NULL
+              AND t.discipline = :discipline
             ORDER BY t.created_at DESC
             """, nativeQuery = true)
     List<DashboardProjection.DoctorOrder> findAllByAttribuateDoctorId(
             @Param("userId") UUID userId,
-            @Param("branchId") UUID branchId);
+            @Param("branchId") UUID branchId,
+            @Param("discipline") String discipline);
 
     @Query(value = """
             SELECT t.id::text as id, t.code as code, t.created_at::text as createdAt,
@@ -307,13 +354,15 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             LEFT JOIN reports r ON r.test_order_id = t.id AND r.deleted_at IS NULL
             WHERE t.attribuate_doctor_id = :userId
               AND t.branch_id = :branchId AND t.deleted_at IS NULL
+              AND t.discipline = :discipline
               AND DATE(r.updated_at) = :today
             ORDER BY t.created_at DESC
             """, nativeQuery = true)
     List<DashboardProjection.DoctorOrder> findTodayByAttribuateDoctorId(
             @Param("userId") UUID userId,
             @Param("branchId") UUID branchId,
-            @Param("today") java.time.LocalDate today);
+            @Param("today") java.time.LocalDate today,
+            @Param("discipline") String discipline);
 
     @Query(value = """
             SELECT t.* FROM test_orders t
@@ -336,6 +385,10 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
      * séquence extraite en fin de code), et le filtre d'année porte sur le
      * <b>code lui-même</b> (et non {@code created_at}), ce qui évite de calculer
      * un « prochain » code qui entre en collision avec un code déjà existant.
+     *
+     * <p>Volontairement sans filtre de discipline : la séquence est unique pour
+     * l'année, toutes disciplines confondues, et le code porte une contrainte
+     * d'unicité sur toute la table.</p>
      *
      * @param branchId  identifiant de la branche
      * @param yearToken les 2 chiffres de l'année (ex. « 26 »)
@@ -374,11 +427,13 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
      * @return nombre total de bons assignés
      */
     @Query("SELECT COUNT(t) FROM TestOrder t WHERE t.branchId = :branchId " +
+           "AND t.discipline = :discipline " +
            "AND (:seeAll = TRUE OR t.assignedToUserId = :userId)")
     long countByAssignedToUserIdAndBranchId(
             @Param("userId") UUID userId,
             @Param("branchId") UUID branchId,
-            @Param("seeAll") boolean seeAll);
+            @Param("seeAll") boolean seeAll,
+            @Param("discipline") Discipline discipline);
 
     /**
      * Compte les bons d'examen assignés à un utilisateur pour une branche et un statut donnés.
@@ -388,11 +443,13 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
      * @param status   statut à filtrer
      * @return nombre de bons correspondants
      */
-    @Query("SELECT COUNT(t) FROM TestOrder t WHERE t.assignedToUserId = :userId AND t.branchId = :branchId AND t.status = :status")
+    @Query("SELECT COUNT(t) FROM TestOrder t WHERE t.assignedToUserId = :userId AND t.branchId = :branchId AND t.status = :status"
+            + " AND t.discipline = :discipline")
     long countByAssignedToUserIdAndBranchIdAndStatus(
             @Param("userId") UUID userId,
             @Param("branchId") UUID branchId,
-            @Param("status") TestOrderStatus status);
+            @Param("status") TestOrderStatus status,
+            @Param("discipline") Discipline discipline);
 
     /**
      * Compte les bons d'examen urgents assignés à un utilisateur pour une branche.
@@ -402,11 +459,13 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
      * @return nombre de bons urgents
      */
     @Query("SELECT COUNT(t) FROM TestOrder t WHERE t.branchId = :branchId AND t.isUrgent = true " +
+           "AND t.discipline = :discipline " +
            "AND (:seeAll = TRUE OR t.assignedToUserId = :userId)")
     long countUrgentByAssignedToUserIdAndBranchId(
             @Param("userId") UUID userId,
             @Param("branchId") UUID branchId,
-            @Param("seeAll") boolean seeAll);
+            @Param("seeAll") boolean seeAll,
+            @Param("discipline") Discipline discipline);
 
     /**
      * Compte les bons d'examen en retard (PENDING assignés il y a plus de 48 h).
@@ -422,12 +481,14 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
            "WHERE t.branchId = :branchId " +
            "AND (:seeAll = TRUE OR t.assignedToUserId = :userId) " +
            "AND (r IS NULL OR r.status NOT IN (com.labo.anapath.report.ReportStatus.VALIDATED, com.labo.anapath.report.ReportStatus.DELIVERED)) " +
-           "AND t.assignmentDate IS NOT NULL AND t.assignmentDate < :cutoff")
+           "AND t.assignmentDate IS NOT NULL AND t.assignmentDate < :cutoff " +
+           "AND t.discipline = :discipline")
     long countLateByAssignedToUserIdAndBranchId(
             @Param("userId") UUID userId,
             @Param("branchId") UUID branchId,
             @Param("cutoff") LocalDateTime cutoff,
-            @Param("seeAll") boolean seeAll);
+            @Param("seeAll") boolean seeAll,
+            @Param("discipline") Discipline discipline);
 
     /**
      * Compte les bons assignés dont le rapport n'est pas encore terminé
@@ -437,9 +498,11 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
            "LEFT JOIN com.labo.anapath.report.Report r ON r.testOrder.id = t.id " +
            "WHERE t.branchId = :branchId " +
            "AND (:seeAll = TRUE OR t.assignedToUserId = :userId) " +
-           "AND (r IS NULL OR r.status NOT IN (com.labo.anapath.report.ReportStatus.VALIDATED, com.labo.anapath.report.ReportStatus.DELIVERED))")
+           "AND (r IS NULL OR r.status NOT IN (com.labo.anapath.report.ReportStatus.VALIDATED, com.labo.anapath.report.ReportStatus.DELIVERED)) " +
+           "AND t.discipline = :discipline")
     long countAssignedReportPending(@Param("userId") UUID userId, @Param("branchId") UUID branchId,
-                                    @Param("seeAll") boolean seeAll);
+                                    @Param("seeAll") boolean seeAll,
+                                    @Param("discipline") Discipline discipline);
 
     /**
      * Compte les bons assignés dont le rapport est terminé (VALIDATED ou DELIVERED).
@@ -448,9 +511,11 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
            "JOIN com.labo.anapath.report.Report r ON r.testOrder.id = t.id " +
            "WHERE t.branchId = :branchId " +
            "AND (:seeAll = TRUE OR t.assignedToUserId = :userId) " +
-           "AND r.status IN (com.labo.anapath.report.ReportStatus.VALIDATED, com.labo.anapath.report.ReportStatus.DELIVERED)")
+           "AND r.status IN (com.labo.anapath.report.ReportStatus.VALIDATED, com.labo.anapath.report.ReportStatus.DELIVERED) " +
+           "AND t.discipline = :discipline")
     long countAssignedReportDone(@Param("userId") UUID userId, @Param("branchId") UUID branchId,
-                                 @Param("seeAll") boolean seeAll);
+                                 @Param("seeAll") boolean seeAll,
+                                 @Param("discipline") Discipline discipline);
 
     /**
      * Compte les bons d'examen immuno assignés dont le rapport n'est pas terminé.
@@ -484,6 +549,7 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
      * @param branchId identifiant de la branche (isolation multi-tenant)
      * @param status   statut à filtrer (peut être null pour tous les statuts)
      * @param search   motif de recherche insensible à la casse (peut être null)
+     * @param discipline nom de la discipline ({@code PATHOLOGY}, {@code BIOLOGY})
      * @param pageable paramètres de pagination
      * @return page de bons correspondants
      */
@@ -494,6 +560,7 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             WHERE t.deleted_at IS NULL
               AND (:seeAll = TRUE OR t.assigned_to_user_id = :userId)
               AND t.branch_id = :branchId
+              AND t.discipline = :discipline
               AND (:status IS NULL
                    OR (:status = 'PENDING'   AND (r.id IS NULL OR r.status NOT IN ('VALIDATED', 'DELIVERED')))
                    OR (:status = 'VALIDATED' AND r.status IN ('VALIDATED', 'DELIVERED'))
@@ -520,6 +587,7 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             WHERE t.deleted_at IS NULL
               AND (:seeAll = TRUE OR t.assigned_to_user_id = :userId)
               AND t.branch_id = :branchId
+              AND t.discipline = :discipline
               AND (:status IS NULL
                    OR (:status = 'PENDING'   AND (r.id IS NULL OR r.status NOT IN ('VALIDATED', 'DELIVERED')))
                    OR (:status = 'VALIDATED' AND r.status IN ('VALIDATED', 'DELIVERED'))
@@ -549,6 +617,7 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             @Param("toDate") String toDate,
             @Param("search") String search,
             @Param("seeAll") boolean seeAll,
+            @Param("discipline") String discipline,
             Pageable pageable);
 
     // -------------------------------------------------------------------------

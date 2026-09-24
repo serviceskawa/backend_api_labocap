@@ -1,5 +1,6 @@
 package com.labo.anapath.report;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.dto.PageResponse;
 
 import java.util.List;
@@ -12,6 +13,15 @@ public interface ReportService {
     PageResponse<ReportResponseDto> findAll(int page, int size, UUID branchId, Integer month, Integer year, UUID doctorId);
 
     PageResponse<ReportResponseDto> findAll(int page, int size, UUID branchId, Integer month, Integer year, UUID doctorId, String status, String search);
+
+    /**
+     * Liste filtrée restreinte à une discipline.
+     *
+     * <p>Les surcharges sans discipline s'en tiennent à l'anatomie pathologique,
+     * pour que les écrans existants voient exactement ce qu'ils voyaient.</p>
+     */
+    PageResponse<ReportResponseDto> findAll(int page, int size, UUID branchId, Integer month, Integer year,
+                                            UUID doctorId, String status, String search, Discipline discipline);
 
     ReportResponseDto findById(UUID id);
 
@@ -37,7 +47,8 @@ public interface ReportService {
     DossierResumeDto findResumeByTestOrderCode(String code, UUID branchId);
 
     /**
-     * Valide un compte-rendu en y attachant, le cas échéant, la preuve d'appareil.
+     * Valide un compte-rendu d'anatomie pathologique en y attachant, le cas
+     * échéant, la preuve d'appareil. Un compte-rendu de biologie est refusé.
      *
      * <p>{@code preuve} nul : comportement d'origine, la validation ne s'adosse
      * qu'à la session ouverte — c'est le cas du web. Non nul : la preuve est
@@ -66,11 +77,20 @@ public interface ReportService {
 
     ReportSuiviDto getSuivi(UUID branchId, Integer month, Integer year);
 
+    ReportSuiviDto getSuivi(UUID branchId, Integer month, Integer year, Discipline discipline);
+
     PageResponse<ReportSuiviRowDto> getSuiviList(
             UUID branchId, int page, int size,
             String search, String typeOrderId,
             String dateBegin, String dateEnd,
             Boolean isUrgent, Integer statusFilter, Boolean isLate);
+
+    PageResponse<ReportSuiviRowDto> getSuiviList(
+            UUID branchId, int page, int size,
+            String search, String typeOrderId,
+            String dateBegin, String dateEnd,
+            Boolean isUrgent, Integer statusFilter, Boolean isLate,
+            Discipline discipline);
 
     PageResponse<LogReportResponseDto> getReportLogs(UUID branchId, int page, int size);
 
@@ -95,8 +115,16 @@ public interface ReportService {
             UUID branchId, int page, int size,
             String search, String statusFilter, String dateBegin, String dateEnd);
 
+    PageResponse<ReportListDto> getList(
+            UUID branchId, int page, int size,
+            String search, String statusFilter, String dateBegin, String dateEnd,
+            Discipline discipline);
+
     ReportPerformanceDto getPerformanceStats(
             UUID branchId, String doctorId, Integer month, Integer year);
+
+    ReportPerformanceDto getPerformanceStats(
+            UUID branchId, String doctorId, Integer month, Integer year, Discipline discipline);
 
     /**
      * Modifications apportées au compte-rendu après sa signature.

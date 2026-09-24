@@ -1,5 +1,6 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.NomComplet;
 
 import com.labo.anapath.branch.Branch;
@@ -86,6 +87,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
                 .orElseThrow(() -> new ResourceNotFoundException("Assignment", assignmentId));
         TestOrder order = testOrderRepository.findById(dto.getTestOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", dto.getTestOrderId()));
+        exigerLaDisciplineDuLot(assignment, order);
 
         Optional<TestOrderAssignmentDetail> courante =
                 detailRepository.findByTestOrderId(dto.getTestOrderId());
@@ -133,23 +135,57 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
             detailRepository.save(detail);
         }
 
-        Optional<TestPathologyMacro> existingMacro = macroRepository.findByTestOrderId(order.getId());
-        if (existingMacro.isPresent()) {
-            existingMacro.get().setAllStepsTrue();
-            macroRepository.save(existingMacro.get());
-        } else {
-            TestPathologyMacro macro = new TestPathologyMacro();
-            macro.setBranchId(assignment.getBranchId());
-            macro.setTestOrderId(order.getId());
-            macro.setTitle("Macro - " + order.getCode());
-            macro.setMacroDate(dto.getDate() != null ? dto.getDate() : LocalDate.now());
-            macro.setAllStepsTrue();
-            macroRepository.save(macro);
+        // La macroscopie n'existe qu'en anatomie pathologique : un bon d'une
+        // autre discipline n'en reçoit pas en entrant dans un lot.
+        if (order.getDiscipline() == Discipline.PATHOLOGY) {
+            Optional<TestPathologyMacro> existingMacro = macroRepository.findByTestOrderId(order.getId());
+            if (existingMacro.isPresent()) {
+                existingMacro.get().setAllStepsTrue();
+                macroRepository.save(existingMacro.get());
+            } else {
+                TestPathologyMacro macro = new TestPathologyMacro();
+                macro.setBranchId(assignment.getBranchId());
+                macro.setTestOrderId(order.getId());
+                macro.setTitle("Macro - " + order.getCode());
+                macro.setMacroDate(dto.getDate() != null ? dto.getDate() : LocalDate.now());
+                macro.setAllStepsTrue();
+                macroRepository.save(macro);
+            }
         }
 
         return new AssignmentDetailResponseDto(detail.getId(), order.getId(), order.getCode(),
                 statutDe(order), decoderEtiquettes(detail.getLabels()), detail.getNote(),
                 detail.getRemplaceeLe());
+    }
+
+    /**
+     * Refuse de mêler deux disciplines dans un même lot.
+     *
+     * <p>Un lot est un bordereau remis à un médecin : il le traite d'un bloc,
+     * avec les gestes d'une seule discipline. Y glisser un bon de biologie au
+     * milieu de prélèvements d'anatomie pathologique l'enverrait chez qui ne
+     * sait pas le traiter. Seules comptent les lignes vivantes — ni supprimées,
+     * ni remplacées par une réaffectation.</p>
+     */
+    private static void exigerLaDisciplineDuLot(TestOrderAssignment lot, TestOrder order) {
+        Discipline voulue = disciplineOuDefaut(order.getDiscipline());
+        boolean melange = lot.getDetails().stream()
+                .filter(TestOrderAssignmentDetail::estCourante)
+                .map(TestOrderAssignmentDetail::getTestOrder)
+                .filter(java.util.Objects::nonNull)
+                .filter(o -> o != order && !java.util.Objects.equals(o.getId(), order.getId()))
+                .anyMatch(o -> disciplineOuDefaut(o.getDiscipline()) != voulue);
+        if (melange) {
+            throw new com.labo.anapath.common.exception.BusinessException(
+                    "Un lot ne mêle pas les disciplines : le bon " + order.getCode()
+                            + " ne relève pas de la même discipline que les demandes déjà "
+                            + "présentes dans le lot " + lot.getCode() + ".");
+        }
+    }
+
+    /** La discipline donnée, ou l'anatomie pathologique à défaut. */
+    private static Discipline disciplineOuDefaut(Discipline discipline) {
+        return discipline != null ? discipline : Discipline.PATHOLOGY;
     }
 
     /**
@@ -213,11 +249,11 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
      */
     @Override
     @Transactional(readOnly = true)
-    public List<String> lotsDeLaFile(UUID docteurId, Integer annee) {
+    public List<String> lotsDeLaFile(UUID docteurId, Integer annee, Discipline discipline) {
         return detailRepository.findAll(SpecificationFileDuMedecin.filtrer(
                         docteurId, LocalDate.now(), joursAvantAlerte,
                         new FiltreFileDuMedecin(annee, null, null, null,
-                                null, null, null, null, null)))
+                                null, null, null, null, null, discipline)))
                 .stream()
                 .map(d -> d.getTestOrderAssignment() == null
                         ? null : d.getTestOrderAssignment().getCode())
@@ -230,9 +266,10 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
     /** Combien de dossiers de la file précèdent l'année demandée. */
     @Override
     @Transactional(readOnly = true)
-    public long arriereDuMedecin(UUID docteurId, int annee) {
+    public long arriereDuMedecin(UUID docteurId, int annee, Discipline discipline) {
         return detailRepository.compterAnterieures(
-                docteurId, LocalDate.now(), LocalDate.of(annee, 1, 1).atStartOfDay());
+                docteurId, LocalDate.now(), LocalDate.of(annee, 1, 1).atStartOfDay(),
+                disciplineOuDefaut(discipline));
     }
 
     /**
@@ -465,7 +502,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
     /** {@inheritDoc} */
     @Override
     @Transactional(readOnly = true)
-    public List<DemandeDuMedecinDto> fileDuMedecin(UUID docteurId, Integer annee) {
+    public List<DemandeDuMedecinDto> fileDuMedecin(UUID docteurId, Integer annee, Discipline discipline) {
         // Les demandes terminées restent visibles le jour même. La borne porte
         // sur la date du lot, seule date que la ligne connaisse : c'est une
         // approximation, mais elle va dans le bon sens — un lot du jour reste
@@ -475,12 +512,14 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
         // production traîne 3 574 dossiers ouverts dont aucun de l'année :
         // trier au retour reviendrait à en faire descendre trois mille cinq
         // cents pour n'en afficher aucun, sur une connexion mobile.
+        Discipline laDiscipline = disciplineOuDefaut(discipline);
         var lignes = annee == null
-                ? detailRepository.fileDuMedecin(docteurId, LocalDate.now())
+                ? detailRepository.fileDuMedecin(docteurId, LocalDate.now(), laDiscipline)
                 : detailRepository.fileDuMedecinPourLannee(
                         docteurId, LocalDate.now(),
                         LocalDate.of(annee, 1, 1).atStartOfDay(),
-                        LocalDate.of(annee + 1, 1, 1).atStartOfDay());
+                        LocalDate.of(annee + 1, 1, 1).atStartOfDay(),
+                        laDiscipline);
 
         var etatsComptesRendus = etatsDesComptesRendus(lignes);
 

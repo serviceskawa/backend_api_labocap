@@ -1,5 +1,6 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.NomComplet;
 
 import com.labo.anapath.common.dto.PageResponse;
@@ -464,6 +465,10 @@ public class TestOrderServiceImpl implements TestOrderService {
             report = new Report();
             report.setBranchId(branchId);
             report.setTestOrder(order);
+            // Le compte-rendu hérite de la discipline du bon : plusieurs
+            // requêtes filtrent sur reports sans joindre test_orders, et la
+            // colonne n'est plus modifiable après l'insertion.
+            report.setDiscipline(order.getDiscipline());
             report.setStatus(ReportStatus.DRAFT);
             // Texte par défaut du compte rendu : Laravel lit `Setting::first()->placeholder`,
             // le singleton de la table `settings`. L'ancienne lecture cherchait la clé
@@ -1085,18 +1090,20 @@ public class TestOrderServiceImpl implements TestOrderService {
      */
     @Override
     @Transactional(readOnly = true)
-    public MyspaceStatsDto getMyspaceStats(UUID userId, UUID branchId) {
+    public MyspaceStatsDto getMyspaceStats(UUID userId, UUID branchId, Discipline discipline) {
         // Un super-admin voit TOUTE la donnée de la branche active (et non ses
         // seules assignations) : « Mon espace » lui sert de vue d'ensemble du labo.
         boolean seeAll = userRepository.isSuperAdmin(userId);
         // En attente / terminé sont déterminés par le statut du RAPPORT (comme Laravel),
         // car tous les bons assignés sont déjà au statut VALIDATED côté bon d'examen.
-        long totalAssigned  = testOrderRepository.countByAssignedToUserIdAndBranchId(userId, branchId, seeAll);
-        long totalPending   = testOrderRepository.countAssignedReportPending(userId, branchId, seeAll);
-        long totalValidated = testOrderRepository.countAssignedReportDone(userId, branchId, seeAll);
-        long totalUrgent    = testOrderRepository.countUrgentByAssignedToUserIdAndBranchId(userId, branchId, seeAll);
+        long totalAssigned  = testOrderRepository.countByAssignedToUserIdAndBranchId(userId, branchId, seeAll, discipline);
+        long totalPending   = testOrderRepository.countAssignedReportPending(userId, branchId, seeAll, discipline);
+        long totalValidated = testOrderRepository.countAssignedReportDone(userId, branchId, seeAll, discipline);
+        long totalUrgent    = testOrderRepository.countUrgentByAssignedToUserIdAndBranchId(userId, branchId, seeAll, discipline);
         LocalDateTime cutoff = LocalDateTime.now().minusDays(21);
-        long totalLate      = testOrderRepository.countLateByAssignedToUserIdAndBranchId(userId, branchId, cutoff, seeAll);
+        long totalLate      = testOrderRepository.countLateByAssignedToUserIdAndBranchId(userId, branchId, cutoff, seeAll, discipline);
+        // Les bons immuno sont retenus par leur type, qui n'existe qu'en
+        // anatomie pathologique : ce compteur n'a pas besoin de la discipline.
 
         List<UUID> immunoTypeIds = typeOrderRepository.findImmunoTypeIds(branchId);
         long totalImmunoPending = immunoTypeIds.isEmpty() ? 0L
@@ -1122,7 +1129,8 @@ public class TestOrderServiceImpl implements TestOrderService {
     @Transactional(readOnly = true)
     public PageResponse<TestOrderResponseDto> getMyspaceOrders(UUID userId, UUID branchId, int page, int size,
                                                                TestOrderStatus status, UUID typeOrderId,
-                                                               String priority, String from, String to, String search) {
+                                                               String priority, String from, String to, String search,
+                                                               Discipline discipline) {
         // La requête native findMyspaceOrders trie déjà par t.created_at DESC.
         // Ne PAS ajouter de Sort ici : Spring l'appliquerait tel quel sur la requête
         // native (ORDER BY t.createdAt) → "column t.createdat does not exist" (500).
@@ -1137,7 +1145,8 @@ public class TestOrderServiceImpl implements TestOrderService {
         boolean seeAll = userRepository.isSuperAdmin(userId);
         Page<TestOrder> orderPage = testOrderRepository
                 .findMyspaceOrders(userId, branchId, statusParam, typeOrderParam, priorityParam,
-                        fromParam, toParam, searchParam, seeAll, pageRequest);
+                        fromParam, toParam, searchParam, seeAll,
+                        (discipline != null ? discipline : Discipline.PATHOLOGY).name(), pageRequest);
 
         // Enrichissement report + facture (batch, anti N+1) pour que la colonne
         // « Compte rendu » reflète le vrai statut (Valider / En attente / Non enregistré)
