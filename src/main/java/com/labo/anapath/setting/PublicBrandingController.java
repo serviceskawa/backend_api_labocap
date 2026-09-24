@@ -1,6 +1,7 @@
 package com.labo.anapath.setting;
 
 import com.labo.anapath.common.dto.ApiResponse;
+import com.labo.anapath.common.module.ModulesProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -51,6 +52,7 @@ public class PublicBrandingController {
     static final Set<String> PUBLIC_KEYS = Set.of("app_name", "logo", "logo_white", "favicon");
 
     private final SettingAppRepository settingAppRepository;
+    private final ModulesProperties modules;
 
     /**
      * Renvoie l'habillage public sous forme de map clé → valeur, dans le même format que
@@ -60,7 +62,8 @@ public class PublicBrandingController {
      * alors qu'ils ne changent qu'à la main depuis l'écran Paramètres.
      * </p>
      *
-     * @return les clés publiques renseignées (les valeurs vides sont omises)
+     * @return les clés publiques renseignées (les valeurs vides sont omises), plus
+     *         {@code modules} quand un module optionnel est activé
      */
     @GetMapping
     public ResponseEntity<ApiResponse<Map<String, String>>> branding() {
@@ -75,6 +78,12 @@ public class PublicBrandingController {
             // La requête est triée par ancienneté : pour une clé donnée, le premier
             // gagnant est la valeur de la branche mère. putIfAbsent fige ce choix.
             branding.putIfAbsent(row.getKey(), value);
+        }
+
+        // Modules optionnels actifs, séparés par des virgules (ex. "biology").
+        // Absente quand aucun n'est actif : le déploiement est purement anapath.
+        if (modules.isBiology()) {
+            branding.put("modules", "biology");
         }
 
         return ResponseEntity.ok()

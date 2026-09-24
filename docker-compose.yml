@@ -57,6 +57,8 @@ services:
       APP_BACKUP_COMMAND: pg_dump -h db -p ${DB_PORT:-5432} -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-labo_anapath}
       APP_BACKUP_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant dans .env}
       APP_BACKUP_KEEP: ${BACKUP_KEEP:-30}
+      # Biologie clinique : "true" pour un laboratoire qui la pratique.
+      MODULE_BIOLOGY: ${MODULE_BIOLOGY:-false}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant dans .env}
       # Les trois durées de session. Elles valaient ici 24 h et 7 jours, ce qui
       # écrasait sans le dire la politique écrite dans application.yml — la

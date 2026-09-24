@@ -1,8 +1,11 @@
 package com.labo.anapath.test;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.audit.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -70,6 +73,14 @@ public class LabTest extends AuditableEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_test_id")
     private CategoryTest categoryTest;
+
+    /**
+     * Discipline de l'analyse. Fixée à la création :
+     * une analyse déjà commandée ne peut pas changer de chaîne de traitement.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "discipline", nullable = false, length = 20, updatable = false)
+    private Discipline discipline = Discipline.PATHOLOGY;
 
     /**
      * Unité de mesure des résultats de l'analyse (ex. : "mg/L", "mmol/L").
