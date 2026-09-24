@@ -1,6 +1,7 @@
 package com.labo.anapath.testorder;
 
 import com.labo.anapath.biology.BiologyResultsGuard;
+import com.labo.anapath.biology.results.BiologyResultsLifecycle;
 import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.NomComplet;
 
@@ -97,6 +98,8 @@ public class TestOrderServiceImpl implements TestOrderService {
     private final ModulesProperties modules;
     /** Consulté avant de retirer une analyse d'un bon de biologie (jamais en anatomie pathologique). */
     private final BiologyResultsGuard biologyResultsGuard;
+    /** Analyses à saisir d'un bon de biologie : créées à la validation, alignées à la modification. */
+    private final BiologyResultsLifecycle biologyResultsLifecycle;
 
     /** Clé du préfixe de code de bon d'examen, dans {@code setting_apps} (comme Laravel). */
     private static final String PREFIXE_CODE_EXAMEN_KEY = "prefixe_code_demande_examen";
@@ -412,7 +415,14 @@ public class TestOrderServiceImpl implements TestOrderService {
             order.setDiscount(subtotal - total);
         }
 
-        return testOrderMapper.toResponseDto(testOrderRepository.save(order));
+        TestOrderResponseDto reponse = testOrderMapper.toResponseDto(testOrderRepository.save(order));
+        // Bon de biologie déjà validé (il a son code) : une analyse ajoutée s'ouvre à
+        // la saisie, une analyse retirée — forcément sans résultat, vérifié plus
+        // haut — quitte la liste de travail.
+        if (dto.getDetails() != null && order.getDiscipline() == Discipline.BIOLOGY && order.getCode() != null) {
+            biologyResultsLifecycle.aligner(order.getId(), branchId, analysesDuBon(order), null);
+        }
+        return reponse;
     }
 
     /**
@@ -526,6 +536,12 @@ public class TestOrderServiceImpl implements TestOrderService {
         logReport.setAction("Créer un nouveau report");
         logReportRepository.save(logReport);
         log.info("Report créé/mis à jour pour bon {}: code={}", id, report.getCode());
+
+        // Biologie : une analyse à saisir (PENDING) par analyse du bon. Rejouable —
+        // une seconde validation ne crée rien de plus.
+        if (order.getDiscipline() == Discipline.BIOLOGY) {
+            biologyResultsLifecycle.aligner(order.getId(), branchId, analysesDuBon(order), userId);
+        }
 
         // AC7/AC8: Facturation
         boolean invoiceGrouped = Boolean.TRUE.equals(order.getContrat().getInvoiceUnique());
@@ -840,6 +856,17 @@ public class TestOrderServiceImpl implements TestOrderService {
                         + " : elle ne peut plus être retirée du bon."
                 : "Des résultats sont déjà saisis pour les analyses " + String.join(", ", noms)
                         + " : elles ne peuvent plus être retirées du bon.");
+    }
+
+    /** Analyses (catalogue) portées par les lignes du bon ; une analyse supprimée du catalogue est ignorée. */
+    private static List<UUID> analysesDuBon(TestOrder order) {
+        return order.getDetails().stream()
+                .map(DetailTestOrder::getLabTest)
+                .filter(java.util.Objects::nonNull)
+                .map(LabTest::getId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
     }
 
     private void assertNoDuplicateTests(List<DetailTestOrderRequestDto> details) {

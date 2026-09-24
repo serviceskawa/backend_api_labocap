@@ -97,6 +97,7 @@ class BonsDeBiologieTest {
     @Mock private FileStorageService fileStorageService;
     @Mock private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     @Mock private BiologyResultsGuard biologyResultsGuard;
+    @Mock private com.labo.anapath.biology.results.BiologyResultsLifecycle biologyResultsLifecycle;
     @Spy private ModulesProperties modules = new ModulesProperties();
 
     @InjectMocks
@@ -627,6 +628,99 @@ class BonsDeBiologieTest {
             f.setTotal(BigDecimal.valueOf(900));
             f.setPaid(false);
             return f;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Analyses à saisir (B5) : créées à la validation, alignées à la modification
+    // -------------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("analyses à saisir")
+    class AnalysesASaisir {
+
+        @Test
+        @DisplayName("validation d'un bon de biologie : une analyse à saisir par analyse du bon, auteur transmis")
+        @SuppressWarnings("unchecked")
+        void validationBiologie_aligne() {
+            LabTest nfs = analyse("NFS", Discipline.BIOLOGY, 5000);
+            LabTest glycemie = analyse("Glycémie", Discipline.BIOLOGY, 2000);
+            TestOrder bio = bonExistant(Discipline.BIOLOGY, nfs, glycemie);
+            bio.setContrat(contrat);
+            preparerLaValidation(bio);
+
+            service.updateStatus(bio.getId(), "VALIDATED", USER_ID, BRANCH_ID);
+
+            ArgumentCaptor<Collection<UUID>> analyses = ArgumentCaptor.forClass(Collection.class);
+            verify(biologyResultsLifecycle).aligner(eq(bio.getId()), eq(BRANCH_ID), analyses.capture(), eq(USER_ID));
+            assertThat(analyses.getValue()).containsExactly(nfs.getId(), glycemie.getId());
+        }
+
+        @Test
+        @DisplayName("validation d'un bon d'anatomie pathologique : aucune analyse à saisir")
+        void validationPathologie_rienASaisir() {
+            TestOrder patho = bonExistant(Discipline.PATHOLOGY, analyse("Biopsie", Discipline.PATHOLOGY, 25000));
+            patho.setContrat(contrat);
+            preparerLaValidation(patho);
+
+            service.updateStatus(patho.getId(), "VALIDATED", USER_ID, BRANCH_ID);
+
+            verifyNoInteractions(biologyResultsLifecycle);
+        }
+
+        @Test
+        @DisplayName("bon de biologie validé modifié : la nouvelle liste d'analyses est alignée")
+        @SuppressWarnings("unchecked")
+        void modificationBonValide_aligne() {
+            LabTest nfs = analyse("NFS", Discipline.BIOLOGY, 5000);
+            LabTest glycemie = analyse("Glycémie", Discipline.BIOLOGY, 2000);
+            TestOrder bio = bonExistant(Discipline.BIOLOGY, nfs);
+            bio.setCode("26-0001");
+            bio.setStatus(TestOrderStatus.VALIDATED);
+
+            service.update(bio.getId(), demande(null, nfs, glycemie), BRANCH_ID);
+
+            ArgumentCaptor<Collection<UUID>> analyses = ArgumentCaptor.forClass(Collection.class);
+            verify(biologyResultsLifecycle).aligner(eq(bio.getId()), eq(BRANCH_ID), analyses.capture(), eq(null));
+            assertThat(analyses.getValue()).containsExactly(nfs.getId(), glycemie.getId());
+        }
+
+        @Test
+        @DisplayName("bon de biologie pas encore validé : rien à aligner (les analyses naîtront à la validation)")
+        void modificationBonNonValide_rienAAligner() {
+            LabTest nfs = analyse("NFS", Discipline.BIOLOGY, 5000);
+            TestOrder bio = bonExistant(Discipline.BIOLOGY, nfs);
+
+            service.update(bio.getId(), demande(null, nfs), BRANCH_ID);
+
+            verifyNoInteractions(biologyResultsLifecycle);
+        }
+
+        @Test
+        @DisplayName("retrait refusé (analyse saisie) : rien n'est aligné")
+        void retraitRefuse_rienAligne() {
+            LabTest nfs = analyse("NFS", Discipline.BIOLOGY, 5000);
+            LabTest glycemie = analyse("Glycémie", Discipline.BIOLOGY, 2000);
+            TestOrder bio = bonExistant(Discipline.BIOLOGY, nfs, glycemie);
+            bio.setCode("26-0001");
+            when(biologyResultsGuard.analysesAvecResultats(eq(bio.getId()), anyCollection()))
+                    .thenReturn(Set.of(glycemie.getId()));
+
+            assertThatThrownBy(() -> service.update(bio.getId(), demande(null, nfs), BRANCH_ID))
+                    .isInstanceOf(BusinessException.class);
+            verifyNoInteractions(biologyResultsLifecycle);
+        }
+
+        @Test
+        @DisplayName("bon d'anatomie pathologique validé modifié : jamais aligné")
+        void modificationPathologie_jamaisAligne() {
+            LabTest biopsie = analyse("Biopsie gastrique", Discipline.PATHOLOGY, 25000);
+            TestOrder patho = bonExistant(Discipline.PATHOLOGY, biopsie);
+            patho.setCode("26-0002");
+
+            service.update(patho.getId(), demande(null, biopsie), BRANCH_ID);
+
+            verifyNoInteractions(biologyResultsLifecycle);
         }
     }
 }

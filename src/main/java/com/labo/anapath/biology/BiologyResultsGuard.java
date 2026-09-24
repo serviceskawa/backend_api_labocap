@@ -13,9 +13,9 @@ import java.util.UUID;
  * modification du bon supprime et recrée à chaque enregistrement. C'est donc sur
  * ce couple que porte la question.</p>
  *
- * <p>Tant que la saisie des résultats n'existe pas, {@link SansResultatsDeBiologie}
- * répond qu'aucune analyse n'en porte. L'implémentation qui lit les tables de
- * résultats la remplace ; le service des bons n'a pas à changer.</p>
+ * <p>Implémentée par {@link com.labo.anapath.biology.results.ResultatsDuBon}, qui lit
+ * les tables de résultats : une analyse porte des résultats si elle n'est plus en
+ * attente de saisie ou si une valeur lui est rattachée.</p>
  *
  * <p>Jamais consulté pour un bon d'anatomie pathologique.</p>
  */

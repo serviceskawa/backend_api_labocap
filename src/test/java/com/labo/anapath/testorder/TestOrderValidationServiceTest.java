@@ -65,6 +65,7 @@ class TestOrderValidationServiceTest {
     @Mock private SettingRepository settingRepository;
     @Mock private com.labo.anapath.setting.SettingAppRepository settingAppRepository;
 
+    @Mock private com.labo.anapath.biology.results.BiologyResultsLifecycle biologyResultsLifecycle;
     @InjectMocks
     private TestOrderServiceImpl testOrderService;
 

@@ -71,6 +71,7 @@ class TestOrderServiceImplTest {
     // Ajouté au service pour rendre le nom de la personne affectée dans la liste.
     @Mock private TestOrderAssignmentDetailRepository assignmentDetailRepository;
 
+    @Mock private com.labo.anapath.biology.results.BiologyResultsLifecycle biologyResultsLifecycle;
     @InjectMocks
     private TestOrderServiceImpl testOrderService;
 
