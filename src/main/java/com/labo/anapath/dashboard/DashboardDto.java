@@ -1,7 +1,11 @@
 package com.labo.anapath.dashboard;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.labo.anapath.common.Discipline;
+
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 public class DashboardDto {
 
@@ -12,18 +16,68 @@ public class DashboardDto {
      * <p>{@code finishTest} / {@code noFinishTest} alimentent le graphique
      * « STATUT D'EXAMENS » et reprennent le {@code $totalByStatus} de Laravel
      * (bons d'examen joints à leur compte rendu, regroupés par statut).</p>
+     *
+     * <p>Les compteurs de demandes et de comptes rendus portent sur la
+     * discipline demandée (anatomie pathologique par défaut) ; patients,
+     * clients et factures restent toutes disciplines confondues.</p>
+     *
+     * @param parDiscipline les mêmes compteurs pour chaque discipline, présent
+     *                      seulement quand le module Biologie est actif — absent
+     *                      du JSON sinon, pour que les clients d'anatomie
+     *                      pathologique reçoivent exactement la réponse d'avant.
+     *                      L'écran en tire la vue séparée ou cumulée selon le
+     *                      réglage {@code bio_dashboard_mode}.
      */
     public record AdminStats(
         long valeurPatient, double crPatient,
         long valeurClient, double crClient,
         long valeurTestOrder, double crTestOrder,
         BigDecimal valeurInvoice, double crInvoice,
+        long finishTest, long noFinishTest,
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        Map<Discipline, CompteursAdmin> parDiscipline
+    ) {
+        /** La réponse d'avant la biologie, sans répartition. */
+        public AdminStats(long valeurPatient, double crPatient,
+                          long valeurClient, double crClient,
+                          long valeurTestOrder, double crTestOrder,
+                          BigDecimal valeurInvoice, double crInvoice,
+                          long finishTest, long noFinishTest) {
+            this(valeurPatient, crPatient, valeurClient, crClient, valeurTestOrder, crTestOrder,
+                    valeurInvoice, crInvoice, finishTest, noFinishTest, null);
+        }
+    }
+
+    /** La part d'une discipline dans les cartes admin : demandes et comptes rendus. */
+    public record CompteursAdmin(
+        long valeurTestOrder, double crTestOrder,
         long finishTest, long noFinishTest
     ) {}
 
-    // Stats secrétariat
+    /**
+     * Stats secrétariat.
+     *
+     * @param parDiscipline comme pour {@link AdminStats} : présent seulement
+     *                      quand le module Biologie est actif
+     */
     public record SecretariatStats(
         long patients, long contrats, long tests,
+        long testOrdersCount, long finishTest, long noFinishTest,
+        long noSaveTest, long noFinishWeek,
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        Map<Discipline, CompteursSecretariat> parDiscipline
+    ) {
+        /** La réponse d'avant la biologie, sans répartition. */
+        public SecretariatStats(long patients, long contrats, long tests,
+                                long testOrdersCount, long finishTest, long noFinishTest,
+                                long noSaveTest, long noFinishWeek) {
+            this(patients, contrats, tests, testOrdersCount, finishTest, noFinishTest,
+                    noSaveTest, noFinishWeek, null);
+        }
+    }
+
+    /** La part d'une discipline dans les cartes du secrétariat. */
+    public record CompteursSecretariat(
         long testOrdersCount, long finishTest, long noFinishTest,
         long noSaveTest, long noFinishWeek
     ) {}
@@ -74,8 +128,25 @@ public class DashboardDto {
         BigDecimal refundTotalPaid, BigDecimal refundTotalNoPaid
     ) {}
 
-    // Statut examens (pour docteur)
-    public record ExamStatusChart(long termine, long enAttente) {}
+    /**
+     * Statut examens (pour docteur).
+     *
+     * @param parDiscipline comme pour {@link AdminStats} : présent seulement
+     *                      quand le module Biologie est actif
+     */
+    public record ExamStatusChart(
+        long termine, long enAttente,
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        Map<Discipline, CompteursExamens> parDiscipline
+    ) {
+        /** La réponse d'avant la biologie, sans répartition. */
+        public ExamStatusChart(long termine, long enAttente) {
+            this(termine, enAttente, null);
+        }
+    }
+
+    /** La part d'une discipline dans le graphique d'un médecin. */
+    public record CompteursExamens(long termine, long enAttente) {}
 
     // Rendez-vous pour docteur
     public record AppointmentDto(

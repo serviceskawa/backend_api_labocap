@@ -69,7 +69,19 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
     @Override
     @Transactional(readOnly = true)
     public PageResponse<AssignmentResponseDto> findAll(int page, int size, UUID branchId) {
-        Page<TestOrderAssignment> p = assignmentRepository.findHistoCyto(branchId, PageRequest.of(page, size));
+        return findAll(page, size, branchId, Discipline.PATHOLOGY);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<AssignmentResponseDto> findAll(int page, int size, UUID branchId,
+                                                       Discipline discipline) {
+        Discipline laDiscipline = disciplineOuDefaut(discipline);
+        // L'anatomie pathologique garde sa requête d'origine, à l'identique :
+        // la liste que voient le web et le mobile ne bouge pas d'une ligne.
+        Page<TestOrderAssignment> p = laDiscipline == Discipline.PATHOLOGY
+                ? assignmentRepository.findHistoCyto(branchId, PageRequest.of(page, size))
+                : assignmentRepository.findByDiscipline(branchId, laDiscipline, PageRequest.of(page, size));
         return PageResponse.of(p.map(this::toDto));
     }
 
@@ -366,7 +378,28 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
                 toDto(assignment),
                 details,
                 branch != null ? branch.getName() : null,
-                branch != null ? branch.getLocation() : null);
+                branch != null ? branch.getLocation() : null,
+                disciplineDuLot(assignment));
+    }
+
+    /**
+     * La discipline d'un lot, lue sur ses demandes.
+     *
+     * <p>Le lot n'a pas de discipline propre : il prend celle des demandes
+     * qu'on y range, et {@link #exigerLaDisciplineDuLot} empêche qu'elles
+     * divergent. Les lignes vivantes font foi ; à défaut — toutes réaffectées
+     * ailleurs —, les anciennes, puisque c'est ce qui a été remis ce jour-là.
+     * Un lot vide n'a pas de discipline.</p>
+     */
+    static Discipline disciplineDuLot(TestOrderAssignment lot) {
+        java.util.Comparator<TestOrderAssignmentDetail> vivantesDabord =
+                java.util.Comparator.comparing(d -> !d.estCourante());
+        return lot.getDetails().stream()
+                .filter(d -> d.getTestOrder() != null)
+                .sorted(vivantesDabord)
+                .map(d -> disciplineOuDefaut(d.getTestOrder().getDiscipline()))
+                .findFirst()
+                .orElse(null);
     }
 
     @Override

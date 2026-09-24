@@ -80,7 +80,7 @@ class DisciplineParDefautDesPointsDEntreeTest {
         assertThat(pointsDEntreeAvecDiscipline(ReportController.class))
                 .containsExactly("findAll", "getList", "getPerformanceStats", "getSuivi", "getSuiviList");
         assertThat(pointsDEntreeAvecDiscipline(TestOrderAssignmentController.class))
-                .containsExactly("arriere", "lotsDeMaFile", "mesDemandes", "pageDeMaFile", "resumeDeMaFile");
+                .containsExactly("arriere", "findAll", "lotsDeMaFile", "mesDemandes", "pageDeMaFile", "resumeDeMaFile");
     }
 
     // -------------------------------------------------------------------------

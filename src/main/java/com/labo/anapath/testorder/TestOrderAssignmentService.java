@@ -8,7 +8,18 @@ public interface TestOrderAssignmentService {
 
     AssignmentResponseDto create(AssignmentRequestDto dto, UUID branchId);
 
+    /** Les lots d'anatomie pathologique (histologie, cytologie, biopsie, pièce opératoire). */
     PageResponse<AssignmentResponseDto> findAll(int page, int size, UUID branchId);
+
+    /**
+     * Les lots d'une discipline.
+     *
+     * <p>En anatomie pathologique, la liste d'avant, inchangée : lots de
+     * cyto/histo. Dans une autre discipline, les lots dont les demandes en
+     * relèvent.</p>
+     */
+    PageResponse<AssignmentResponseDto> findAll(int page, int size, UUID branchId,
+                                                com.labo.anapath.common.Discipline discipline);
 
     PageResponse<AssignmentResponseDto> findAllImmuno(int page, int size, UUID branchId);
 

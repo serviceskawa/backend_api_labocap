@@ -3,6 +3,7 @@ package com.labo.anapath.dashboard;
 import com.labo.anapath.appointment.AppointmentRepository;
 import com.labo.anapath.client.ClientRepository;
 import com.labo.anapath.common.Discipline;
+import com.labo.anapath.common.module.ModulesProperties;
 import com.labo.anapath.contract.ContratRepository;
 import com.labo.anapath.finance.InvoiceRepository;
 import com.labo.anapath.patient.PatientRepository;
@@ -32,15 +33,14 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class DashboardServiceImpl implements DashboardService {
 
-    /**
-     * Discipline des comptages de demandes et de comptes-rendus.
-     *
-     * <p>Anatomie pathologique seule, tant que le tableau de bord n'affiche pas
-     * la répartition par discipline : mêler la biologie aux chiffres existants
-     * les ferait bouger sans que rien ne l'annonce. Les montants (factures,
-     * chiffre d'affaires) restent, eux, toutes disciplines confondues.</p>
+    /*
+     * Discipline des comptages de demandes et de comptes-rendus : celle que
+     * demande l'appelant, l'anatomie pathologique à défaut. Mêler la biologie
+     * aux chiffres existants les ferait bouger sans que rien ne l'annonce ; la
+     * répartition par discipline vient donc à côté (« parDiscipline »), et
+     * seulement quand le module Biologie est actif. Les montants (factures,
+     * chiffre d'affaires) restent, eux, toutes disciplines confondues.
      */
-    private static final Discipline DISCIPLINE = Discipline.PATHOLOGY;
 
     private final PatientRepository patientRepository;
     private final ClientRepository clientRepository;
@@ -51,13 +51,65 @@ public class DashboardServiceImpl implements DashboardService {
     private final ContratRepository contratRepository;
     private final LabTestRepository labTestRepository;
     private final AppointmentRepository appointmentRepository;
+    /** Interrupteur du module Biologie : sans lui, aucune répartition par discipline. */
+    private final ModulesProperties modules;
+
+    // -----------------------------------------------------------------------
+    // Signatures d'avant la biologie : l'anatomie pathologique
+    // -----------------------------------------------------------------------
+
+    @Override
+    public DashboardDto.AdminStats getAdminStats(UUID branchId) {
+        return getAdminStats(branchId, Discipline.PATHOLOGY);
+    }
+
+    @Override
+    public DashboardDto.SecretariatStats getSecretariatStats(UUID branchId) {
+        return getSecretariatStats(branchId, Discipline.PATHOLOGY);
+    }
+
+    @Override
+    public List<DashboardDto.ReportToday> getReportsToday(UUID branchId) {
+        return getReportsToday(branchId, Discipline.PATHOLOGY);
+    }
+
+    @Override
+    public List<DashboardDto.DoctorStat> getDoctorStats(UUID branchId) {
+        return getDoctorStats(branchId, Discipline.PATHOLOGY);
+    }
+
+    @Override
+    public List<DashboardDto.TopExamen> getTopExamens(UUID branchId) {
+        return getTopExamens(branchId, Discipline.PATHOLOGY);
+    }
+
+    @Override
+    public DashboardDto.MonthlyStats getMonthlyStats(UUID branchId) {
+        return getMonthlyStats(branchId, Discipline.PATHOLOGY);
+    }
+
+    @Override
+    public DashboardDto.ExamStatusChart getExamStatusForDoctor(UUID userId, UUID branchId) {
+        return getExamStatusForDoctor(userId, branchId, Discipline.PATHOLOGY);
+    }
+
+    @Override
+    public List<DashboardDto.DoctorOrder> getDoctorOrders(UUID userId, UUID branchId) {
+        return getDoctorOrders(userId, branchId, Discipline.PATHOLOGY);
+    }
+
+    @Override
+    public List<DashboardDto.DoctorOrder> getDoctorOrdersToday(UUID userId, UUID branchId) {
+        return getDoctorOrdersToday(userId, branchId, Discipline.PATHOLOGY);
+    }
 
     // -----------------------------------------------------------------------
     // Admin KPIs
     // -----------------------------------------------------------------------
 
     @Override
-    public DashboardDto.AdminStats getAdminStats(UUID branchId) {
+    public DashboardDto.AdminStats getAdminStats(UUID branchId, Discipline discipline) {
+        Discipline laDiscipline = disciplineOuDefaut(discipline);
         LocalDate now = LocalDate.now();
         LocalDate startCurrentMonth = now.withDayOfMonth(1);
         LocalDate startPrevMonth = startCurrentMonth.minusMonths(1);
@@ -79,13 +131,8 @@ public class DashboardServiceImpl implements DashboardService {
                 startPrevMonth.atStartOfDay(), endPrevMonth.atTime(LocalTime.MAX));
         double crClient = calcGrowth(currClient, prevClient);
 
-        // TestOrders
-        long valTO = testOrderRepository.countByBranchIdAndDiscipline(branchId, DISCIPLINE);
-        long currTO = testOrderRepository.countByBranchIdAndCreatedAtBetween(branchId,
-                startCurrentMonth.atStartOfDay(), now.atTime(LocalTime.MAX), DISCIPLINE);
-        long prevTO = testOrderRepository.countByBranchIdAndCreatedAtBetween(branchId,
-                startPrevMonth.atStartOfDay(), endPrevMonth.atTime(LocalTime.MAX), DISCIPLINE);
-        double crTO = calcGrowth(currTO, prevTO);
+        // TestOrders et donut « STATUT D'EXAMENS », pour la discipline demandée
+        DashboardDto.CompteursAdmin compteurs = compteursAdmin(branchId, laDiscipline);
 
         // Invoices
         BigDecimal valInvoice = invoiceRepository.sumTotalByBranchId(branchId);
@@ -101,15 +148,34 @@ public class DashboardServiceImpl implements DashboardService {
                         .divide(prevInv, 2, RoundingMode.HALF_UP).doubleValue()
                 : 0.0;
 
+        return new DashboardDto.AdminStats(valPatient, crPatient, valClient, crClient,
+                compteurs.valeurTestOrder(), compteurs.crTestOrder(), valInvoice, crInvoice,
+                compteurs.finishTest(), compteurs.noFinishTest(),
+                parDiscipline(laDiscipline, compteurs, d -> compteursAdmin(branchId, d)));
+    }
+
+    /** Demandes (total et croissance du mois) et donut de statut, pour une discipline. */
+    private DashboardDto.CompteursAdmin compteursAdmin(UUID branchId, Discipline discipline) {
+        LocalDate now = LocalDate.now();
+        LocalDate startCurrentMonth = now.withDayOfMonth(1);
+        LocalDate startPrevMonth = startCurrentMonth.minusMonths(1);
+        LocalDate endPrevMonth = startCurrentMonth.minusDays(1);
+
+        long valTO = testOrderRepository.countByBranchIdAndDiscipline(branchId, discipline);
+        long currTO = testOrderRepository.countByBranchIdAndCreatedAtBetween(branchId,
+                startCurrentMonth.atStartOfDay(), now.atTime(LocalTime.MAX), discipline);
+        long prevTO = testOrderRepository.countByBranchIdAndCreatedAtBetween(branchId,
+                startPrevMonth.atStartOfDay(), endPrevMonth.atTime(LocalTime.MAX), discipline);
+        double crTO = calcGrowth(currTO, prevTO);
+
         // Donut « STATUT D'EXAMENS » — équivalent du $totalByStatus de Laravel :
         // terminé = compte rendu validé ou remis, en attente = brouillon ou en relecture.
         long finishTest = reportRepository.countByBranchIdAndStatusIn(branchId,
-                List.of(ReportStatus.VALIDATED, ReportStatus.DELIVERED), DISCIPLINE);
+                List.of(ReportStatus.VALIDATED, ReportStatus.DELIVERED), discipline);
         long noFinishTest = reportRepository.countByBranchIdAndStatusIn(branchId,
-                List.of(ReportStatus.DRAFT, ReportStatus.PENDING_REVIEW), DISCIPLINE);
+                List.of(ReportStatus.DRAFT, ReportStatus.PENDING_REVIEW), discipline);
 
-        return new DashboardDto.AdminStats(valPatient, crPatient, valClient, crClient,
-                valTO, crTO, valInvoice, crInvoice, finishTest, noFinishTest);
+        return new DashboardDto.CompteursAdmin(valTO, crTO, finishTest, noFinishTest);
     }
 
     // -----------------------------------------------------------------------
@@ -117,11 +183,22 @@ public class DashboardServiceImpl implements DashboardService {
     // -----------------------------------------------------------------------
 
     @Override
-    public DashboardDto.SecretariatStats getSecretariatStats(UUID branchId) {
+    public DashboardDto.SecretariatStats getSecretariatStats(UUID branchId, Discipline discipline) {
+        Discipline laDiscipline = disciplineOuDefaut(discipline);
         long patients = patientRepository.countByBranchId(branchId);
         long contrats = contratRepository.countByBranchId(branchId);
         long tests = labTestRepository.countByBranchId(branchId);
-        long toCount = testOrderRepository.countByBranchIdAndDiscipline(branchId, DISCIPLINE);
+        DashboardDto.CompteursSecretariat compteurs = compteursSecretariat(branchId, laDiscipline);
+
+        return new DashboardDto.SecretariatStats(patients, contrats, tests,
+                compteurs.testOrdersCount(), compteurs.finishTest(), compteurs.noFinishTest(),
+                compteurs.noSaveTest(), compteurs.noFinishWeek(),
+                parDiscipline(laDiscipline, compteurs, d -> compteursSecretariat(branchId, d)));
+    }
+
+    /** Les cinq indicateurs de charge du secrétariat, pour une discipline. */
+    private DashboardDto.CompteursSecretariat compteursSecretariat(UUID branchId, Discipline discipline) {
+        long toCount = testOrderRepository.countByBranchIdAndDiscipline(branchId, discipline);
         // Les quatre indicateurs de charge portent sur l'année en cours.
         //
         // Ils comptaient tout l'historique, et disaient donc surtout l'arriéré :
@@ -133,17 +210,17 @@ public class DashboardServiceImpl implements DashboardService {
         LocalDateTime debutDAnnee =
                 java.time.LocalDate.now().withDayOfYear(1).atStartOfDay();
         // finishTest = reports livrés, noFinishTest = reports non livrés
-        long finishTest = reportRepository.countByBranchIdAndIsDelivered(branchId, true, debutDAnnee, DISCIPLINE);
-        long noFinishTest = reportRepository.countByBranchIdAndIsDelivered(branchId, false, debutDAnnee, DISCIPLINE);
+        long finishTest = reportRepository.countByBranchIdAndIsDelivered(branchId, true, debutDAnnee, discipline);
+        long noFinishTest = reportRepository.countByBranchIdAndIsDelivered(branchId, false, debutDAnnee, discipline);
         // noSaveTest = test_orders sans report
-        long noSaveTest = testOrderRepository.countByBranchIdAndReportIsNull(branchId, debutDAnnee, DISCIPLINE.name());
+        long noSaveTest = testOrderRepository.countByBranchIdAndReportIsNull(branchId, debutDAnnee, discipline.name());
         // noFinishWeek = testorders pending depuis > 3 semaines
         LocalDateTime threeWeeksAgo = LocalDateTime.now().minusWeeks(3);
         long noFinishWeek = testOrderRepository.countByBranchIdAndStatusPendingAndCreatedAtBefore(
-                branchId, threeWeeksAgo, debutDAnnee, DISCIPLINE);
+                branchId, threeWeeksAgo, debutDAnnee, discipline);
 
-        return new DashboardDto.SecretariatStats(patients, contrats, tests, toCount,
-                finishTest, noFinishTest, noSaveTest, noFinishWeek);
+        return new DashboardDto.CompteursSecretariat(toCount, finishTest, noFinishTest,
+                noSaveTest, noFinishWeek);
     }
 
     // -----------------------------------------------------------------------
@@ -151,9 +228,9 @@ public class DashboardServiceImpl implements DashboardService {
     // -----------------------------------------------------------------------
 
     @Override
-    public List<DashboardDto.ReportToday> getReportsToday(UUID branchId) {
+    public List<DashboardDto.ReportToday> getReportsToday(UUID branchId, Discipline discipline) {
         LocalDate today = LocalDate.now();
-        return reportRepository.findReportsTodayByBranchId(branchId, today, DISCIPLINE.name()).stream()
+        return reportRepository.findReportsTodayByBranchId(branchId, today, disciplineOuDefaut(discipline).name()).stream()
                 .map(p -> new DashboardDto.ReportToday(
                         p.getId(), p.getTestOrderId(), p.getCode(),
                         p.getPatientLastname(), p.getPatientFirstname(),
@@ -167,8 +244,8 @@ public class DashboardServiceImpl implements DashboardService {
     // -----------------------------------------------------------------------
 
     @Override
-    public List<DashboardDto.DoctorStat> getDoctorStats(UUID branchId) {
-        return testOrderRepository.getDoctorStatsByBranchId(branchId, DISCIPLINE.name()).stream()
+    public List<DashboardDto.DoctorStat> getDoctorStats(UUID branchId, Discipline discipline) {
+        return testOrderRepository.getDoctorStatsByBranchId(branchId, disciplineOuDefaut(discipline).name()).stream()
                 .map(p -> new DashboardDto.DoctorStat(p.getId(), p.getDoctor(),
                         p.getAssigne() != null ? p.getAssigne() : 0L,
                         p.getTraite() != null ? p.getTraite() : 0L))
@@ -180,8 +257,8 @@ public class DashboardServiceImpl implements DashboardService {
     // -----------------------------------------------------------------------
 
     @Override
-    public List<DashboardDto.TopExamen> getTopExamens(UUID branchId) {
-        return testOrderRepository.getTopExamensByBranchId(branchId, 7, DISCIPLINE.name()).stream()
+    public List<DashboardDto.TopExamen> getTopExamens(UUID branchId, Discipline discipline) {
+        return testOrderRepository.getTopExamensByBranchId(branchId, 7, disciplineOuDefaut(discipline).name()).stream()
                 .map(p -> new DashboardDto.TopExamen(p.getTestName(),
                         p.getTotalDemandes() != null ? p.getTotalDemandes() : 0L))
                 .toList();
@@ -192,12 +269,13 @@ public class DashboardServiceImpl implements DashboardService {
     // -----------------------------------------------------------------------
 
     @Override
-    public DashboardDto.MonthlyStats getMonthlyStats(UUID branchId) {
+    public DashboardDto.MonthlyStats getMonthlyStats(UUID branchId, Discipline disciplineDemandee) {
+        Discipline laDiscipline = disciplineOuDefaut(disciplineDemandee);
         // Mois seul, sans l'année : voir le commentaire de parité Laravel dans
         // TestOrderRepository (section « Dashboard — stats mensuelles »).
         int month = LocalDate.now().getMonthValue();
 
-        String discipline = DISCIPLINE.name();
+        String discipline = laDiscipline.name();
         long nombreTests = testOrderRepository.countByBranchIdAndMonth(branchId, month, discipline);
         // Chiffre d'affaires : toutes disciplines confondues, comme les factures.
         BigDecimal caTests = testOrderRepository.sumPriceByBranchIdAndMonth(branchId, month);
@@ -209,7 +287,11 @@ public class DashboardServiceImpl implements DashboardService {
         List<DashboardDto.ByItem> byMedecin = testOrderRepository.countByDoctorAndMonth(branchId, month, discipline)
                 .stream().map(p -> new DashboardDto.ByItem(p.getNom(), p.getTotalPatients() != null ? p.getTotalPatients() : 0L)).toList();
         // Sans discipline : la jointure sur type_orders écarte déjà la biologie.
-        List<DashboardDto.ByItem> byType = testOrderRepository.countByTypeOrderAndMonth(branchId, month)
+        // Un bon de biologie n'a pas de type de bon : la répartition par type
+        // n'a pas de sens pour elle, et la requête rendrait celle de l'anapath.
+        List<DashboardDto.ByItem> byType = laDiscipline != Discipline.PATHOLOGY
+                ? List.of()
+                : testOrderRepository.countByTypeOrderAndMonth(branchId, month)
                 .stream().map(p -> new DashboardDto.ByItem(p.getNom(), p.getTotalPatients() != null ? p.getTotalPatients() : 0L)).toList();
 
         return new DashboardDto.MonthlyStats(nombreTests, caTests, totalPatientTest,
@@ -308,14 +390,24 @@ public class DashboardServiceImpl implements DashboardService {
     // -----------------------------------------------------------------------
 
     @Override
-    public DashboardDto.ExamStatusChart getExamStatusForDoctor(UUID userId, UUID branchId) {
+    public DashboardDto.ExamStatusChart getExamStatusForDoctor(UUID userId, UUID branchId,
+                                                               Discipline discipline) {
+        Discipline laDiscipline = disciplineOuDefaut(discipline);
+        DashboardDto.CompteursExamens compteurs = compteursExamens(userId, branchId, laDiscipline);
+        return new DashboardDto.ExamStatusChart(compteurs.termine(), compteurs.enAttente(),
+                parDiscipline(laDiscipline, compteurs, d -> compteursExamens(userId, branchId, d)));
+    }
+
+    /** Examens remis et en attente d'un médecin, pour une discipline. */
+    private DashboardDto.CompteursExamens compteursExamens(UUID userId, UUID branchId,
+                                                           Discipline discipline) {
         long termine = testOrderRepository.countByAssignedToUserIdAndBranchIdAndStatus(
-                userId, branchId, TestOrderStatus.DELIVERED, DISCIPLINE);
+                userId, branchId, TestOrderStatus.DELIVERED, discipline);
         long enAttente = testOrderRepository.countByAssignedToUserIdAndBranchIdAndStatus(
-                userId, branchId, TestOrderStatus.PENDING, DISCIPLINE)
+                userId, branchId, TestOrderStatus.PENDING, discipline)
                 + testOrderRepository.countByAssignedToUserIdAndBranchIdAndStatus(
-                userId, branchId, TestOrderStatus.VALIDATED, DISCIPLINE);
-        return new DashboardDto.ExamStatusChart(termine, enAttente);
+                userId, branchId, TestOrderStatus.VALIDATED, discipline);
+        return new DashboardDto.CompteursExamens(termine, enAttente);
     }
 
     @Override
@@ -331,8 +423,8 @@ public class DashboardServiceImpl implements DashboardService {
     // -----------------------------------------------------------------------
 
     @Override
-    public List<DashboardDto.DoctorOrder> getDoctorOrders(UUID userId, UUID branchId) {
-        return testOrderRepository.findAllByAttribuateDoctorId(userId, branchId, DISCIPLINE.name()).stream()
+    public List<DashboardDto.DoctorOrder> getDoctorOrders(UUID userId, UUID branchId, Discipline discipline) {
+        return testOrderRepository.findAllByAttribuateDoctorId(userId, branchId, disciplineOuDefaut(discipline).name()).stream()
                 .map(p -> new DashboardDto.DoctorOrder(p.getId(), p.getCode(), p.getCreatedAt(),
                         p.getPatientFirstname(), p.getPatientLastname(),
                         p.getReportStatus() != null ? p.getReportStatus() : 0))
@@ -340,8 +432,9 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     @Override
-    public List<DashboardDto.DoctorOrder> getDoctorOrdersToday(UUID userId, UUID branchId) {
-        return testOrderRepository.findTodayByAttribuateDoctorId(userId, branchId, LocalDate.now(), DISCIPLINE.name()).stream()
+    public List<DashboardDto.DoctorOrder> getDoctorOrdersToday(UUID userId, UUID branchId, Discipline discipline) {
+        return testOrderRepository.findTodayByAttribuateDoctorId(userId, branchId, LocalDate.now(),
+                        disciplineOuDefaut(discipline).name()).stream()
                 .map(p -> new DashboardDto.DoctorOrder(p.getId(), p.getCode(), p.getCreatedAt(),
                         p.getPatientFirstname(), p.getPatientLastname(),
                         p.getReportStatus() != null ? p.getReportStatus() : 0))
@@ -351,6 +444,32 @@ public class DashboardServiceImpl implements DashboardService {
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
+
+    /**
+     * Les compteurs de chaque discipline, ou rien si le module Biologie est éteint.
+     *
+     * <p>Rien, et non une seule entrée d'anatomie pathologique : le champ reste
+     * alors absent du JSON, et les clients d'avant la biologie — l'application
+     * mobile en tête — reçoivent la réponse d'avant, octet pour octet. La
+     * discipline déjà comptée pour les champs principaux n'est pas recomptée.</p>
+     */
+    private <T> java.util.Map<Discipline, T> parDiscipline(
+            Discipline dejaComptee, T compteursDejaComptes,
+            java.util.function.Function<Discipline, T> compter) {
+        if (!modules.isBiology()) {
+            return null;
+        }
+        java.util.Map<Discipline, T> parDiscipline = new java.util.EnumMap<>(Discipline.class);
+        for (Discipline d : Discipline.values()) {
+            parDiscipline.put(d, d == dejaComptee ? compteursDejaComptes : compter.apply(d));
+        }
+        return parDiscipline;
+    }
+
+    /** La discipline donnée, ou l'anatomie pathologique à défaut. */
+    private static Discipline disciplineOuDefaut(Discipline discipline) {
+        return discipline != null ? discipline : Discipline.PATHOLOGY;
+    }
 
     private double calcGrowth(long curr, long prev) {
         if (prev == 0) return 0.0;

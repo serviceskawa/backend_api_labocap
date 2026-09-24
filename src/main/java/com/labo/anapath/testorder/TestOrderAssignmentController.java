@@ -251,14 +251,23 @@ public class TestOrderAssignmentController {
                 assignmentService.etiquettesConnues(principal.getBranchId())));
     }
 
+    /**
+     * Les lots de la branche, pour une discipline.
+     *
+     * <p>Sans {@code discipline}, les lots d'anatomie pathologique, exactement
+     * comme avant. Avec {@code BIOLOGY}, les lots de bons de biologie — qui
+     * n'ont pas de type de bon et n'apparaissent donc jamais dans la première
+     * liste.</p>
+     */
     @GetMapping
     @PreAuthorize("hasAuthority('view-test-order-assignments')")
     public ResponseEntity<ApiResponse<PageResponse<AssignmentResponseDto>>> findAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                assignmentService.findAll(page, size, principal.getBranchId())));
+                assignmentService.findAll(page, size, principal.getBranchId(), discipline)));
     }
 
     @GetMapping("/immuno")
