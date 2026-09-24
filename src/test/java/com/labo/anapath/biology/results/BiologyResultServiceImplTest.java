@@ -787,6 +787,26 @@ class BiologyResultServiceImplTest {
                         assertThat(p.result().value()).isEqualTo("15.0");
                     });
         }
+
+        @Test
+        @DisplayName("paramètre retiré du catalogue : son nom d'origine est relu sur la ligne supprimée")
+        void orphelineNommee() {
+            saisir(v(hb, "15", null));
+            when(parameterRepository.findByLabTest_IdOrderByPositionAsc(nfs.getId())).thenReturn(List.of(glu));
+            BiologyParameterRepository.LibelleDeParametre libelle = mock(BiologyParameterRepository.LibelleDeParametre.class);
+            when(libelle.getId()).thenReturn(hb.getId().toString());
+            when(libelle.getName()).thenReturn("Hémoglobine");
+            when(parameterRepository.findLibellesYComprisRetires(List.of(hb.getId()))).thenReturn(List.of(libelle));
+
+            BiologyWorksheetDto f = service.worksheet(bon.getId(), BRANCH);
+
+            assertThat(f.analyses().get(0).parameters())
+                    .anySatisfy(p -> {
+                        assertThat(p.parameterId()).isEqualTo(hb.getId());
+                        assertThat(p.name()).isEqualTo("Hémoglobine");
+                        assertThat(p.result().value()).isEqualTo("15.0");
+                    });
+        }
     }
 
     // =====================================================================================

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -181,4 +182,24 @@ public interface LabTestRepository extends JpaRepository<LabTest, UUID> {
 
     // Dashboard KPIs
     long countByBranchId(UUID branchId);
+
+    /**
+     * Catégorie de chaque analyse, <b>y compris retirée du catalogue</b> — le
+     * compte-rendu de biologie regroupe ses analyses par catégorie, et une
+     * analyse retirée après la saisie doit rester à sa place sur le document.
+     * Une catégorie supprimée ne donne pas de nom.
+     *
+     * @param ids analyses (non vide)
+     */
+    @Query(value = "SELECT CAST(lt.id AS VARCHAR) AS labTestId, c.name AS categoryName "
+            + "FROM lab_tests lt "
+            + "LEFT JOIN category_tests c ON c.id = lt.category_test_id AND c.deleted_at IS NULL "
+            + "WHERE lt.id IN (:ids)", nativeQuery = true)
+    List<CategorieDAnalyse> findCategoriesYComprisRetirees(@Param("ids") Collection<UUID> ids);
+
+    /** Catégorie d'une analyse. */
+    interface CategorieDAnalyse {
+        String getLabTestId();
+        String getCategoryName();
+    }
 }

@@ -29,6 +29,7 @@ public class ReglagesDeBiologie {
     static final String CLE_MODE = "bio_validation_mode";
     static final String CLE_LIBELLES_ANTIBIOGRAMME = "bio_antibiogram_labels";
     static final String CLE_LIBELLES_INDICATEURS = "bio_flag_labels";
+    static final String CLE_IMPRESSION_PROVISOIRE = "bio_print_provisional";
 
     static final Map<String, String> ANTIBIOGRAMME_PAR_DEFAUT = ordonnee(
             "S", "Sensible", "I", "Intermédiaire", "R", "Résistant");
@@ -60,6 +61,30 @@ public class ReglagesDeBiologie {
     /** @return libellés des indicateurs L/H/LL/HH (défauts complétés) */
     public Map<String, String> libellesIndicateurs(UUID branchId) {
         return libelles(CLE_LIBELLES_INDICATEURS, branchId, INDICATEURS_PAR_DEFAUT);
+    }
+
+    /**
+     * Un compte-rendu non validé peut-il s'imprimer, sous la mention « RÉSULTATS
+     * PROVISOIRES » ?
+     *
+     * <p>{@code true}/{@code false} (casse indifférente), {@code 1}/{@code 0},
+     * {@code oui}/{@code non}. Absent ou illisible : {@code true}, la valeur amorcée
+     * par V98 — le document provisoire ne porte ni signature ni date de validation.</p>
+     */
+    public boolean impressionProvisoire(UUID branchId) {
+        String v = valeur(CLE_IMPRESSION_PROVISOIRE, branchId);
+        if (v == null || v.isBlank()) {
+            return true;
+        }
+        return switch (v.strip().toLowerCase(Locale.ROOT)) {
+            case "false", "0", "non", "no" -> false;
+            case "true", "1", "oui", "yes" -> true;
+            default -> {
+                log.warn("Réglage {} illisible ({}) pour la succursale {} : impression provisoire permise.",
+                        CLE_IMPRESSION_PROVISOIRE, v, branchId);
+                yield true;
+            }
+        };
     }
 
     private Map<String, String> libelles(String cle, UUID branchId, Map<String, String> defauts) {

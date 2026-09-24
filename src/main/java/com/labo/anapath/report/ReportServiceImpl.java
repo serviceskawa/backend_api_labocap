@@ -792,7 +792,7 @@ public class ReportServiceImpl implements ReportService {
      *
      * <p>Ne vérifie <b>pas</b> la discipline : c'est à l'appelant de le faire —
      * {@link #validate(UUID, UUID, ValidationSigneeDto)} pour l'anatomie
-     * pathologique, le futur point d'entrée de biologie pour la sienne. Il
+     * pathologique, {@code BiologyReportServiceImpl} pour la biologie. Il
      * s'exécute dans la transaction de l'appelant.</p>
      *
      * @param report compte-rendu déjà chargé
@@ -800,7 +800,9 @@ public class ReportServiceImpl implements ReportService {
      * @param preuve preuve d'appareil, ou {@code null} depuis le web
      * @return le compte-rendu validé
      */
-    ReportResponseDto validerCompteRendu(Report report, UUID userId, ValidationSigneeDto preuve) {
+    @Override
+    @Transactional
+    public ReportResponseDto validerCompteRendu(Report report, UUID userId, ValidationSigneeDto preuve) {
         UUID id = report.getId();
         if (report.getStatus() == ReportStatus.VALIDATED || report.getStatus() == ReportStatus.DELIVERED) {
             throw new InvalidOperationException("Le rapport est déjà validé ou livré.");

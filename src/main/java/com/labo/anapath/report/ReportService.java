@@ -57,6 +57,22 @@ public interface ReportService {
      */
     ReportResponseDto validate(UUID id, UUID userId, ValidationSigneeDto preuve);
 
+    /**
+     * Cœur de la validation, commun aux disciplines : passage à VALIDATED, date
+     * de signature, contrôle de la preuve d'appareil, journal et avis au patient
+     * ({@link ReportValidatedEvent}, publié une seule fois, à la transition).
+     *
+     * <p><b>Ne contrôle pas la discipline.</b> Réservé aux points d'entrée qui ont
+     * fait leurs propres vérifications — {@link #validate(UUID, UUID, ValidationSigneeDto)}
+     * pour l'anatomie pathologique, la validation biologique pour la biologie.
+     * S'exécute dans la transaction de l'appelant.</p>
+     *
+     * @param report compte-rendu déjà chargé par l'appelant
+     * @param userId auteur de la validation
+     * @param preuve preuve d'appareil, ou {@code null} depuis le web
+     */
+    ReportResponseDto validerCompteRendu(Report report, UUID userId, ValidationSigneeDto preuve);
+
     ReportResponseDto create(ReportRequestDto dto, UUID branchId);
 
     ReportResponseDto createOrUpdate(ReportRequestDto dto, UUID branchId);

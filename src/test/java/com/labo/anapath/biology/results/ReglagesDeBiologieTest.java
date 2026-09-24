@@ -52,6 +52,23 @@ class ReglagesDeBiologieTest {
     }
 
     @Test
+    @DisplayName("impression provisoire : absent ou illisible → permise (V98) ; false/0/non → refusée")
+    void impressionProvisoire() {
+        when(repo.findByKeyAndBranchId(any(), any())).thenReturn(Optional.empty());
+        assertThat(reglages.impressionProvisoire(BRANCH)).isTrue();
+        regler(ReglagesDeBiologie.CLE_IMPRESSION_PROVISOIRE, " FALSE ");
+        assertThat(reglages.impressionProvisoire(BRANCH)).isFalse();
+        regler(ReglagesDeBiologie.CLE_IMPRESSION_PROVISOIRE, "0");
+        assertThat(reglages.impressionProvisoire(BRANCH)).isFalse();
+        regler(ReglagesDeBiologie.CLE_IMPRESSION_PROVISOIRE, "non");
+        assertThat(reglages.impressionProvisoire(BRANCH)).isFalse();
+        regler(ReglagesDeBiologie.CLE_IMPRESSION_PROVISOIRE, "true");
+        assertThat(reglages.impressionProvisoire(BRANCH)).isTrue();
+        regler(ReglagesDeBiologie.CLE_IMPRESSION_PROVISOIRE, "peut-être");
+        assertThat(reglages.impressionProvisoire(BRANCH)).isTrue();
+    }
+
+    @Test
     @DisplayName("libellés illisibles ou absents : défauts de V98")
     void libellesIllisibles() {
         when(repo.findByKeyAndBranchId(any(), any())).thenReturn(Optional.empty());

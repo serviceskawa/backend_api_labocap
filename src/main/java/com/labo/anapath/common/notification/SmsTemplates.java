@@ -29,6 +29,16 @@ public class SmsTemplates {
     /** Clé {@code setting_apps} du SMS annonçant un résultat disponible au retrait. */
     public static final String CLE_SMS_RESULTAT = "sms_resultat_body";
 
+    /**
+     * Clé {@code setting_apps} du SMS annonçant des résultats de biologie.
+     *
+     * <p>Distincte de {@link #CLE_SMS_RESULTAT} : le texte d'anatomie pathologique
+     * nomme le cabinet d'anatomie pathologique, et le reprendre pour un bilan
+     * sanguin induirait le patient en erreur. Pas de repli sur la clé
+     * d'anatomie pathologique pour la même raison.</p>
+     */
+    public static final String CLE_SMS_RESULTAT_BIOLOGIE = "sms_resultat_biologie_body";
+
     /** Clé {@code setting_apps} du SMS annonçant une facture téléchargeable. */
     public static final String CLE_SMS_FACTURE = "sms_facture_body";
 
@@ -38,6 +48,15 @@ public class SmsTemplates {
             + "vos résultats d'analyse sont maintenant disponible vous pouvez venir les recupérer "
             + "à tout moment pendant nos heures d'ouvertures. "
             + "Nous sommes ouvert du Lundi au vendredi de 08h à 17h Merci de votre confiance";
+
+    /**
+     * Texte livré du SMS de résultat de biologie : neutre (sans nom de
+     * laboratoire, que chaque déploiement renseigne sous la clé ci-dessus) et
+     * sous les 160 caractères.
+     */
+    public static final String DEFAUT_SMS_RESULTAT_BIOLOGIE =
+            "Bonjour, vos résultats d'analyses sont disponibles. Vous pouvez venir les récupérer "
+            + "pendant nos heures d'ouverture. Merci de votre confiance.";
 
     /**
      * Texte livré du SMS de facture. Volontairement court : au-delà de
@@ -57,6 +76,16 @@ public class SmsTemplates {
      */
     public String smsResultat(UUID branchId) {
         return modele(CLE_SMS_RESULTAT, branchId, DEFAUT_SMS_RESULTAT);
+    }
+
+    /**
+     * Le texte du SMS de résultat de biologie, tel que paramétré ou, à défaut,
+     * tel que livré.
+     *
+     * @param branchId branche du compte-rendu ; {@code null} accepté
+     */
+    public String smsResultatBiologie(UUID branchId) {
+        return modele(CLE_SMS_RESULTAT_BIOLOGIE, branchId, DEFAUT_SMS_RESULTAT_BIOLOGIE);
     }
 
     /**

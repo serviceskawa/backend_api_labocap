@@ -730,10 +730,23 @@ public class BiologyResultServiceImpl implements BiologyResultService {
                     parSection.getOrDefault(s.getId(), List.of())));
         }
         Set<UUID> connus = parametres.stream().map(BiologyParameter::getId).collect(Collectors.toSet());
+        List<UUID> retires = sesValeurs.stream().map(BiologyParameterResult::getParameterId)
+                .filter(id -> id != null && !connus.contains(id)).toList();
+        // Le nom n'est pas copié à la saisie : celui d'un paramètre retiré se relit
+        // sur sa ligne supprimée logiquement (voir findLibellesYComprisRetires).
+        Map<UUID, String> nomsRetires = new HashMap<>();
+        if (!retires.isEmpty()) {
+            for (BiologyParameterRepository.LibelleDeParametre l : parameterRepository.findLibellesYComprisRetires(retires)) {
+                if (l != null && l.getId() != null && l.getName() != null) {
+                    nomsRetires.put(UUID.fromString(l.getId()), l.getName());
+                }
+            }
+        }
         for (BiologyParameterResult orpheline : sesValeurs) {
             if (!connus.contains(orpheline.getParameterId())) {
                 horsSection.add(new BiologyWorksheetDto.ParameterRow(orpheline.getParameterId(), null,
-                        "Paramètre retiré du catalogue", Integer.MAX_VALUE,
+                        nomsRetires.getOrDefault(orpheline.getParameterId(), "Paramètre retiré du catalogue"),
+                        Integer.MAX_VALUE,
                         orpheline.getValueNumeric() != null ? ResultType.NUMERIC : ResultType.TEXT,
                         null, null, orpheline.getUnitSnapshot(), null, true, false, null,
                         versValeur(orpheline)));

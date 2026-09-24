@@ -1,5 +1,6 @@
 package com.labo.anapath.report;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.notification.OurVoiceClient;
 import com.labo.anapath.common.notification.PhoneNumbers;
@@ -118,8 +119,14 @@ public class NotificationServiceImpl implements NotificationService {
         // Clé d'idempotence tirée au sort, et non l'identifiant du compte-rendu :
         // ce SMS se renvoie à la demande depuis l'écran de suivi, et une clé stable
         // ferait écarter la relance comme un doublon.
-        smsSender.envoyer(to, smsTemplates.smsResultat(report.getBranchId()),
-                SmsSender.SOURCE_RESULTAT, UUID.randomUUID());
+        //
+        // Le texte suit la discipline : celui d'anatomie pathologique nomme le
+        // cabinet d'anatomie pathologique, la biologie a le sien. Le chemin
+        // d'anatomie pathologique est inchangé.
+        String texte = report.getDiscipline() == Discipline.BIOLOGY
+                ? smsTemplates.smsResultatBiologie(report.getBranchId())
+                : smsTemplates.smsResultat(report.getBranchId());
+        smsSender.envoyer(to, texte, SmsSender.SOURCE_RESULTAT, UUID.randomUUID());
 
         // L'avis est parti : la reprise de 8h n'a plus à s'en occuper.
         report.setPatientNotifiedAt(LocalDateTime.now());
