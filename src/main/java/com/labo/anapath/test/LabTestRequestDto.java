@@ -1,8 +1,11 @@
 package com.labo.anapath.test;
 
+import com.labo.anapath.biology.BiologyKind;
+import com.labo.anapath.common.Discipline;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -41,4 +44,21 @@ public class LabTestRequestDto {
 
     /** Statut de l'analyse : {@code ACTIF} (défaut) ou {@code INACTIF}. */
     private String status = "ACTIF";
+
+    /**
+     * Discipline de l'analyse ; {@code null} vaut {@link Discipline#PATHOLOGY}, pour
+     * que les formulaires existants, qui ne l'envoient pas, restent inchangés.
+     * Prise en compte à la création seulement : une modification qui la change est refusée.
+     */
+    private Discipline discipline;
+
+    /**
+     * Nature d'une analyse de biologie ({@code PANEL} par défaut) ; interdite en
+     * anatomie pathologique. Prise en compte à la création seulement.
+     */
+    private BiologyKind biologyKind;
+
+    /** Type d'échantillon attendu, pour la biologie uniquement (ex. : « Urines »). */
+    @Size(max = 100, message = "Le type d'échantillon ne doit pas dépasser 100 caractères")
+    private String specimenType;
 }

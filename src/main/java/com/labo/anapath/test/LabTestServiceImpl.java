@@ -1,16 +1,20 @@
 package com.labo.anapath.test;
 
+import com.labo.anapath.biology.BiologyKind;
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.dto.PageResponse;
+import com.labo.anapath.common.exception.BusinessException;
 import com.labo.anapath.common.exception.DuplicateResourceException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
+import com.labo.anapath.common.module.ModulesProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -21,6 +25,9 @@ import java.util.UUID;
  *   <li>Vérification de l'unicité du nom (insensible à la casse) dans la succursale</li>
  *   <li>Résolution des entités {@link CategoryTest} et {@link UnitMeasurement}
  *       à partir de leurs identifiants fournis dans le DTO</li>
+ *   <li>Règles de discipline : une analyse et sa catégorie sont de la même
+ *       discipline ; la discipline et la nature biologique sont fixées à la création ;
+ *       aucune analyse de biologie ne se crée tant que le module est désactivé</li>
  * </ul>
  * </p>
  */
@@ -33,6 +40,7 @@ public class LabTestServiceImpl implements LabTestService {
     private final CategoryTestRepository categoryTestRepository;
     private final UnitMeasurementRepository unitMeasurementRepository;
     private final TestCatalogueMapper mapper;
+    private final ModulesProperties modules;
 
     /**
      * {@inheritDoc}
@@ -40,7 +48,8 @@ public class LabTestServiceImpl implements LabTestService {
      */
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<LabTestResponseDto> findAll(int page, int size, String search, String status, UUID branchId) {
+    public PageResponse<LabTestResponseDto> findAll(int page, int size, String search, String status,
+                                                    Discipline discipline, UUID branchId) {
         String searchFilter = (search != null && !search.isBlank()) ? search.trim() : null;
         String statusFilter = (status != null && !status.isBlank()) ? status.trim() : null;
         return PageResponse.of(
@@ -49,15 +58,16 @@ public class LabTestServiceImpl implements LabTestService {
                 // (« createdAt » ≠ colonne « created_at »). L'ordre est porté par
                 // la requête elle-même.
                 labTestRepository.findByFilters(branchId, searchFilter, statusFilter,
-                                PageRequest.of(page, size))
+                                disciplineOuDefaut(discipline).name(), PageRequest.of(page, size))
                         .map(mapper::toLabTestResponseDto));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<LabTestResponseDto> findAll(UUID branchId) {
+    public List<LabTestResponseDto> findAll(UUID branchId, Discipline discipline) {
         // Tri du plus récemment créé au plus ancien (formulaire d'ajout d'examen).
-        return labTestRepository.findAllByBranchIdOrderByCreatedAtDesc(branchId)
+        return labTestRepository.findAllByBranchIdAndDisciplineOrderByCreatedAtDesc(
+                        branchId, disciplineOuDefaut(discipline))
                 .stream().map(mapper::toLabTestResponseDto).toList();
     }
 
@@ -72,8 +82,9 @@ public class LabTestServiceImpl implements LabTestService {
     /** {@inheritDoc} */
     @Override
     @Transactional(readOnly = true)
-    public List<LabTestResponseDto> search(String query, UUID branchId) {
-        return labTestRepository.findByNameContainingIgnoreCaseAndBranchId(query, branchId)
+    public List<LabTestResponseDto> search(String query, UUID branchId, Discipline discipline) {
+        return labTestRepository.findByNameContainingIgnoreCaseAndBranchId(
+                        query, branchId, disciplineOuDefaut(discipline).name())
                 .stream().map(mapper::toLabTestResponseDto).toList();
     }
 
@@ -89,11 +100,20 @@ public class LabTestServiceImpl implements LabTestService {
         if (labTestRepository.existsByNameIgnoreCaseAndBranchId(dto.getName(), branchId)) {
             throw new DuplicateResourceException("Une analyse '" + dto.getName() + "' existe déjà.");
         }
+        Discipline discipline = disciplineOuDefaut(dto.getDiscipline());
+        if (discipline == Discipline.BIOLOGY && !modules.isBiology()) {
+            throw new BusinessException("Le module Biologie n'est pas activé sur ce laboratoire.");
+        }
         LabTest entity = mapper.toLabTestEntity(dto);
         entity.setBranchId(branchId);
+        entity.setDiscipline(discipline);
+        if (discipline == Discipline.BIOLOGY) {
+            entity.setBiologyKind(dto.getBiologyKind() != null ? dto.getBiologyKind() : BiologyKind.PANEL);
+        } else {
+            refuserLesChampsDeBiologie(dto);
+        }
         if (dto.getCategoryTestId() != null) {
-            entity.setCategoryTest(categoryTestRepository.findById(dto.getCategoryTestId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Catégorie", dto.getCategoryTestId())));
+            entity.setCategoryTest(categorieDeMemeDiscipline(dto.getCategoryTestId(), discipline));
         }
         if (dto.getUnitMeasurementId() != null) {
             entity.setUnitMeasurement(unitMeasurementRepository.findById(dto.getUnitMeasurementId())
@@ -115,10 +135,18 @@ public class LabTestServiceImpl implements LabTestService {
     public LabTestResponseDto update(UUID id, LabTestRequestDto dto) {
         LabTest entity = labTestRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Analyse", id));
+        if (dto.getDiscipline() != null && dto.getDiscipline() != entity.getDiscipline()) {
+            throw new BusinessException("La discipline d'une analyse ne se modifie pas après sa création.");
+        }
+        if (dto.getBiologyKind() != null && !Objects.equals(dto.getBiologyKind(), entity.getBiologyKind())) {
+            throw new BusinessException("La nature d'une analyse de biologie ne se modifie pas après sa création.");
+        }
+        if (entity.getDiscipline() != Discipline.BIOLOGY) {
+            refuserLesChampsDeBiologie(dto);
+        }
         mapper.updateLabTestFromDto(dto, entity);
         if (dto.getCategoryTestId() != null) {
-            entity.setCategoryTest(categoryTestRepository.findById(dto.getCategoryTestId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Catégorie", dto.getCategoryTestId())));
+            entity.setCategoryTest(categorieDeMemeDiscipline(dto.getCategoryTestId(), entity.getDiscipline()));
         }
         if (dto.getUnitMeasurementId() != null) {
             entity.setUnitMeasurement(unitMeasurementRepository.findById(dto.getUnitMeasurementId())
@@ -134,5 +162,34 @@ public class LabTestServiceImpl implements LabTestService {
         LabTest entity = labTestRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Analyse", id));
         labTestRepository.delete(entity);
+    }
+
+    /** {@code null} (client qui n'envoie pas la discipline) vaut anatomie pathologique. */
+    private static Discipline disciplineOuDefaut(Discipline discipline) {
+        return discipline != null ? discipline : Discipline.PATHOLOGY;
+    }
+
+    /**
+     * Charge la catégorie et vérifie qu'elle est de la discipline de l'analyse :
+     * une analyse de biologie rangée dans une catégorie d'anatomie pathologique
+     * apparaîtrait dans les écrans d'anapath, et fausserait les remises de contrat
+     * qui visent la catégorie.
+     */
+    private CategoryTest categorieDeMemeDiscipline(UUID categoryTestId, Discipline discipline) {
+        CategoryTest categorie = categoryTestRepository.findById(categoryTestId)
+                .orElseThrow(() -> new ResourceNotFoundException("Catégorie", categoryTestId));
+        if (categorie.getDiscipline() != discipline) {
+            throw new BusinessException("La catégorie « " + categorie.getName()
+                    + " » n'est pas de la même discipline que l'analyse.");
+        }
+        return categorie;
+    }
+
+    /** Nature biologique et type d'échantillon n'ont pas de sens en anatomie pathologique. */
+    private static void refuserLesChampsDeBiologie(LabTestRequestDto dto) {
+        if (dto.getBiologyKind() != null || (dto.getSpecimenType() != null && !dto.getSpecimenType().isBlank())) {
+            throw new BusinessException(
+                    "La nature biologique et le type d'échantillon sont réservés aux analyses de biologie.");
+        }
     }
 }

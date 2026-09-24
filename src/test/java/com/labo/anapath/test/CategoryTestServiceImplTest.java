@@ -51,7 +51,8 @@ class CategoryTestServiceImplTest {
     }
 
     private CategoryTestResponseDto buildResponseDto(String name) {
-        return new CategoryTestResponseDto(ID, name, null, BRANCH_ID, LocalDateTime.now());
+        return new CategoryTestResponseDto(ID, name, null, BRANCH_ID, LocalDateTime.now(),
+                com.labo.anapath.common.Discipline.PATHOLOGY);
     }
 
     @Test
@@ -63,7 +64,8 @@ class CategoryTestServiceImplTest {
         CategoryTest entity = buildEntity("Cytologie");
         CategoryTestResponseDto responseDto = buildResponseDto("Cytologie");
 
-        when(categoryTestRepository.existsByNameIgnoreCaseAndBranchId("Cytologie", BRANCH_ID)).thenReturn(false);
+        when(categoryTestRepository.existsByNameIgnoreCaseAndBranchIdAndDiscipline("Cytologie", BRANCH_ID,
+                com.labo.anapath.common.Discipline.PATHOLOGY)).thenReturn(false);
         when(mapper.toCategoryTestEntity(dto)).thenReturn(entity);
         when(categoryTestRepository.save(any(CategoryTest.class))).thenReturn(entity);
         when(mapper.toCategoryTestResponseDto(entity)).thenReturn(responseDto);
@@ -80,7 +82,8 @@ class CategoryTestServiceImplTest {
         CategoryTestRequestDto dto = new CategoryTestRequestDto();
         dto.setName("Cytologie");
 
-        when(categoryTestRepository.existsByNameIgnoreCaseAndBranchId("Cytologie", BRANCH_ID)).thenReturn(true);
+        when(categoryTestRepository.existsByNameIgnoreCaseAndBranchIdAndDiscipline("Cytologie", BRANCH_ID,
+                com.labo.anapath.common.Discipline.PATHOLOGY)).thenReturn(true);
 
         assertThatThrownBy(() -> categoryTestService.create(dto, BRANCH_ID))
                 .isInstanceOf(DuplicateResourceException.class);
@@ -93,10 +96,12 @@ class CategoryTestServiceImplTest {
         CategoryTestResponseDto dto = buildResponseDto("Cytologie");
         Page<CategoryTest> page = new PageImpl<>(List.of(entity));
 
-        when(categoryTestRepository.findByBranchId(any(UUID.class), any(Pageable.class))).thenReturn(page);
+        when(categoryTestRepository.findByBranchIdAndDiscipline(any(UUID.class),
+                org.mockito.ArgumentMatchers.eq(com.labo.anapath.common.Discipline.PATHOLOGY), any(Pageable.class)))
+                .thenReturn(page);
         when(mapper.toCategoryTestResponseDto(entity)).thenReturn(dto);
 
-        PageResponse<CategoryTestResponseDto> result = categoryTestService.findAll(0, 20, BRANCH_ID);
+        PageResponse<CategoryTestResponseDto> result = categoryTestService.findAll(0, 20, null, BRANCH_ID);
 
         assertThat(result.content()).hasSize(1);
     }

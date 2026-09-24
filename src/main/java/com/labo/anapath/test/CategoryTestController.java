@@ -1,5 +1,6 @@
 package com.labo.anapath.test;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.security.UserPrincipal;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -26,6 +28,9 @@ import java.util.UUID;
  *
  * <p>La consultation est accessible aux utilisateurs ayant la permission {@code view-tests},
  * tandis que la création, la modification et la suppression nécessitent {@code manage-tests}.</p>
+ *
+ * <p>La liste accepte un paramètre {@code discipline} qui vaut {@code PATHOLOGY} par
+ * défaut : les écrans d'anatomie pathologique ne voient pas les catégories de biologie.</p>
  *
  * <p>Base URL : {@code /api/v1/category-tests}</p>
  */
@@ -41,6 +46,7 @@ public class CategoryTestController {
      *
      * @param page      numéro de page (0-indexé, défaut 0)
      * @param size      nombre d'éléments par page (défaut 20)
+     * @param discipline discipline des catégories listées (défaut PATHOLOGY)
      * @param principal principal de sécurité de l'utilisateur connecté
      * @return page de {@link CategoryTestResponseDto}
      */
@@ -49,8 +55,26 @@ public class CategoryTestController {
     public ResponseEntity<ApiResponse<PageResponse<CategoryTestResponseDto>>> findAll(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
-        return ResponseEntity.ok(ApiResponse.success(categoryTestService.findAll(page, size, principal.getBranchId())));
+        return ResponseEntity.ok(ApiResponse.success(
+                categoryTestService.findAll(page, size, discipline, principal.getBranchId())));
+    }
+
+    /**
+     * Crée les catégories de biologie usuelles absentes de la succursale
+     * (bouton « Créer les catégories par défaut »). Idempotent.
+     * Refusé (422) quand le module Biologie est désactivé.
+     *
+     * @param principal principal de sécurité fournissant le branchId
+     * @return les catégories de biologie de la succursale
+     */
+    @PostMapping("/biology-defaults")
+    @PreAuthorize("hasAuthority('edit-tests')")
+    public ResponseEntity<ApiResponse<List<CategoryTestResponseDto>>> createBiologyDefaults(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success("Catégories de biologie par défaut en place",
+                categoryTestService.createBiologyDefaults(principal.getBranchId())));
     }
 
     /**

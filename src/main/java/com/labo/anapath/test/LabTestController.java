@@ -1,5 +1,6 @@
 package com.labo.anapath.test;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.security.UserPrincipal;
@@ -29,6 +30,10 @@ import java.util.UUID;
  * {@code view-tests}, tandis que la création, la modification et la suppression nécessitent
  * {@code manage-tests}.</p>
  *
+ * <p>Les listes acceptent un paramètre {@code discipline} qui vaut {@code PATHOLOGY}
+ * par défaut : les écrans d'anatomie pathologique, qui ne l'envoient pas, ne voient
+ * jamais les analyses de biologie.</p>
+ *
  * <p>Base URL : {@code /api/v1/lab-tests}</p>
  */
 @RestController
@@ -45,6 +50,7 @@ public class LabTestController {
      * @param size      nombre d'éléments par page (défaut 20)
      * @param search    terme de recherche partielle sur le nom (optionnel)
      * @param status    statut à filtrer, ACTIF/INACTIF (optionnel)
+     * @param discipline discipline des analyses listées (défaut PATHOLOGY)
      * @param principal principal de sécurité de l'utilisateur connecté
      * @return page de {@link LabTestResponseDto}
      */
@@ -55,32 +61,43 @@ public class LabTestController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                labTestService.findAll(page, size, search, status, principal.getBranchId())));
+                labTestService.findAll(page, size, search, status, discipline, principal.getBranchId())));
     }
 
+    /**
+     * Toutes les analyses d'une discipline, sans pagination (formulaire de demande).
+     *
+     * @param discipline discipline des analyses listées (défaut PATHOLOGY)
+     * @param principal  principal de sécurité fournissant le branchId
+     * @return liste des analyses
+     */
     @GetMapping("/all")
     @PreAuthorize("hasAuthority('view-tests')")
     public ResponseEntity<ApiResponse<List<LabTestResponseDto>>> findAll(
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
-        return ResponseEntity.ok(ApiResponse.success(labTestService.findAll(principal.getBranchId())));
+        return ResponseEntity.ok(ApiResponse.success(labTestService.findAll(principal.getBranchId(), discipline)));
     }
 
     /**
      * Recherche des analyses dont le nom contient le terme fourni (insensible à la casse).
      * Utilisé pour l'autocomplétion dans les formulaires de demande d'analyses.
      *
-     * @param q         terme de recherche
-     * @param principal principal de sécurité fournissant le branchId
+     * @param q          terme de recherche
+     * @param discipline discipline des analyses proposées (défaut PATHOLOGY)
+     * @param principal  principal de sécurité fournissant le branchId
      * @return liste des analyses correspondantes
      */
     @GetMapping("/search")
     @PreAuthorize("hasAuthority('view-tests')")
     public ResponseEntity<ApiResponse<List<LabTestResponseDto>>> search(
             @RequestParam String q,
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
-        return ResponseEntity.ok(ApiResponse.success(labTestService.search(q, principal.getBranchId())));
+        return ResponseEntity.ok(ApiResponse.success(labTestService.search(q, principal.getBranchId(), discipline)));
     }
 
     /**
