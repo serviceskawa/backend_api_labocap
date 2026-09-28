@@ -145,6 +145,23 @@ public class GlobalExceptionHandler {
      * @param ex exception levée par Spring Security
      * @return réponse 403 avec un message générique
      */
+    /**
+     * Refus dont le motif est destiné à être lu par la personne.
+     *
+     * <p>Déclaré à côté du cas général : Spring retient le gestionnaire le plus
+     * spécifique, et celui-ci rend le message tel qu'il a été écrit au lieu du
+     * texte générique. Voir {@link AccesRefuseExplique} pour ce qui justifie
+     * cette exception à la règle de prudence ci-dessus.</p>
+     */
+    @ExceptionHandler(AccesRefuseExplique.class)
+    public ResponseEntity<ApiResponse<Object>> handleAccesRefuseExplique(
+            AccesRefuseExplique ex, jakarta.servlet.http.HttpServletRequest requete) {
+        log.warn("Accès refusé (motif montré) : {} {} — {}",
+                requete.getMethod(), requete.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Object>> handleAccessDenied(
             AccessDeniedException ex, jakarta.servlet.http.HttpServletRequest requete) {

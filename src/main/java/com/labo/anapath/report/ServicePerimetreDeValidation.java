@@ -1,5 +1,6 @@
 package com.labo.anapath.report;
 
+import com.labo.anapath.common.exception.AccesRefuseExplique;
 import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.test.TypeOrder;
@@ -8,7 +9,6 @@ import com.labo.anapath.user.User;
 import com.labo.anapath.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,14 +62,14 @@ public class ServicePerimetreDeValidation {
             // Sans type identifiable, aucun périmètre ne peut être vérifié. On
             // refuse plutôt que de laisser passer : c'est la seule décision qui
             // ne crée pas de validation dont personne n'a pesé la portée.
-            throw new AccessDeniedException(
+            throw new AccesRefuseExplique(
                     "Le type d'examen de cette demande est inconnu : la validation par périmètre "
                             + "ne peut pas s'appliquer. Un médecin doit valider ce compte-rendu.");
         }
 
         if (!perimetres.couvreLeType(auteurId, titre)) {
             List<String> couverts = perimetres.libellesCouverts(auteurId);
-            throw new AccessDeniedException(couverts.isEmpty()
+            throw new AccesRefuseExplique(couverts.isEmpty()
                     ? "Aucun type d'examen ne vous est confié pour la validation. "
                             + "Un administrateur doit vous en accorder."
                     : "Vous ne validez pas les comptes-rendus de type « " + titre + " ». "
