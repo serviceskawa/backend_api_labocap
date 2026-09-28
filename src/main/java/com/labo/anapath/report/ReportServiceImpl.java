@@ -56,6 +56,7 @@ public class ReportServiceImpl implements ReportService {
     private final com.labo.anapath.mobile.SignatureAppareil signatureAppareil;
     private final com.labo.anapath.mobile.ProvenanceRequete provenanceRequete;
     private final com.labo.anapath.testorder.TestOrderAssignmentDetailRepository assignmentDetailRepository;
+    private final ServicePerimetreDeValidation perimetreDeValidation;
     /** Pour relire les étiquettes, rangées en tableau JSON sur la ligne d'affectation. */
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
@@ -214,7 +215,28 @@ public class ReportServiceImpl implements ReportService {
                 affectation.nom(), affectation.code(), affectation.date(),
                 affectation.etiquettes(), affectation.note(), affectation.noteDuLot(),
                 report.getCreatedAt(), report.getUpdatedAt(),
-                report.getDiscipline());
+                report.getDiscipline(),
+                report.getValidatedBy() != null ? report.getValidatedBy().getId() : null,
+                report.getValidatedBy() != null ? NomComplet.de(
+                        report.getValidatedBy().getLastname(),
+                        report.getValidatedBy().getFirstname()) : null,
+                metierDe(report.getValidatedBy()));
+    }
+
+    /**
+     * Le métier sous lequel une personne a validé, en clair.
+     *
+     * <p>Le premier rôle suffit : les comptes qui valident en portent un seul,
+     * et énumérer les cumuls du super-administrateur n'apprendrait rien au
+     * lecteur du compte-rendu.</p>
+     */
+    private static String metierDe(com.labo.anapath.user.User utilisateur) {
+        if (utilisateur == null || utilisateur.getRoles() == null) return null;
+        return utilisateur.getRoles().stream()
+                .map(r -> r.getName() != null ? r.getName() : r.getSlug())
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     /**
@@ -807,10 +829,21 @@ public class ReportServiceImpl implements ReportService {
         if (report.getStatus() == ReportStatus.VALIDATED || report.getStatus() == ReportStatus.DELIVERED) {
             throw new InvalidOperationException("Le rapport est déjà validé ou livré.");
         }
+        // Le type d'examen doit entrer dans le périmètre confié à l'auteur. Le
+        // contrôle est ici, au cœur commun, et non sur le point d'entrée : les
+        // deux chemins — web et mobile — passent par cette méthode, et une garde
+        // posée plus haut aurait fini par ne couvrir que l'un des deux.
+        perimetreDeValidation.exigerLePerimetre(report, userId);
+
         ReportStatus statutInitial = report.getStatus();
         report.setStatus(ReportStatus.VALIDATED);
         report.setSignatureDate(LocalDateTime.now());
         report.setDeliveryDate(LocalDateTime.now());
+
+        // Qui a posé l'acte. Les signataires nomment les pathologistes dont la
+        // signature figure au document ; ceci nomme la personne qui a validé,
+        // qui n'est plus forcément l'un d'eux.
+        userRepository.findById(userId).ifPresent(report::setValidatedBy);
 
         // Une session ouverte depuis un téléphone enrôlé DOIT signer. Sans cette
         // exigence, il suffirait à l'application d'omettre la preuve pour

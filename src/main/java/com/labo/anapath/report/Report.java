@@ -99,6 +99,24 @@ public class Report extends AuditableEntity {
     @JoinColumn(name = "reviewed_by_user_id")
     private User reviewedBy;
 
+    /**
+     * Utilisateur ayant posé l'acte de validation.
+     *
+     * <p>Distinct des signataires, qui nomment les pathologistes dont la
+     * signature figure au document, et du relecteur. Tant que seuls des médecins
+     * validaient, ces notions se confondaient ; depuis qu'un secrétaire peut
+     * valider certains types d'examen, le compte-rendu doit porter le nom de qui
+     * l'a réellement validé — sans quoi le document affirmerait une validation
+     * médicale qui n'a pas eu lieu.</p>
+     *
+     * <p>Nul sur les comptes-rendus validés avant cette colonne : leur trace vit
+     * dans le journal, et inventer un validateur ici écrirait une information
+     * que personne n'a constatée.</p>
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "validated_by_user_id")
+    private User validatedBy;
+
     /** Premier signataire du compte-rendu (pathologiste principal). */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "signatory1")

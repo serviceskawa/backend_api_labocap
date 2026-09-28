@@ -95,7 +95,18 @@ public record ReportDetailDto(
          * disciplines — le comptoir lit les deux — et l'écran en déduit quoi
          * afficher : texte rédigé ou résultats chiffrés.
          */
-        com.labo.anapath.common.Discipline discipline
+        com.labo.anapath.common.Discipline discipline,
+        /**
+         * Qui a posé l'acte de validation, et sous quel métier.
+         *
+         * <p>Le métier accompagne le nom parce que c'est lui qui porte le sens :
+         * « validé par Florence Hounnou » ne dit pas au lecteur si le
+         * compte-rendu a reçu un jugement médical. Nuls sur les comptes-rendus
+         * validés avant l'ouverture de la validation au secrétariat.</p>
+         */
+        UUID validatedById,
+        String validatedByName,
+        String validatedByRole
 ) {
     public record LogReportDto(String action, String description, String userName, LocalDateTime createdAt) {}
 }
