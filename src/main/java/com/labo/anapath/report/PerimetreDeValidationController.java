@@ -50,6 +50,31 @@ public class PerimetreDeValidationController {
         return ResponseEntity.ok(ApiResponse.success("Périmètre de validation enregistré", confies));
     }
 
+    /**
+     * L'historique des décisions prises sur ce compte.
+     *
+     * <p>Le périmètre courant ne dit rien de ce qui a été accordé puis retiré.
+     * Un compte-rendu validé six mois plus tôt ne s'explique que par l'état du
+     * périmètre à ce moment-là, et c'est ici qu'on le retrouve.</p>
+     */
+    @GetMapping("/{userId}/historique")
+    @PreAuthorize("hasAuthority('view-users')")
+    public ResponseEntity<ApiResponse<List<LigneDeJournal>>> historique(@PathVariable UUID userId) {
+        List<LigneDeJournal> lignes = service.historique(userId).stream()
+                .map(j -> new LigneDeJournal(
+                        j.getCreatedAt(), j.getAccordePar(),
+                        j.getTypesAvant(), j.getTypesApres()))
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success(lignes));
+    }
+
     /** Les libellés des types d'examen, tels qu'on les coche. */
     public record PerimetreRequest(@NotNull List<String> types) {}
+
+    /** Une décision : quand, par qui, et ce qui a changé. */
+    public record LigneDeJournal(
+            java.time.LocalDateTime quand,
+            UUID accordePar,
+            String typesAvant,
+            String typesApres) {}
 }

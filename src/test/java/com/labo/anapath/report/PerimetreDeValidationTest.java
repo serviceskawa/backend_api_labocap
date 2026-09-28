@@ -44,6 +44,7 @@ class PerimetreDeValidationTest {
     @Mock private PerimetreDeValidationRepository perimetres;
     @Mock private UserRepository utilisateurs;
     @Mock private TypeOrderRepository typesDExamen;
+    @Mock private JournalDuPerimetreRepository journal;
 
     @InjectMocks private ServicePerimetreDeValidation service;
 
@@ -154,6 +155,27 @@ class PerimetreDeValidationTest {
         verify(perimetres, never()).couvreLeType(any(), anyString());
     }
 
+    @Test
+    @DisplayName("Un bon d'examen supprimé ne fait pas une erreur 500, mais un refus")
+    void unBonIntrouvableSeRefuse() {
+        // Sept comptes-rendus de la base pointent vers un bon supprimé
+        // logiquement : le proxy ne se résout pas et lève EntityNotFoundException.
+        // Cette garde est le premier code à déréférencer le bon pendant une
+        // validation — sans filet, elle changerait une donnée ancienne en
+        // erreur 500 sur un dossier qui se validait la veille.
+        when(utilisateurs.findById(QUELQU_UN)).thenReturn(Optional.of(compte("secretariat")));
+
+        Report r = new Report();
+        ReflectionTestUtils.setField(r, "id", UUID.randomUUID());
+        TestOrder proxy = org.mockito.Mockito.mock(TestOrder.class);
+        when(proxy.getTypeOrder()).thenThrow(new jakarta.persistence.EntityNotFoundException("bon absent"));
+        r.setTestOrder(proxy);
+
+        assertThatThrownBy(() -> service.exigerLePerimetre(r, QUELQU_UN))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("type d'examen de cette demande est inconnu");
+    }
+
     // ------------------------------------------------------- l'attribution
 
     @Test
@@ -170,13 +192,92 @@ class PerimetreDeValidationTest {
         service.definirLePerimetre(QUELQU_UN, BRANCHE, List.of("Cytologie"), UUID.randomUUID());
 
         verify(perimetres).deleteByUserId(QUELQU_UN);
+        // Vidé en base avant de réécrire : Hibernate ordonne les insertions
+        // avant les suppressions, et sans ce flush réenregistrer un périmètre
+        // qui conserve un type déjà accordé viole la contrainte d'unicité.
+        verify(perimetres).flush();
         verify(perimetres, org.mockito.Mockito.times(2)).save(any(PerimetreDeValidation.class));
+    }
+
+    // ------------------------------------------------------------ la trace
+
+    @Test
+    @DisplayName("Chaque décision laisse une ligne de journal : avant → après")
+    void chaqueDecisionEstJournalisee() {
+        when(utilisateurs.findById(QUELQU_UN)).thenReturn(Optional.of(compte("secretariat")));
+        when(typesDExamen.findAll()).thenReturn(List.of(type("Cytologie")));
+        when(perimetres.libellesCouverts(QUELQU_UN))
+                .thenReturn(List.of("Immuno Externe"))   // avant
+                .thenReturn(List.of("Cytologie"));       // après
+
+        service.definirLePerimetre(QUELQU_UN, BRANCHE, List.of("Cytologie"), UUID.randomUUID());
+
+        org.mockito.ArgumentCaptor<JournalDuPerimetre> ligne =
+                org.mockito.ArgumentCaptor.forClass(JournalDuPerimetre.class);
+        verify(journal).save(ligne.capture());
+        assertThat(ligne.getValue().getTypesAvant()).isEqualTo("Immuno Externe");
+        assertThat(ligne.getValue().getTypesApres()).isEqualTo("Cytologie");
+    }
+
+    @Test
+    @DisplayName("Un retrait total se lit dans le journal, pas seulement dans l'absence de lignes")
+    void leRetraitEstJournalise() {
+        when(utilisateurs.findById(QUELQU_UN)).thenReturn(Optional.of(compte("secretariat")));
+        when(perimetres.libellesCouverts(QUELQU_UN))
+                .thenReturn(List.of("Cytologie", "Immuno Externe"))
+                .thenReturn(List.of());
+
+        service.definirLePerimetre(QUELQU_UN, BRANCHE, List.of(), UUID.randomUUID());
+
+        org.mockito.ArgumentCaptor<JournalDuPerimetre> ligne =
+                org.mockito.ArgumentCaptor.forClass(JournalDuPerimetre.class);
+        verify(journal).save(ligne.capture());
+        assertThat(ligne.getValue().getTypesAvant()).isEqualTo("Cytologie, Immuno Externe");
+        assertThat(ligne.getValue().getTypesApres()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Un type inconnu n'écrit rien : ni périmètre, ni journal")
+    void unTypeInconnuNEcritRien() {
+        when(utilisateurs.findById(QUELQU_UN)).thenReturn(Optional.of(compte("secretariat")));
+        when(perimetres.libellesCouverts(QUELQU_UN)).thenReturn(List.of());
+        when(typesDExamen.findAll()).thenReturn(List.of(type("Cytologie")));
+
+        assertThatThrownBy(() -> service.definirLePerimetre(
+                QUELQU_UN, BRANCHE, List.of("Radiologie"), UUID.randomUUID()))
+                .isInstanceOf(com.labo.anapath.common.exception.InvalidOperationException.class);
+
+        // La transaction est annulée de toute façon ; journaliser une décision
+        // non appliquée serait pire que ne rien journaliser.
+        verify(journal, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("La règle rendue au journal nomme le métier et le périmètre")
+    void laRegleSeLitEnClair() {
+        when(utilisateurs.findById(QUELQU_UN)).thenReturn(Optional.of(compte("secretariat")));
+        when(perimetres.libellesCouverts(QUELQU_UN)).thenReturn(List.of("Immuno Externe"));
+
+        assertThat(service.sousQuelleRegle(QUELQU_UN))
+                .contains("secretariat")
+                .contains("Immuno Externe");
+    }
+
+    @Test
+    @DisplayName("Pour un médecin, la règle dit « périmètre complet » plutôt que rien")
+    void pourUnMedecinLaRegleLeDit() {
+        when(utilisateurs.findById(QUELQU_UN)).thenReturn(Optional.of(compte("docteur")));
+
+        assertThat(service.sousQuelleRegle(QUELQU_UN)).contains("périmètre complet");
+        verifyNoInteractions(perimetres);
     }
 
     @Test
     @DisplayName("Enregistrer une liste vide retire tout le périmètre")
     void listeVideRetireTout() {
         when(utilisateurs.findById(QUELQU_UN)).thenReturn(Optional.of(compte("secretariat")));
+
+        when(perimetres.libellesCouverts(QUELQU_UN)).thenReturn(List.of());
 
         List<String> restant = service.definirLePerimetre(
                 QUELQU_UN, BRANCHE, List.of(), UUID.randomUUID());

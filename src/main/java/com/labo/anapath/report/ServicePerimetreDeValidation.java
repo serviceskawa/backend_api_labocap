@@ -40,6 +40,29 @@ public class ServicePerimetreDeValidation {
     private final PerimetreDeValidationRepository perimetres;
     private final UserRepository utilisateurs;
     private final TypeOrderRepository typesDExamen;
+    private final JournalDuPerimetreRepository journal;
+
+    /**
+     * Ce qu'un compte pouvait valider au moment où il a validé.
+     *
+     * <p>Rendu au journal du compte-rendu, pour qu'on y lise sous quelle règle
+     * l'acte a été posé et non seulement par qui. Sans cela, la validation d'un
+     * secrétaire et celle d'un pathologiste laissent la même ligne, et
+     * reconstituer la seconde suppose de deviner l'état d'une table qui a
+     * changé depuis.</p>
+     */
+    @Transactional(readOnly = true)
+    public String sousQuelleRegle(UUID auteurId) {
+        User auteur = utilisateurs.findById(auteurId).orElse(null);
+        if (auteur == null) return null;
+        String metier = premierMetier(auteur);
+        if (exerceUnMetierSansBorne(auteur)) {
+            return metier == null ? "périmètre complet" : metier + ", périmètre complet";
+        }
+        List<String> confies = perimetres.libellesCouverts(auteurId);
+        String perimetre = confies.isEmpty() ? "aucun type confié" : String.join(", ", confies);
+        return metier == null ? perimetre : metier + ", périmètre : " + perimetre;
+    }
 
     /**
      * Refuse la validation si le type d'examen sort du périmètre du compte.
@@ -101,30 +124,67 @@ public class ServicePerimetreDeValidation {
         User beneficiaire = utilisateurs.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", userId));
 
+        // Relevé AVANT toute écriture : au-delà, l'état d'origine est perdu et
+        // le journal ne pourrait plus dire ce qui a été retiré.
+        List<String> avant = perimetres.libellesCouverts(userId);
+
         perimetres.deleteByUserId(userId);
-        if (libelles == null || libelles.isEmpty()) {
-            log.info("Périmètre de validation vidé pour userId={} par userId={}", userId, auteurId);
-            return List.of();
+        // Vidé en base AVANT de réécrire.
+        //
+        // Hibernate ordonne ses écritures par type — insertions d'abord,
+        // suppressions ensuite — et non dans l'ordre où on les demande. Sans ce
+        // flush, réenregistrer un périmètre qui conserve un type déjà accordé
+        // tentait de l'insérer avant d'avoir retiré l'ancienne ligne, et se
+        // heurtait à `uq_perimetre_validation_user_type`. Le défaut ne se voyait
+        // pas sur une table vide : il fallait un compte ayant déjà un périmètre,
+        // c'est-à-dire exactement le cas courant.
+        perimetres.flush();
+
+        if (libelles != null) {
+            for (String libelle : libelles) {
+                if (libelle == null || libelle.isBlank()) continue;
+                List<TypeOrder> lignes = typesDExamen.findAll().stream()
+                        .filter(t -> t.getTitle() != null
+                                && t.getTitle().trim().equalsIgnoreCase(libelle.trim()))
+                        .toList();
+                if (lignes.isEmpty()) {
+                    // La transaction est annulée : ni le retrait ni la ligne de
+                    // journal ne subsistent. Un journal qui enregistrerait une
+                    // décision non appliquée serait pire que pas de journal.
+                    throw new InvalidOperationException(
+                            "Type d'examen inconnu : « " + libelle + " ».");
+                }
+                for (TypeOrder ligne : lignes) {
+                    perimetres.save(new PerimetreDeValidation(branchId, beneficiaire, ligne, auteurId));
+                }
+            }
         }
 
-        for (String libelle : libelles) {
-            if (libelle == null || libelle.isBlank()) continue;
-            List<TypeOrder> lignes = typesDExamen.findAll().stream()
-                    .filter(t -> t.getTitle() != null
-                            && t.getTitle().trim().equalsIgnoreCase(libelle.trim()))
-                    .toList();
-            if (lignes.isEmpty()) {
-                throw new InvalidOperationException(
-                        "Type d'examen inconnu : « " + libelle + " ».");
-            }
-            for (TypeOrder ligne : lignes) {
-                perimetres.save(new PerimetreDeValidation(branchId, beneficiaire, ligne, auteurId));
-            }
-        }
+        List<String> apres = perimetres.libellesCouverts(userId);
 
-        log.info("Périmètre de validation de userId={} fixé à {} par userId={}",
-                userId, libelles, auteurId);
-        return perimetres.libellesCouverts(userId);
+        // Une ligne par décision, même quand elle ne change rien : « on a
+        // réexaminé le périmètre de cette personne et on l'a laissé tel quel »
+        // est un fait d'audit, et son absence se lirait comme un oubli.
+        journal.save(new JournalDuPerimetre(branchId, userId, auteurId, avant, apres));
+
+        log.info("Périmètre de validation de userId={} : [{}] → [{}] par userId={}",
+                userId, String.join(", ", avant), String.join(", ", apres), auteurId);
+        return apres;
+    }
+
+    /** L'historique des décisions sur un compte, du plus récent au plus ancien. */
+    @Transactional(readOnly = true)
+    public List<JournalDuPerimetre> historique(UUID userId) {
+        return journal.findByUserIdOrderByCreatedAtDesc(userId);
+    }
+
+    private String premierMetier(User utilisateur) {
+        if (utilisateur.getRoles() == null) return null;
+        return utilisateur.getRoles().stream()
+                .map(r -> r.getName() != null ? r.getName() : r.getSlug())
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     private boolean exerceUnMetierSansBorne(User utilisateur) {
@@ -133,10 +193,30 @@ public class ServicePerimetreDeValidation {
                 .anyMatch(METIERS_SANS_BORNE::contains);
     }
 
+    /**
+     * Le libellé du type d'examen, ou {@code null} s'il est hors d'atteinte.
+     *
+     * <p>Le bon d'examen est chargé paresseusement, et sept comptes-rendus de la
+     * base pointent vers un bon supprimé logiquement — le proxy ne se résout
+     * alors pas et lève {@link jakarta.persistence.EntityNotFoundException}.
+     * Cette garde est le premier code à déréférencer le bon pendant une
+     * validation : sans ce filet, elle changerait une donnée ancienne en
+     * erreur 500 sur un dossier qui se validait la veille.</p>
+     *
+     * <p>Rendre {@code null} conduit au refus explicite « type inconnu », qui
+     * renvoie vers un médecin — lequel n'est pas borné et passe avant même
+     * d'arriver ici. Le dossier reste donc traitable.</p>
+     */
     private String titreDuType(Report compteRendu) {
-        if (compteRendu.getTestOrder() == null) return null;
-        TypeOrder type = compteRendu.getTestOrder().getTypeOrder();
-        if (type == null || type.getTitle() == null || type.getTitle().isBlank()) return null;
-        return type.getTitle();
+        try {
+            if (compteRendu.getTestOrder() == null) return null;
+            TypeOrder type = compteRendu.getTestOrder().getTypeOrder();
+            if (type == null || type.getTitle() == null || type.getTitle().isBlank()) return null;
+            return type.getTitle();
+        } catch (jakarta.persistence.EntityNotFoundException introuvable) {
+            log.warn("Compte-rendu {} : bon d'examen introuvable (supprimé ?), "
+                    + "périmètre invérifiable", compteRendu.getId());
+            return null;
+        }
     }
 }

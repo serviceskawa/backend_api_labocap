@@ -57,6 +57,7 @@ public class ReportServiceImpl implements ReportService {
     private final com.labo.anapath.mobile.ProvenanceRequete provenanceRequete;
     private final com.labo.anapath.testorder.TestOrderAssignmentDetailRepository assignmentDetailRepository;
     private final ServicePerimetreDeValidation perimetreDeValidation;
+    private final JournalDesRefus journalDesRefus;
     /** Pour relire les étiquettes, rangées en tableau JSON sur la ligne d'affectation. */
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
@@ -833,7 +834,18 @@ public class ReportServiceImpl implements ReportService {
         // contrôle est ici, au cœur commun, et non sur le point d'entrée : les
         // deux chemins — web et mobile — passent par cette méthode, et une garde
         // posée plus haut aurait fini par ne couvrir que l'un des deux.
-        perimetreDeValidation.exigerLePerimetre(report, userId);
+        try {
+            perimetreDeValidation.exigerLePerimetre(report, userId);
+        } catch (org.springframework.security.access.AccessDeniedException refus) {
+            // Un refus laisse une trace sur le compte-rendu lui-même.
+            //
+            // Sans elle, seule une validation réussie serait auditable : qui a
+            // tenté de valider un dossier qui n'était pas le sien, et quand, ne
+            // se lirait que dans les journaux applicatifs, qui tournent. Le
+            // journal du compte-rendu, lui, vit aussi longtemps que le dossier.
+            journalDesRefus.refusDeValidation(id, userId, refus.getMessage());
+            throw refus;
+        }
 
         ReportStatus statutInitial = report.getStatus();
         report.setStatus(ReportStatus.VALIDATED);
@@ -866,7 +878,15 @@ public class ReportServiceImpl implements ReportService {
         }
 
         Report saved = reportRepository.save(report);
-        logAction(id, preuve != null ? "Validé (signé par appareil)" : "Validé", userId);
+        // La règle sous laquelle l'acte a été posé, et pas seulement son auteur.
+        // Sans elle, la validation d'un secrétaire et celle d'un pathologiste
+        // laissent la même ligne, et reconstituer la seconde supposerait de
+        // deviner l'état d'une table qui a changé depuis.
+        String regle = perimetreDeValidation.sousQuelleRegle(userId);
+        logAction(id,
+                (preuve != null ? "Validé (signé par appareil)" : "Validé")
+                        + (regle == null ? "" : " — " + regle),
+                userId);
         signalerValidation(statutInitial, saved, userId);
         return reportMapper.toResponseDto(saved);
     }
