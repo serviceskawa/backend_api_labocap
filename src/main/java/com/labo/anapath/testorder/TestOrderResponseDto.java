@@ -79,6 +79,11 @@ public record TestOrderResponseDto(
         String testAffiliate,
         /** Option d'envoi des résultats : false = Appel, true = SMS (colonne `option`). */
         Boolean option,
+
+        /** L'établissement à facturer, ou nuls quand c'est le patient qui paie. */
+        String factureANom,
+        String factureAAdresse,
+        String factureAIfu,
         /**
          * Nom de la personne à qui le bon a été affecté, ou {@code null} s'il ne
          * l'est pas encore.

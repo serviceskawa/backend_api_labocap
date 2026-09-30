@@ -20,6 +20,10 @@ public record InvoiceResponseDto(
         String clientName,
         String clientAddress,
         String clientContact,
+        /** IFU de l'acheteur, tel qu'il part à la DGI. Vide pour un patient. */
+        String clientIfu,
+        /** L'identité de facturation a été saisie à la main et ne sera plus réécrite. */
+        boolean facturationFigee,
         LocalDate date,
         Double subtotal,
         BigDecimal total,

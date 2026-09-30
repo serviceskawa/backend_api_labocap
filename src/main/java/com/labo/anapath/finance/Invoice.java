@@ -83,6 +83,27 @@ public class Invoice extends AuditableEntity {
     @Column(name = "client_address", columnDefinition = "TEXT")
     private String clientAddress;
 
+    /**
+     * IFU de l'acheteur, transmis à la DGI avec son nom et son adresse.
+     *
+     * <p>Il manquait à la déclaration : {@code acheteur()} n'envoyait que le
+     * nom et l'adresse, y compris quand la vente allait à un client qui en
+     * portait un en base. Une vente professionnelle partait sans dire à qui.</p>
+     */
+    @Column(name = "client_ifu", length = 50)
+    private String clientIfu;
+
+    /**
+     * L'identité de facturation a été saisie à la main.
+     *
+     * <p>La validation d'une demande réécrit le nom et l'adresse depuis le
+     * patient, à chaque fois. Sans cette marque, une adresse choisie à la
+     * normalisation serait effacée au geste suivant — et personne ne verrait
+     * que la facture a changé de destinataire.</p>
+     */
+    @Column(name = "facturation_figee", nullable = false)
+    private boolean facturationFigee = false;
+
     /** Montant brut avant remise (somme des prix unitaires × quantités). */
     @Column(name = "subtotal")
     private Double subtotal;

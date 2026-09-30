@@ -20,6 +20,10 @@ public interface FluidInvoiceService {
      */
     InvoiceResponseDto normaliser(UUID invoiceId, UUID branchId, String modeDePaiement);
 
+    /** La même, en adressant la facture à qui l'on désigne. */
+    InvoiceResponseDto normaliser(UUID invoiceId, UUID branchId, String modeDePaiement,
+                                  IdentiteDeFacturation destinataire);
+
     /**
      * Le document normalisé, récupéré chez FluidInvoice.
      *

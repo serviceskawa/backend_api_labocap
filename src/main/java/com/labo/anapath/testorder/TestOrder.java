@@ -101,6 +101,33 @@ public class TestOrder extends AuditableEntity {
     @Column(name = "assigned_to_user_id")
     private UUID assignedToUserId;
 
+    /**
+     * L'établissement à facturer à la place du patient, s'il y en a un.
+     *
+     * <p>Une clinique adresse son patient et règle l'examen : la facture doit
+     * alors porter son nom, et la déclaration à la DGI dire la même chose.
+     * Nuls, ces trois champs laissent la facture au patient — le cas
+     * ordinaire, et de loin.</p>
+     *
+     * <p>Saisis librement plutôt que choisis dans une table : un laboratoire
+     * facture des établissements qu'il ne reverra pas, et leur créer une fiche
+     * à chacun encombrerait un référentiel pour un seul examen.</p>
+     */
+    @Column(name = "facture_a_nom", length = 150)
+    private String factureANom;
+
+    @Column(name = "facture_a_adresse", columnDefinition = "TEXT")
+    private String factureAAdresse;
+
+    /** Identifiant fiscal de l'établissement. Facultatif, transmis s'il est là. */
+    @Column(name = "facture_a_ifu", length = 50)
+    private String factureAIfu;
+
+    /** Vrai dès qu'un établissement est désigné pour payer. */
+    public boolean estFactureAUnTiers() {
+        return factureANom != null && !factureANom.isBlank();
+    }
+
     /** Analyses affiliées complémentaires (stockées en texte libre, héritage du système Laravel). */
     @Column(name = "test_affiliate", columnDefinition = "TEXT")
     private String testAffiliate;

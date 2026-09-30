@@ -236,7 +236,8 @@ public class InvoiceController {
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success("Facture normalisée",
                 fluidInvoiceService.normaliser(id, principal.getBranchId(),
-                        corps == null ? null : corps.getPayment())));
+                        corps == null ? null : corps.getPayment(),
+                        corps == null ? null : corps.getDestinataire())));
     }
 
     /**

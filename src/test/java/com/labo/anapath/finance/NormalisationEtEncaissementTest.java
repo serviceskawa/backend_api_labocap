@@ -140,4 +140,48 @@ class NormalisationEtEncaissementTest {
         // laisser produirait un libellé que la DGI ne reconnaît pas.
         assertThat(regle.getValue().getPayment()).isEqualTo("MOBILEMONEY");
     }
+
+    @Test
+    @DisplayName("le destinataire choisi à la déclaration remplace celui de la facture")
+    void leDestinataireChoisi() {
+        when(client.emettre(any(), any())).thenReturn(new FluidInvoiceResponseDto());
+
+        service.normaliser(FACTURE, BRANCHE, "ESPECES", new IdentiteDeFacturation(
+                "  CLINIQUE LA PROVIDENCE  ", "  Cotonou, Ganhi  ", " 3201900123456 "));
+
+        // Rogné : ces valeurs viennent d'un champ de saisie, et une espace de
+        // tête partirait telle quelle à la DGI.
+        assertThat(facture.getClientName()).isEqualTo("CLINIQUE LA PROVIDENCE");
+        assertThat(facture.getClientAddress()).isEqualTo("Cotonou, Ganhi");
+        assertThat(facture.getClientIfu()).isEqualTo("3201900123456");
+        // Figée, sinon la revalidation du bon rendrait la facture au patient.
+        assertThat(facture.isFacturationFigee()).isTrue();
+    }
+
+    @Test
+    @DisplayName("sans destinataire, la facture garde le sien")
+    void sansDestinataire() {
+        facture.setClientName("DOTOU Justine");
+        when(client.emettre(any(), any())).thenReturn(new FluidInvoiceResponseDto());
+
+        service.normaliser(FACTURE, BRANCHE, "ESPECES", null);
+
+        assertThat(facture.getClientName()).isEqualTo("DOTOU Justine");
+        assertThat(facture.isFacturationFigee()).isFalse();
+    }
+
+    @Test
+    @DisplayName("un destinataire sans nom est ignoré")
+    void destinataireSansNom() {
+        // Un formulaire ouvert puis refermé sans rien saisir ne doit pas
+        // effacer le destinataire de la facture.
+        facture.setClientName("DOTOU Justine");
+        when(client.emettre(any(), any())).thenReturn(new FluidInvoiceResponseDto());
+
+        service.normaliser(FACTURE, BRANCHE, "ESPECES",
+                new IdentiteDeFacturation("   ", "Cotonou", "320190"));
+
+        assertThat(facture.getClientName()).isEqualTo("DOTOU Justine");
+        assertThat(facture.isFacturationFigee()).isFalse();
+    }
 }

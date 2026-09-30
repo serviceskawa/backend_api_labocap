@@ -46,6 +46,22 @@ public class FluidInvoiceServiceImpl implements FluidInvoiceService {
     @Transactional
     public InvoiceResponseDto normaliser(UUID invoiceId, UUID branchId,
                                          String modeDePaiement) {
+        return normaliser(invoiceId, branchId, modeDePaiement, null);
+    }
+
+    /**
+     * Normalise, en adressant la facture à qui l'on désigne.
+     *
+     * <p>Le destinataire se pose ici parce que c'est ici qu'on le découvre :
+     * l'agent a la facture sous les yeux au moment de déclarer, et c'est le
+     * dernier instant où elle peut encore changer de nom. Une fois partie à la
+     * DGI, un document fiscal ne se reprend plus.</p>
+     */
+    @Override
+    @Transactional
+    public InvoiceResponseDto normaliser(UUID invoiceId, UUID branchId,
+                                         String modeDePaiement,
+                                         IdentiteDeFacturation destinataire) {
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Facture", invoiceId));
 
@@ -58,6 +74,18 @@ public class FluidInvoiceServiceImpl implements FluidInvoiceService {
             throw new InvalidOperationException("Cette facture est déjà normalisée.");
         }
 
+
+        // Le destinataire d'abord : il part avec la déclaration, et le poser
+        // après l'envoi ne changerait plus rien au document fiscal.
+        if (destinataire != null && destinataire.estRenseignee()) {
+            invoice.setClientName(destinataire.nom().trim());
+            invoice.setClientAddress(destinataire.adresse() == null
+                    ? null : destinataire.adresse().trim());
+            invoice.setClientIfu(destinataire.ifu() == null || destinataire.ifu().isBlank()
+                    ? null : destinataire.ifu().trim());
+            invoice.setFacturationFigee(true);
+            invoice = invoiceRepository.save(invoice);
+        }
 
         // Encaisser AVANT de déclarer, et non l'inverse.
         //
@@ -236,7 +264,13 @@ public class FluidInvoiceServiceImpl implements FluidInvoiceService {
         if (nom == null || nom.isBlank()) {
             return null;
         }
-        return new FluidInvoiceRequestDto.Client(null, nom, null, invoice.getClientAddress());
+        // L'IFU part avec le reste : sans lui, une vente à un établissement est
+        // déclarée sans dire à qui, et c'est précisément ce que l'identifiant
+        // fiscal sert à établir. Vide pour un patient, qui n'en a pas.
+        String ifu = invoice.getClientIfu();
+        return new FluidInvoiceRequestDto.Client(
+                ifu == null || ifu.isBlank() ? null : ifu.trim(),
+                nom, null, invoice.getClientAddress());
     }
 
     /** Le règlement, ou null tant que la facture n'est pas payée. */
