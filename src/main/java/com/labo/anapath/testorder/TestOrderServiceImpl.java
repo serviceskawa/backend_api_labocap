@@ -623,8 +623,11 @@ public class TestOrderServiceImpl implements TestOrderService {
             invoice.setTestOrder(order);
             invoice.setPatient(order.getPatient());
             invoice.setContrat(order.getContrat());
+            // « Prénom Nom » : même ordre que `FinanceMapper.patientName`, pour
+            // que le bandeau « informations à actualiser » ne s'affiche pas dès
+            // la création de la facture alors que rien n'a changé.
             invoice.setClientName(
-                    NomComplet.de(order.getPatient().getLastname(), order.getPatient().getFirstname()));
+                    NomComplet.de(order.getPatient().getFirstname(), order.getPatient().getLastname()));
             invoice.setClientAddress(order.getPatient().getAdresse());
             invoice.setSubtotal(order.getSubtotal());
             invoice.setDiscount(order.getDiscount());
@@ -636,7 +639,7 @@ public class TestOrderServiceImpl implements TestOrderService {
             // Laravel réécrit aussi l'identité du patient sur la facture existante.
             invoice.setPatient(order.getPatient());
             invoice.setClientName(
-                    NomComplet.de(order.getPatient().getLastname(), order.getPatient().getFirstname()));
+                    NomComplet.de(order.getPatient().getFirstname(), order.getPatient().getLastname()));
             invoice.setClientAddress(order.getPatient().getAdresse());
             invoice.setSubtotal(order.getSubtotal());
             invoice.setDiscount(order.getDiscount());
