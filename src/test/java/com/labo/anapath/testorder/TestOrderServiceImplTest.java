@@ -71,6 +71,7 @@ class TestOrderServiceImplTest {
     // Ajouté au service pour rendre le nom de la personne affectée dans la liste.
     @Mock private TestOrderAssignmentDetailRepository assignmentDetailRepository;
 
+    @Mock private com.labo.anapath.biology.results.BiologyResultsLifecycle biologyResultsLifecycle;
     @InjectMocks
     private TestOrderServiceImpl testOrderService;
 
@@ -102,8 +103,8 @@ class TestOrderServiceImplTest {
                 null, null, null, null,
                 null, null, List.of(), BRANCH_ID, LocalDateTime.now(),
                 // reportId, reportStatus, reportIsDelivered, invoiceId, archive,
-                // testAffiliate, option, assignedUserName.
-                null, null, false, null, null, null, null, null);
+                // testAffiliate, option, assignedUserName, discipline.
+                null, null, false, null, null, null, null, null, null);
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.labo.anapath.test;
 
+import com.labo.anapath.common.Discipline;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -7,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -53,6 +55,8 @@ public interface LabTestRepository extends JpaRepository<LabTest, UUID> {
      * @param branchId identifiant de la succursale
      * @param search   termes de recherche séparés par des espaces (ou {@code null})
      * @param status   statut exact à filtrer, ACTIF/INACTIF (ou {@code null})
+     * @param discipline discipline des analyses listées ({@code PATHOLOGY} ou {@code BIOLOGY}) :
+     *                 l'écran d'anatomie pathologique ne doit pas voir les analyses de biologie
      */
     @Query(value = """
             SELECT * FROM lab_tests t
@@ -65,6 +69,7 @@ public interface LabTestRepository extends JpaRepository<LabTest, UUID> {
                         FROM unnest(string_to_array(unaccent(lower(CAST(:search AS text))), ' ')) AS w
                         WHERE w <> ''))
               AND (CAST(:status AS text) IS NULL OR t.status = CAST(:status AS text))
+              AND t.discipline = CAST(:discipline AS text)
             ORDER BY t.created_at DESC
             """,
             countQuery = """
@@ -78,17 +83,22 @@ public interface LabTestRepository extends JpaRepository<LabTest, UUID> {
                         FROM unnest(string_to_array(unaccent(lower(CAST(:search AS text))), ' ')) AS w
                         WHERE w <> ''))
               AND (CAST(:status AS text) IS NULL OR t.status = CAST(:status AS text))
+              AND t.discipline = CAST(:discipline AS text)
             """,
             nativeQuery = true)
     Page<LabTest> findByFilters(@Param("branchId") UUID branchId,
                                 @Param("search") String search,
                                 @Param("status") String status,
+                                @Param("discipline") String discipline,
                                 Pageable pageable);
 
     List<LabTest> findAllByBranchIdOrderByName(UUID branchId);
 
     /** Analyses de la succursale, triées du plus récemment créé au plus ancien. */
     List<LabTest> findAllByBranchIdOrderByCreatedAtDesc(UUID branchId);
+
+    /** Analyses d'une discipline de la succursale, du plus récemment créé au plus ancien. */
+    List<LabTest> findAllByBranchIdAndDisciplineOrderByCreatedAtDesc(UUID branchId, Discipline discipline);
 
     /**
      * Recherche une analyse par son identifiant et sa succursale.
@@ -112,11 +122,13 @@ public interface LabTestRepository extends JpaRepository<LabTest, UUID> {
      *
      * @param name     terme de recherche (partiel, insensible casse et accents)
      * @param branchId identifiant de la succursale
+     * @param discipline discipline des analyses proposées ({@code PATHOLOGY} ou {@code BIOLOGY})
      * @return liste des analyses correspondantes
      */
     @Query(value = """
             SELECT * FROM lab_tests t
             WHERE t.branch_id = :branchId
+              AND t.discipline = CAST(:discipline AS text)
               AND unaccent(lower(t.name)) LIKE ALL (
                     SELECT '%' || CASE WHEN length(w) > 3
                                        THEN regexp_replace(w, 's$', '')
@@ -126,7 +138,8 @@ public interface LabTestRepository extends JpaRepository<LabTest, UUID> {
             ORDER BY t.name
             """, nativeQuery = true)
     List<LabTest> findByNameContainingIgnoreCaseAndBranchId(@Param("name") String name,
-                                                            @Param("branchId") UUID branchId);
+                                                            @Param("branchId") UUID branchId,
+                                                            @Param("discipline") String discipline);
 
     /**
      * Vérifie si une analyse portant ce nom existe dans la succursale (insensible à la casse).
@@ -169,4 +182,24 @@ public interface LabTestRepository extends JpaRepository<LabTest, UUID> {
 
     // Dashboard KPIs
     long countByBranchId(UUID branchId);
+
+    /**
+     * Catégorie de chaque analyse, <b>y compris retirée du catalogue</b> — le
+     * compte-rendu de biologie regroupe ses analyses par catégorie, et une
+     * analyse retirée après la saisie doit rester à sa place sur le document.
+     * Une catégorie supprimée ne donne pas de nom.
+     *
+     * @param ids analyses (non vide)
+     */
+    @Query(value = "SELECT CAST(lt.id AS VARCHAR) AS labTestId, c.name AS categoryName "
+            + "FROM lab_tests lt "
+            + "LEFT JOIN category_tests c ON c.id = lt.category_test_id AND c.deleted_at IS NULL "
+            + "WHERE lt.id IN (:ids)", nativeQuery = true)
+    List<CategorieDAnalyse> findCategoriesYComprisRetirees(@Param("ids") Collection<UUID> ids);
+
+    /** Catégorie d'une analyse. */
+    interface CategorieDAnalyse {
+        String getLabTestId();
+        String getCategoryName();
+    }
 }

@@ -1,8 +1,11 @@
 package com.labo.anapath.test;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.audit.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -36,4 +39,12 @@ public class CategoryTest extends AuditableEntity {
     /** Code court optionnel de la catégorie (ex. : "HEM", "BIO"). */
     @Column(name = "code", length = 50)
     private String code;
+
+    /**
+     * Discipline de la catégorie. Fixée à la création :
+     * ses analyses et les remises de contrat qui la visent en dépendent.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "discipline", nullable = false, length = 20, updatable = false)
+    private Discipline discipline = Discipline.PATHOLOGY;
 }

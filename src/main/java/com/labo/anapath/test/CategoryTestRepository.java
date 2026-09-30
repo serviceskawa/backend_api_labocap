@@ -1,10 +1,12 @@
 package com.labo.anapath.test;
 
+import com.labo.anapath.common.Discipline;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -24,6 +26,51 @@ public interface CategoryTestRepository extends JpaRepository<CategoryTest, UUID
      * @return page de catégories
      */
     Page<CategoryTest> findByBranchId(UUID branchId, Pageable pageable);
+
+    /**
+     * Retourne la liste paginée des catégories d'une discipline dans une succursale.
+     * Les écrans d'anatomie pathologique ne voient ainsi que leurs catégories.
+     *
+     * @param branchId   identifiant de la succursale
+     * @param discipline discipline des catégories
+     * @param pageable   paramètres de pagination et de tri
+     * @return page de catégories
+     */
+    Page<CategoryTest> findByBranchIdAndDiscipline(UUID branchId, Discipline discipline, Pageable pageable);
+
+    /**
+     * Toutes les catégories d'une discipline dans une succursale, par nom.
+     *
+     * @param branchId   identifiant de la succursale
+     * @param discipline discipline des catégories
+     * @return catégories triées par nom
+     */
+    List<CategoryTest> findAllByBranchIdAndDisciplineOrderByName(UUID branchId, Discipline discipline);
+
+    /**
+     * Vérifie si une catégorie de même nom existe déjà dans la même discipline de la
+     * succursale (insensible à la casse). Le nom n'est unique que par discipline :
+     * « Hématologie » peut exister en anatomie pathologique et en biologie.
+     *
+     * @param name       nom de la catégorie
+     * @param branchId   identifiant de la succursale
+     * @param discipline discipline de la catégorie
+     * @return {@code true} si le nom est déjà utilisé dans cette discipline
+     */
+    boolean existsByNameIgnoreCaseAndBranchIdAndDiscipline(String name, UUID branchId, Discipline discipline);
+
+    /**
+     * Variante de {@link #existsByNameIgnoreCaseAndBranchIdAndDiscipline} excluant la
+     * catégorie {@code id}, pour la mise à jour.
+     *
+     * @param name       nom de la catégorie
+     * @param branchId   identifiant de la succursale
+     * @param discipline discipline de la catégorie
+     * @param id         identifiant de la catégorie à exclure
+     * @return {@code true} si le nom est déjà utilisé par une autre catégorie de la discipline
+     */
+    boolean existsByNameIgnoreCaseAndBranchIdAndDisciplineAndIdNot(String name, UUID branchId,
+                                                                  Discipline discipline, UUID id);
 
     /**
      * Vérifie si une catégorie portant ce nom existe dans la succursale (insensible à la casse).

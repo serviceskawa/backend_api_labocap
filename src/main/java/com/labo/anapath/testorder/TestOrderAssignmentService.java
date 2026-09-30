@@ -8,7 +8,18 @@ public interface TestOrderAssignmentService {
 
     AssignmentResponseDto create(AssignmentRequestDto dto, UUID branchId);
 
+    /** Les lots d'anatomie pathologique (histologie, cytologie, biopsie, pièce opératoire). */
     PageResponse<AssignmentResponseDto> findAll(int page, int size, UUID branchId);
+
+    /**
+     * Les lots d'une discipline.
+     *
+     * <p>En anatomie pathologique, la liste d'avant, inchangée : lots de
+     * cyto/histo. Dans une autre discipline, les lots dont les demandes en
+     * relèvent.</p>
+     */
+    PageResponse<AssignmentResponseDto> findAll(int page, int size, UUID branchId,
+                                                com.labo.anapath.common.Discipline discipline);
 
     PageResponse<AssignmentResponseDto> findAllImmuno(int page, int size, UUID branchId);
 
@@ -81,20 +92,23 @@ public interface TestOrderAssignmentService {
      * reste rappelé sur chaque ligne.</p>
      */
     java.util.List<DemandeDuMedecinDto> fileDuMedecin(java.util.UUID docteurId,
-                                                      Integer annee);
+                                                      Integer annee,
+                                                      com.labo.anapath.common.Discipline discipline);
 
     /** Une page de la file, filtrée au serveur. */
     com.labo.anapath.common.dto.PageResponse<DemandeDuMedecinDto> pageDeLaFile(
             java.util.UUID docteurId, FiltreFileDuMedecin filtre, int page, int taille);
 
     /** Les lots présents dans la file, pour n'offrir au filtre que ce qui existe. */
-    java.util.List<String> lotsDeLaFile(java.util.UUID docteurId, Integer annee);
+    java.util.List<String> lotsDeLaFile(java.util.UUID docteurId, Integer annee,
+                                        com.labo.anapath.common.Discipline discipline);
 
     /** La répartition du périmètre courant entre les trois états. */
     ResumeFileDto resumeDeLaFile(java.util.UUID docteurId, FiltreFileDuMedecin filtre);
 
     /** Combien de dossiers de sa file datent d'avant l'année donnée. */
-    long arriereDuMedecin(java.util.UUID docteurId, int annee);
+    long arriereDuMedecin(java.util.UUID docteurId, int annee,
+                          com.labo.anapath.common.Discipline discipline);
 
     /**
      * Change où en est le médecin sur une demande.

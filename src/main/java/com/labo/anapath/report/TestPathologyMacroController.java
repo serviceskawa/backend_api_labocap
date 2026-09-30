@@ -1,5 +1,6 @@
 package com.labo.anapath.report;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.NomComplet;
 
 import com.labo.anapath.common.dto.ApiResponse;
@@ -11,7 +12,7 @@ import com.labo.anapath.hr.Employee;
 import com.labo.anapath.hr.EmployeeRepository;
 import com.labo.anapath.testorder.TestOrder;
 import com.labo.anapath.testorder.TestOrderRepository;
-import com.labo.anapath.testorder.TestOrderStatus;
+import com.labo.anapath.testorder.TestOrderSpecification;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -399,6 +400,12 @@ public class TestPathologyMacroController {
      * Retourne les bons d'examen validés ({@code status=VALIDATED}) de la branche courante
      * qui n'ont pas encore de macroscopie assignée.
      *
+     * <p><b>Anatomie pathologique uniquement</b>, sans paramètre pour élargir : un
+     * bon de biologie validé n'a pas de macroscopie et ne doit jamais entrer dans
+     * cette file. Le filtre est posé deux fois — dans la requête et sur le
+     * résultat — parce qu'une régression ici enverrait un prélèvement sanguin
+     * en macroscopie.</p>
+     *
      * <p>Ces demandes sont affichées dans le tableau « Demandes urgentes » de la page Macroscopie
      * et représentent le travail en attente d'assignation à un laborantin.
      *
@@ -423,21 +430,13 @@ public class TestPathologyMacroController {
                 .map(TestPathologyMacro::getTestOrderId)
                 .collect(Collectors.toSet());
 
-        // Bons validés de la branche, triés par urgence puis date
+        // Bons validés d'anatomie pathologique, triés par urgence puis date
         List<TestOrder> validatedOrders = testOrderRepository.findAll(
-                (root, query, cb) -> {
-                    query.orderBy(
-                            cb.desc(root.get("isUrgent")),
-                            cb.asc(root.get("createdAt"))
-                    );
-                    return cb.and(
-                            cb.equal(root.get("branchId"), branchId),
-                            cb.equal(root.get("status"), TestOrderStatus.VALIDATED)
-                    );
-                }
-        );
+                TestOrderSpecification.macroscopieEnAttente(branchId));
 
         List<PendingMacroDto> pending = validatedOrders.stream()
+                // Seconde garde, indépendante de la requête : voir la Javadoc.
+                .filter(o -> o.getDiscipline() == Discipline.PATHOLOGY)
                 .filter(o -> !assignedOrderIds.contains(o.getId()))
                 .map(o -> {
                     String patientName = o.getPatient() != null
@@ -482,6 +481,12 @@ public class TestPathologyMacroController {
         // Vérifier que le bon existe et appartient à la branche
         TestOrder order = testOrderRepository.findByIdAndBranchId(request.testOrderId(), branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", request.testOrderId()));
+
+        // La macroscopie n'existe qu'en anatomie pathologique.
+        if (order.getDiscipline() != Discipline.PATHOLOGY) {
+            throw new InvalidOperationException(
+                    "Ce bon d'examen relève de la biologie : il n'a pas de macroscopie.");
+        }
 
         // Vérifier qu'il n'y a pas déjà une macroscopie pour ce bon
         testPathologyMacroRepository.findByTestOrderId(request.testOrderId())

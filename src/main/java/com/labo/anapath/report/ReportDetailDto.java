@@ -89,7 +89,13 @@ public record ReportDetailDto(
          */
         String assignmentLotNote,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+        /**
+         * Discipline du compte-rendu. Le détail est partagé entre les deux
+         * disciplines — le comptoir lit les deux — et l'écran en déduit quoi
+         * afficher : texte rédigé ou résultats chiffrés.
+         */
+        com.labo.anapath.common.Discipline discipline
 ) {
     public record LogReportDto(String action, String description, String userName, LocalDateTime createdAt) {}
 }

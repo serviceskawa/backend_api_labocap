@@ -55,6 +55,11 @@ server:
   forward-headers-strategy: framework
 
 app:
+  # Modules optionnels, activés déploiement par déploiement (un laboratoire = un
+  # déploiement). Désactivés, leurs routes répondent 404 ; le schéma, lui, est
+  # migré partout.
+  modules:
+    biology: ${MODULE_BIOLOGY:false}
   report:
     notify-retry:
       # Reprise des avis de disponibilité qu'un compte-rendu validé hors de la

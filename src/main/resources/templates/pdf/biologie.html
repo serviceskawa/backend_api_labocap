@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="fr" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <title th:text="${code}">Compte rendu de biologie</title>
+    <style>
+        /* Page, entête et bloc patient : repris de pdf/rapport.html (compte rendu
+           d'anatomie pathologique), pour que les deux documents d'un laboratoire
+           se ressemblent. Toute correction faite là-bas doit l'être ici. */
+        @page {
+            size: A4;
+            margin: 15px 30px 115px 30px;
+            @bottom-center { content: element(pagefooter); }
+        }
+        /* DejaVu Sans (embarquée) et non Arial/Helvetica comme pdf/rapport.html :
+           les valeurs de référence portent « ≥ » et « ≤ », absents de la police
+           de base du PDF, et le moteur ne sait pas emprunter un signe manquant à
+           une autre police quand la première est une police de base. */
+        body { font-family: 'DejaVu Sans', sans-serif; margin: 0; padding: 0; line-height: 1.23; }
+        .entete img { width: 100%; }
+        table.meta-row { width: 100%; border-collapse: collapse; margin-top: 22px; }
+        table.meta-row td { vertical-align: top; padding: 0; }
+        .meta { font-size: 13px; margin-left: 10px; }
+        .qr-cell { text-align: right; width: 90px; }
+        .qr-cell img { width: 80px; display: inline-block; vertical-align: top; }
+        .title-band {
+            background-color: #0070C1;
+            width: 96%;
+            padding: 15px;
+            color: white;
+            text-align: center;
+            font-size: 16px;
+            text-transform: uppercase;
+            margin-top: 20px;
+        }
+        .section-label {
+            display: inline-block;
+            padding-left: 10px;
+            padding-right: 5px;
+            margin-top: 15px;
+            font-size: 16px;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+        table.infos { width: 100%; margin-left: 15px; font-size: 13px; margin-top: 5px; border-collapse: collapse; }
+        table.infos th { text-align: left; width: 25%; font-weight: bold; }
+        table.infos td { width: 25%; }
+        hr.sep { margin-top: 15px; border: none; border-top: 1px solid #0070C1; }
+
+        /* Mention des résultats non validés : en tête du document, et rappelée
+           dans le pied de chaque page. */
+        .provisoire {
+            margin-top: 12px;
+            padding: 8px;
+            border: 2px solid #b91c1c;
+            color: #b91c1c;
+            text-align: center;
+            font-size: 15px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        .provisoire-pied { color: #b91c1c; font-weight: bold; }
+
+        /* ------------------------------------------------------------------
+           Résultats
+           ------------------------------------------------------------------ */
+        .categorie {
+            margin-top: 16px;
+            padding: 4px 8px;
+            font-size: 14px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #0070C1;
+            border-bottom: 1px solid #0070C1;
+        }
+        /* Une analyse ne se coupe pas quand elle tient sur une page ; plus longue,
+           elle se poursuit page suivante, l'en-tête du tableau répété. */
+        .analyse { margin-top: 10px; page-break-inside: avoid; }
+        .analyse-nom { font-size: 13px; font-weight: bold; margin-left: 4px; }
+        .analyse-prelevement { font-size: 11px; font-weight: normal; color: #4b5563; }
+        table.resultats {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-top: 4px;
+            -fs-table-paginate: paginate;
+        }
+        table.resultats th {
+            text-align: left;
+            font-weight: bold;
+            background-color: #eef4fb;
+            border-bottom: 1px solid #9ca3af;
+            padding: 3px 6px;
+        }
+        table.resultats td { padding: 2px 6px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+        table.resultats tr { page-break-inside: avoid; }
+        table.resultats td.sous-titre {
+            font-weight: bold;
+            font-style: italic;
+            background-color: #f9fafb;
+            padding-top: 4px;
+        }
+        .col-parametre { width: 38%; }
+        .col-resultat { width: 22%; }
+        .col-unite { width: 14%; }
+        .col-reference { width: 26%; }
+        .anormal { font-weight: bold; }
+        .indicateur { font-size: 10px; font-weight: bold; }
+        .en-attente { font-size: 12px; font-style: italic; color: #6b7280; margin: 4px 6px; }
+        .commentaire { font-size: 12px; margin: 4px 6px; }
+        .commentaire b { font-weight: bold; }
+
+        table.options { font-size: 12px; margin: 4px 6px; border-collapse: collapse; }
+        table.options td { padding: 1px 12px 1px 0; vertical-align: top; }
+        .germe { font-size: 12px; margin: 8px 6px 2px 6px; font-weight: bold; }
+        .germe-quantite { font-weight: normal; }
+        .legende { font-size: 11px; color: #374151; margin-top: 10px; }
+
+        .conclusion { margin-top: 16px; font-size: 13px; page-break-inside: avoid; }
+        .conclusion-titre { font-weight: bold; text-transform: uppercase; margin-bottom: 4px; }
+        .conclusion-texte { white-space: pre-wrap; }
+
+        /* Signature : même bloc que le compte rendu d'anatomie pathologique. */
+        table.sign { width: 100%; margin-top: 24px; page-break-inside: avoid; }
+        table.sign td { vertical-align: bottom; font-size: 13px; width: 50%; text-align: left; }
+        .sign-space { min-height: 45px; }
+        .sign-space img { max-width: 85px; max-height: 45px; }
+
+        .page-footer {
+            position: running(pagefooter);
+            width: 100%;
+            font-size: 12px;
+            text-align: center;
+            border-top: 1px solid #cccccc;
+            padding-top: 6px;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Pied de page, en tête du corps et non à la fin : un élément « running »
+         ne vaut qu'à partir de la page où il apparaît. Placé en dernier (comme
+         dans pdf/rapport.html), il ne figurait que sur la dernière page — ce qui
+         se voit dès qu'un compte-rendu de biologie dépasse une page. -->
+    <div class="page-footer">
+        <div class="provisoire-pied" th:if="${document.provisoire()}">RÉSULTATS PROVISOIRES — NON VALIDÉS</div>
+        <div th:text="${footer}"></div>
+    </div>
+
+    <!-- Entête labo en pleine largeur -->
+    <div class="entete" th:if="${!#strings.isEmpty(enteteImg)}">
+        <img th:src="${enteteImg}" alt=""/>
+    </div>
+
+    <!-- N° de dossier + dates (gauche) et QR (droite) sur la même ligne -->
+    <table class="meta-row">
+        <tr>
+            <td>
+                <div class="meta">
+                    <b>N° dossier :</b> <span th:text="${testOrderCode}"></span>
+                    <b th:text="${#strings.isEmpty(testAffiliate) ? '' : '| Examen reference : '}"></b>
+                    <span th:text="${#strings.isEmpty(testAffiliate) ? '' : testAffiliate}"></span>
+                    <br/>
+                    <b>Date validation:</b> <span th:text="${signatureDate}"></span>
+                    <br/>
+                    <b>Date impression:</b> <span th:text="${currentDate}"></span>
+                </div>
+            </td>
+            <td class="qr-cell">
+                <img th:if="${!#strings.isEmpty(qrcode)}" th:src="${qrcode}" alt=""/>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Bandeau titre -->
+    <div class="title-band">
+        <b th:text="${title}"></b>
+    </div>
+
+    <div class="provisoire" th:if="${document.provisoire()}">RÉSULTATS PROVISOIRES — NON VALIDÉS</div>
+
+    <!-- Informations prélèvement -->
+    <div style="margin-top: 10px;">
+        <span class="section-label">Informations prélèvement</span>
+
+        <table class="infos">
+            <tbody>
+                <tr>
+                    <th>Nom :</th>
+                    <td th:text="${patientLastname}"></td>
+                    <th>Date prélèvement :</th>
+                    <td th:text="${prelevementDate}"></td>
+                </tr>
+                <tr>
+                    <th>Prénoms :</th>
+                    <td th:text="${patientFirstname}"></td>
+                    <th>Date d’arrivée labo :</th>
+                    <td th:text="${createdAt}"></td>
+                </tr>
+                <tr>
+                    <th>Age :</th>
+                    <td th:text="${patientAge + ' ' + patientAgeUnit}"></td>
+                    <th>Service demandeur :</th>
+                    <td th:text="${hospitalName}"></td>
+                </tr>
+                <tr>
+                    <th>Sexe :</th>
+                    <td th:text="${patientGenre}"></td>
+                    <th>Médecin prescripteur :</th>
+                    <td th:text="${doctorName}"></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <hr class="sep"/>
+
+    <!-- Résultats, par catégorie puis par analyse -->
+    <th:block th:each="categorie : ${document.categories()}">
+        <div class="categorie" th:text="${categorie.nom()}"></div>
+
+        <div class="analyse" th:each="analyse : ${categorie.analyses()}">
+            <div class="analyse-nom">
+                <span th:text="${analyse.nom()}"></span>
+                <span class="analyse-prelevement" th:if="${analyse.prelevement() != null}"
+                      th:text="${'(' + analyse.prelevement() + ')'}"></span>
+            </div>
+
+            <div class="en-attente" th:if="${analyse.enAttente()}">Résultat en attente</div>
+
+            <!-- Fiche de paramètres -->
+            <table class="resultats" th:if="${!analyse.culture() and !analyse.blocs().isEmpty()}">
+                <thead>
+                    <tr>
+                        <th class="col-parametre">Paramètre</th>
+                        <th class="col-resultat">Résultat</th>
+                        <th class="col-unite">Unité</th>
+                        <th class="col-reference">Valeurs de référence</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <th:block th:each="bloc : ${analyse.blocs()}">
+                        <tr th:if="${bloc.titre() != null}">
+                            <td class="sous-titre" colspan="4" th:text="${bloc.titre()}"></td>
+                        </tr>
+                        <tr th:each="ligne : ${bloc.lignes()}">
+                            <td th:text="${ligne.parametre()}"></td>
+                            <td>
+                                <span th:class="${ligne.anormal()} ? 'anormal' : ''" th:text="${ligne.resultat()}"></span>
+                                <span class="indicateur" th:if="${ligne.indicateur() != null}"
+                                      th:text="${'(' + ligne.indicateur() + ')'}"></span>
+                            </td>
+                            <td th:text="${ligne.unite()}"></td>
+                            <td th:text="${ligne.reference()}"></td>
+                        </tr>
+                    </th:block>
+                </tbody>
+            </table>
+
+            <!-- Culture -->
+            <th:block th:if="${analyse.culture()}">
+                <table class="options" th:if="${!analyse.options().isEmpty()}">
+                    <tr th:each="option : ${analyse.options()}">
+                        <td><b th:text="${option.nom() + ' :'}"></b></td>
+                        <td th:text="${option.valeur()}"></td>
+                    </tr>
+                </table>
+                <th:block th:each="germe, iter : ${analyse.germes()}">
+                    <div class="germe">
+                        <span th:text="${'Germe ' + iter.count + ' : ' + germe.organisme()}"></span>
+                        <span class="germe-quantite" th:if="${germe.quantite() != null}"
+                              th:text="${'— ' + germe.quantite()}"></span>
+                    </div>
+                    <table class="resultats" th:if="${!germe.sensibilites().isEmpty()}">
+                        <thead>
+                            <tr>
+                                <th class="col-parametre">Antibiotique</th>
+                                <th class="col-resultat">Interprétation</th>
+                                <th class="col-unite" th:if="${germe.avecCmi()}">CMI</th>
+                                <th class="col-reference" th:if="${germe.avecDiametre()}">Diamètre (mm)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="s : ${germe.sensibilites()}">
+                                <td th:text="${s.antibiotique()}"></td>
+                                <td>
+                                    <b th:text="${s.interpretation()}"></b>
+                                    <span th:if="${s.libelle() != null and s.libelle() != s.interpretation()}"
+                                          th:text="${s.libelle()}"></span>
+                                </td>
+                                <td th:if="${germe.avecCmi()}" th:text="${s.cmi()}"></td>
+                                <td th:if="${germe.avecDiametre()}" th:text="${s.diametre()}"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </th:block>
+            </th:block>
+
+            <div class="commentaire" th:if="${analyse.commentaire() != null}">
+                <b>Commentaire :</b> <span th:text="${analyse.commentaire()}"></span>
+            </div>
+        </div>
+    </th:block>
+
+    <div class="legende" th:if="${!document.legende().isEmpty()}">
+        <b>Antibiogramme :</b>
+        <th:block th:each="l, iter : ${document.legende()}">
+            <span th:text="${l.code() + ' = ' + l.libelle() + (iter.last ? '' : ' ; ')}"></span>
+        </th:block>
+    </div>
+
+    <!-- Conclusion générale -->
+    <div class="conclusion" th:if="${document.conclusion() != null}">
+        <div class="conclusion-titre">Conclusion</div>
+        <div class="conclusion-texte" th:text="${document.conclusion()}"></div>
+    </div>
+
+    <!-- Signature (compte rendu validé uniquement ; jamais sur un provisoire) -->
+    <div th:if="${status == 1 and !document.provisoire()}">
+        <table class="sign">
+            <tr>
+                <td>
+                    <th:block th:if="${!#strings.isEmpty(signator)}">
+                        <div class="sign-space">
+                            <img th:if="${!#strings.isEmpty(signature1Img)}" th:src="${signature1Img}" alt=""/>
+                        </div>
+                        <span th:text="${signator}"></span>
+                    </th:block>
+                </td>
+                <td></td>
+            </tr>
+        </table>
+    </div>
+
+</body>
+
+</html>

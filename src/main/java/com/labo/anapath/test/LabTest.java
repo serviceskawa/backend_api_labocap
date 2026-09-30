@@ -1,8 +1,12 @@
 package com.labo.anapath.test;
 
+import com.labo.anapath.biology.BiologyKind;
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.audit.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -70,6 +74,28 @@ public class LabTest extends AuditableEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_test_id")
     private CategoryTest categoryTest;
+
+    /**
+     * Discipline de l'analyse. Fixée à la création :
+     * une analyse déjà commandée ne peut pas changer de chaîne de traitement.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "discipline", nullable = false, length = 20, updatable = false)
+    private Discipline discipline = Discipline.PATHOLOGY;
+
+    /**
+     * Nature d'une analyse de biologie : fiche de paramètres ({@code PANEL}) ou
+     * culture ({@code CULTURE}). Toujours {@code null} en anatomie pathologique
+     * (contrainte {@code chk_lab_tests_biology_kind_discipline}). Fixée à la
+     * création : les paramètres ou options de culture en dépendent.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "biology_kind", length = 20, updatable = false)
+    private BiologyKind biologyKind;
+
+    /** Type d'échantillon attendu en biologie (ex. : « Sang total EDTA », « Urines »). */
+    @Column(name = "specimen_type", length = 100)
+    private String specimenType;
 
     /**
      * Unité de mesure des résultats de l'analyse (ex. : "mg/L", "mmol/L").

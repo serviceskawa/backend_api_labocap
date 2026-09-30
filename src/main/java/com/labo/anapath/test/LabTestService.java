@@ -1,5 +1,6 @@
 package com.labo.anapath.test;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.dto.PageResponse;
 
 import java.util.List;
@@ -19,12 +20,21 @@ public interface LabTestService {
      * @param size     taille de la page
      * @param search   terme de recherche partielle sur le nom (ou {@code null}/vide)
      * @param status   statut exact à filtrer, ACTIF/INACTIF (ou {@code null}/vide)
+     * @param discipline discipline des analyses listées
      * @param branchId identifiant de la succursale
      * @return page de DTOs d'analyses
      */
-    PageResponse<LabTestResponseDto> findAll(int page, int size, String search, String status, UUID branchId);
+    PageResponse<LabTestResponseDto> findAll(int page, int size, String search, String status,
+                                             Discipline discipline, UUID branchId);
 
-    List<LabTestResponseDto> findAll(UUID branchId);
+    /**
+     * Toutes les analyses d'une discipline de la succursale, de la plus récente à la plus ancienne.
+     *
+     * @param branchId   identifiant de la succursale
+     * @param discipline discipline des analyses listées
+     * @return liste des analyses
+     */
+    List<LabTestResponseDto> findAll(UUID branchId, Discipline discipline);
 
     /**
      * Recherche une analyse par son identifiant.
@@ -40,9 +50,10 @@ public interface LabTestService {
      *
      * @param query    terme de recherche partielle
      * @param branchId identifiant de la succursale
+     * @param discipline discipline des analyses proposées
      * @return liste des analyses correspondantes
      */
-    List<LabTestResponseDto> search(String query, UUID branchId);
+    List<LabTestResponseDto> search(String query, UUID branchId, Discipline discipline);
 
     /**
      * Crée une nouvelle analyse dans la succursale spécifiée.
@@ -51,6 +62,8 @@ public interface LabTestService {
      * @param branchId identifiant de la succursale
      * @return le DTO de l'analyse créée
      * @throws com.labo.anapath.common.exception.DuplicateResourceException si le nom existe déjà
+     * @throws com.labo.anapath.common.exception.BusinessException si la discipline est BIOLOGY
+     *         alors que le module est désactivé, ou si la catégorie est d'une autre discipline
      */
     LabTestResponseDto create(LabTestRequestDto dto, UUID branchId);
 
@@ -60,6 +73,8 @@ public interface LabTestService {
      * @param id  identifiant UUID de l'analyse
      * @param dto nouvelles données
      * @return le DTO mis à jour
+     * @throws com.labo.anapath.common.exception.BusinessException si la requête change la
+     *         discipline ou la nature biologique, ou vise une catégorie d'une autre discipline
      */
     LabTestResponseDto update(UUID id, LabTestRequestDto dto);
 

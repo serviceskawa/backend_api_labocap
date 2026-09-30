@@ -141,7 +141,9 @@ public class ScheduledTasksService {
                     .orElse("le laboratoire");
 
             List<TestOrder> overdue =
-                    testOrderRepository.findOverdueWithoutMacro(branch.getId(), macroDays, macroMaxPerRun);
+                    // La macroscopie n'existe qu'en anatomie pathologique.
+                    testOrderRepository.findOverdueWithoutMacro(branch.getId(), macroDays, macroMaxPerRun,
+                            com.labo.anapath.common.Discipline.PATHOLOGY.name());
 
             for (TestOrder order : overdue) {
                 for (String to : recipients) {
@@ -181,7 +183,9 @@ public class ScheduledTasksService {
                     .orElse("le laboratoire");
 
             List<ReportNonFaitProjection> overdue =
-                    testOrderRepository.findOverdueWithoutReport(branch.getId(), reportDays, reportMaxPerRun);
+                    // Alerte adressée au pathologiste : la biologie aura son propre circuit.
+                    testOrderRepository.findOverdueWithoutReport(branch.getId(), reportDays, reportMaxPerRun,
+                            com.labo.anapath.common.Discipline.PATHOLOGY.name());
 
             for (ReportNonFaitProjection row : overdue) {
                 if (row.getEmail() == null || row.getEmail().isBlank()) {

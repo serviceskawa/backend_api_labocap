@@ -26,6 +26,7 @@ public class TestOrderSpecification {
      * <p>Critères supportés :
      * <ul>
      *   <li>branchId : toujours appliqué (isolation multi-tenant)</li>
+     *   <li>discipline : PATHOLOGY par défaut (voir {@link TestOrderFilterDto#getDiscipline()})</li>
      *   <li>status, patientId, doctorId, hospitalId, isUrgent : égalité stricte</li>
      *   <li>from / to : plage de dates sur {@code prelevementDate}</li>
      *   <li>search : recherche insensible à la casse sur le code du bon</li>
@@ -41,6 +42,12 @@ public class TestOrderSpecification {
             query.distinct(true);
 
             predicates.add(cb.equal(root.get("branchId"), branchId));
+
+            // Discipline : sans elle, un bon de biologie apparaîtrait dans les
+            // listes d'anatomie pathologique, qui ne savent pas le traiter.
+            if (filter.getDiscipline() != null) {
+                predicates.add(cb.equal(root.get("discipline"), filter.getDiscipline()));
+            }
 
             if (filter.getStatus() != null) {
                 predicates.add(cb.equal(root.get("status"), filter.getStatus()));
@@ -167,6 +174,30 @@ public class TestOrderSpecification {
         return cb.like(
                 cb.function("unaccent", String.class, cb.lower(cb.coalesce(champ, ""))),
                 cb.function("unaccent", String.class, cb.literal(motif)));
+    }
+
+    /**
+     * Les bons validés de la branche qui attendent leur macroscopie, les
+     * urgents d'abord puis du plus ancien au plus récent.
+     *
+     * <p>Restreinte à l'anatomie pathologique, sans exception possible : la
+     * macroscopie n'a pas de sens pour un bon de biologie, et la file du
+     * laborantin le montrerait sinon dès sa validation. Aucun paramètre ne
+     * permet d'élargir ce filtre, à dessein.</p>
+     *
+     * @param branchId identifiant de la branche
+     * @return la spécification de la file de macroscopie
+     */
+    public static Specification<TestOrder> macroscopieEnAttente(UUID branchId) {
+        return (root, query, cb) -> {
+            query.orderBy(
+                    cb.desc(root.get("isUrgent")),
+                    cb.asc(root.get("createdAt")));
+            return cb.and(
+                    cb.equal(root.get("branchId"), branchId),
+                    cb.equal(root.get("status"), TestOrderStatus.VALIDATED),
+                    cb.equal(root.get("discipline"), com.labo.anapath.common.Discipline.PATHOLOGY));
+        };
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.labo.anapath.dashboard;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
@@ -7,10 +8,24 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * Tableau de bord.
+ *
+ * <p>Les points d'entrée qui comptent des demandes ou des comptes rendus
+ * acceptent un paramètre {@code discipline}, anatomie pathologique par défaut :
+ * sans lui, la réponse est celle d'avant la biologie, ce dont dépendent les
+ * applications mobiles déjà installées. Quand le module Biologie est actif, les
+ * cartes ({@code /stats}, {@code /secretariat-stats}, {@code /doctor/exam-status})
+ * portent en plus {@code parDiscipline}, la même série de compteurs pour chaque
+ * discipline : l'écran en tire la vue séparée ou cumulée selon le réglage
+ * {@code bio_dashboard_mode}. Montants, factures, utilisateurs connectés et
+ * rendez-vous restent sans discipline.</p>
+ */
 @RestController
 @RequestMapping("/api/v1/dashboard")
 @RequiredArgsConstructor
@@ -20,44 +35,50 @@ public class DashboardController {
 
     @GetMapping("/stats")
     public ResponseEntity<ApiResponse<DashboardDto.AdminStats>> getAdminStats(
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                dashboardService.getAdminStats(principal.getBranchId())));
+                dashboardService.getAdminStats(principal.getBranchId(), discipline)));
     }
 
     @GetMapping("/secretariat-stats")
     public ResponseEntity<ApiResponse<DashboardDto.SecretariatStats>> getSecretariatStats(
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                dashboardService.getSecretariatStats(principal.getBranchId())));
+                dashboardService.getSecretariatStats(principal.getBranchId(), discipline)));
     }
 
     @GetMapping("/reports-today")
     public ResponseEntity<ApiResponse<List<DashboardDto.ReportToday>>> getReportsToday(
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                dashboardService.getReportsToday(principal.getBranchId())));
+                dashboardService.getReportsToday(principal.getBranchId(), discipline)));
     }
 
     @GetMapping("/doctor-stats")
     public ResponseEntity<ApiResponse<List<DashboardDto.DoctorStat>>> getDoctorStats(
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                dashboardService.getDoctorStats(principal.getBranchId())));
+                dashboardService.getDoctorStats(principal.getBranchId(), discipline)));
     }
 
     @GetMapping("/top-examens")
     public ResponseEntity<ApiResponse<List<DashboardDto.TopExamen>>> getTopExamens(
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                dashboardService.getTopExamens(principal.getBranchId())));
+                dashboardService.getTopExamens(principal.getBranchId(), discipline)));
     }
 
     @GetMapping("/monthly-stats")
     public ResponseEntity<ApiResponse<DashboardDto.MonthlyStats>> getMonthlyStats(
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                dashboardService.getMonthlyStats(principal.getBranchId())));
+                dashboardService.getMonthlyStats(principal.getBranchId(), discipline)));
     }
 
     @GetMapping("/connected-users")
@@ -83,9 +104,10 @@ public class DashboardController {
 
     @GetMapping("/doctor/exam-status")
     public ResponseEntity<ApiResponse<DashboardDto.ExamStatusChart>> getDoctorExamStatus(
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                dashboardService.getExamStatusForDoctor(principal.getId(), principal.getBranchId())));
+                dashboardService.getExamStatusForDoctor(principal.getId(), principal.getBranchId(), discipline)));
     }
 
     @GetMapping("/doctor/appointments")
@@ -97,15 +119,17 @@ public class DashboardController {
 
     @GetMapping("/doctor/orders")
     public ResponseEntity<ApiResponse<List<DashboardDto.DoctorOrder>>> getDoctorOrders(
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                dashboardService.getDoctorOrders(principal.getId(), principal.getBranchId())));
+                dashboardService.getDoctorOrders(principal.getId(), principal.getBranchId(), discipline)));
     }
 
     @GetMapping("/doctor/orders-today")
     public ResponseEntity<ApiResponse<List<DashboardDto.DoctorOrder>>> getDoctorOrdersToday(
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                dashboardService.getDoctorOrdersToday(principal.getId(), principal.getBranchId())));
+                dashboardService.getDoctorOrdersToday(principal.getId(), principal.getBranchId(), discipline)));
     }
 }

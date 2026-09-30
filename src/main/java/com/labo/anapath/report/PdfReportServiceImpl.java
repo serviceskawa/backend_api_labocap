@@ -4,23 +4,20 @@ import com.labo.anapath.common.NomComplet;
 
 import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
-import com.labo.anapath.setting.SettingApp;
+import com.labo.anapath.common.pdf.PdfAssets;
 import com.labo.anapath.setting.SettingAppRepository;
 import com.labo.anapath.user.UserRepository;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 
 import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.Base64;
 import java.util.UUID;
 
 @Service
@@ -36,12 +33,20 @@ public class PdfReportServiceImpl implements PdfReportService {
     private final UserRepository userRepository;
     private final QrCodeService qrCodeService;
     private final SpringTemplateEngine templateEngine;
+    /** Rendu propre aux comptes-rendus de biologie, vers lequel ce point d'entrée aiguille. */
+    private final com.labo.anapath.biology.report.BiologyPdfService biologyPdfService;
 
     @Override
     @Transactional
     public byte[] generatePdf(UUID reportId, UUID userId) {
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", reportId));
+
+        // GET /reports/{id}/pdf sert les deux disciplines : un compte-rendu de
+        // biologie n'a ni titre ni texte rédigé, il s'imprime par son propre gabarit.
+        if (report.getDiscipline() == com.labo.anapath.common.Discipline.BIOLOGY) {
+            return biologyPdfService.generatePdf(reportId, userId, null);
+        }
 
         Context ctx = new Context();
 
@@ -126,35 +131,12 @@ public class PdfReportServiceImpl implements PdfReportService {
                 || report.getStatus() == ReportStatus.DELIVERED;
         ctx.setVariable("status", validated ? 1 : 0);
 
-        // Entête image du laboratoire : priorité au setting `entete` uploadé
-        // (data URI base64, comme entete_pdf_cr.png dans Laravel) ; repli sur le
-        // placeholder embarqué dans les ressources si aucun n'a été téléversé.
-        String enteteSetting = settingAppRepository.findByKey("entete")
-                .map(SettingApp::getValue).orElse("");
-        String enteteImg = (enteteSetting != null && enteteSetting.startsWith("data:"))
-                ? enteteSetting
-                : loadImageDataUri("pdf-assets/entete_pdf_cr.png");
-        ctx.setVariable("enteteImg", enteteImg);
-
-        // Settings
-        ctx.setVariable("footer", settingAppRepository.findByKey("report_footer")
-                .map(SettingApp::getValue).filter(v -> !v.isBlank())
-                .orElse(SettingApp.DEFAULT_REPORT_FOOTER));
-        // Titre de revue : « Signé électroniquement par : » par défaut (réplique du
-        // rendu de référence CAAP), surchargé par le réglage report_review_title si défini.
-        String reviewTitle = settingAppRepository.findByKey("report_review_title")
-                .map(SettingApp::getValue).filter(v -> !v.isBlank())
-                .orElse("Signé électroniquement par :");
-        ctx.setVariable("reportReviewTitle", reviewTitle);
-
-        // Image de signature du signataire 1 (embarquée si le fichier est disponible)
-        String signature1Img = "";
-        if (report.getSignatory1() != null
-                && report.getSignatory1().getSignature() != null
-                && !report.getSignatory1().getSignature().isBlank()) {
-            signature1Img = loadImageDataUri("pdf-assets/signatures/" + report.getSignatory1().getSignature());
-        }
-        ctx.setVariable("signature1Img", signature1Img);
+        // Entête, pied de page, titre de relecture et signature : communs aux
+        // comptes-rendus imprimés, voir PdfAssets (mêmes clés, mêmes replis).
+        ctx.setVariable("enteteImg", PdfAssets.entete(settingAppRepository));
+        ctx.setVariable("footer", PdfAssets.piedDePage(settingAppRepository));
+        ctx.setVariable("reportReviewTitle", PdfAssets.titreDeRelecture(settingAppRepository));
+        ctx.setVariable("signature1Img", PdfAssets.signature(report.getSignatory1()));
 
         // Render HTML puis normalisation XHTML (contenu éditeur → OpenHTMLToPDF)
         String html = com.labo.anapath.common.pdf.PdfHtmlUtil.toXhtml(
@@ -183,31 +165,6 @@ public class PdfReportServiceImpl implements PdfReportService {
             return outputStream.toByteArray();
         } catch (Exception e) {
             throw new InvalidOperationException("Erreur lors de la génération du PDF: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Charge une image depuis le classpath et la renvoie en data URI base64
-     * (embarquée dans le HTML, pour qu'OpenHTMLToPDF la rende sans baseUri).
-     * Renvoie une chaîne vide si l'image est absente.
-     */
-    private String loadImageDataUri(String classpathLocation) {
-        try {
-            ClassPathResource resource = new ClassPathResource(classpathLocation);
-            if (!resource.exists()) {
-                return "";
-            }
-            byte[] bytes;
-            try (InputStream in = resource.getInputStream()) {
-                bytes = in.readAllBytes();
-            }
-            String mime = classpathLocation.toLowerCase().endsWith(".jpg")
-                    || classpathLocation.toLowerCase().endsWith(".jpeg")
-                    ? "image/jpeg" : "image/png";
-            return "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(bytes);
-        } catch (Exception e) {
-            log.warn("Chargement image PDF échoué ({}): {}", classpathLocation, e.getMessage());
-            return "";
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.common.Discipline;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -30,8 +31,21 @@ public class TestOrderRequestDto {
     @NotNull(message = "La date de prélèvement est obligatoire")
     private LocalDate prelevementDate;
 
-    /** Type de bon d'examen (biopsie, cytologie, etc.). */
+    /**
+     * Type de bon d'examen (biopsie, cytologie, etc.).
+     *
+     * <p>Propre à l'anatomie pathologique : un bon de biologie n'en porte pas
+     * (les compteurs par type — immuno, cyto/histo — ne filtrent pas la discipline).
+     */
     private UUID typeOrderId;
+
+    /**
+     * Discipline du bon ; {@code null} vaut {@link Discipline#PATHOLOGY}, pour que
+     * les clients qui ne l'envoient pas (web actuel, mobile) créent ce qu'ils
+     * créaient. Fixée à la création : en modification, seule la valeur du bon
+     * (ou {@code null}) est acceptée.
+     */
+    private Discipline discipline;
 
     /** Identifiant du médecin prescripteur. */
     private UUID doctorId;

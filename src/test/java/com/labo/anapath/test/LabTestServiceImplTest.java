@@ -22,6 +22,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,7 +58,8 @@ class LabTestServiceImplTest {
 
     private LabTestResponseDto buildResponseDto(String name) {
         return new LabTestResponseDto(ID, name, null, BigDecimal.valueOf(5000), null, "ACTIF",
-                null, null, null, null, BRANCH_ID, LocalDateTime.now());
+                null, null, null, null, BRANCH_ID, LocalDateTime.now(),
+                com.labo.anapath.common.Discipline.PATHOLOGY, null, null);
     }
 
     @Test
@@ -124,10 +126,10 @@ class LabTestServiceImplTest {
         LabTestResponseDto dto = buildResponseDto("NFS");
         Page<LabTest> page = new PageImpl<>(List.of(entity));
 
-        when(labTestRepository.findByFilters(any(UUID.class), any(), any(), any(Pageable.class))).thenReturn(page);
+        when(labTestRepository.findByFilters(any(UUID.class), any(), any(), eq("PATHOLOGY"), any(Pageable.class))).thenReturn(page);
         when(mapper.toLabTestResponseDto(entity)).thenReturn(dto);
 
-        PageResponse<LabTestResponseDto> result = labTestService.findAll(0, 20, null, null, BRANCH_ID);
+        PageResponse<LabTestResponseDto> result = labTestService.findAll(0, 20, null, null, null, BRANCH_ID);
 
         assertThat(result.content()).hasSize(1);
     }
@@ -138,11 +140,11 @@ class LabTestServiceImplTest {
         LabTest entity = buildEntity("Numération Formule Sanguine");
         LabTestResponseDto dto = buildResponseDto("Numération Formule Sanguine");
 
-        when(labTestRepository.findByNameContainingIgnoreCaseAndBranchId("Numération", BRANCH_ID))
+        when(labTestRepository.findByNameContainingIgnoreCaseAndBranchId("Numération", BRANCH_ID, "PATHOLOGY"))
                 .thenReturn(List.of(entity));
         when(mapper.toLabTestResponseDto(entity)).thenReturn(dto);
 
-        List<LabTestResponseDto> result = labTestService.search("Numération", BRANCH_ID);
+        List<LabTestResponseDto> result = labTestService.search("Numération", BRANCH_ID, com.labo.anapath.common.Discipline.PATHOLOGY);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).name()).isEqualTo("Numération Formule Sanguine");
@@ -151,10 +153,10 @@ class LabTestServiceImplTest {
     @Test
     @DisplayName("search - aucun résultat → liste vide")
     void search_noMatch_returnsEmptyList() {
-        when(labTestRepository.findByNameContainingIgnoreCaseAndBranchId("INEXISTANT", BRANCH_ID))
+        when(labTestRepository.findByNameContainingIgnoreCaseAndBranchId("INEXISTANT", BRANCH_ID, "PATHOLOGY"))
                 .thenReturn(List.of());
 
-        List<LabTestResponseDto> result = labTestService.search("INEXISTANT", BRANCH_ID);
+        List<LabTestResponseDto> result = labTestService.search("INEXISTANT", BRANCH_ID, null);
 
         assertThat(result).isEmpty();
     }

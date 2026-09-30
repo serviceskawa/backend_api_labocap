@@ -1,5 +1,8 @@
 package com.labo.anapath.test;
 
+import com.labo.anapath.biology.BiologyKind;
+import com.labo.anapath.common.Discipline;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -22,6 +25,9 @@ import java.util.UUID;
  * @param unitMeasurementName nom de l'unité de mesure
  * @param branchId            identifiant de la succursale propriétaire
  * @param createdAt           date et heure de création
+ * @param discipline          discipline de l'analyse (PATHOLOGY ou BIOLOGY)
+ * @param biologyKind         nature d'une analyse de biologie (PANEL, CULTURE), sinon {@code null}
+ * @param specimenType        type d'échantillon attendu (biologie)
  */
 public record LabTestResponseDto(
         UUID id,
@@ -35,5 +41,8 @@ public record LabTestResponseDto(
         UUID unitMeasurementId,
         String unitMeasurementName,
         UUID branchId,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        Discipline discipline,
+        BiologyKind biologyKind,
+        String specimenType
 ) {}

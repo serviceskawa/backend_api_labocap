@@ -1,5 +1,6 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.audit.AuditableEntity;
 import com.labo.anapath.contract.Contrat;
 import com.labo.anapath.doctor.Doctor;
@@ -188,6 +189,14 @@ public class TestOrder extends AuditableEntity {
     @NotFound(action = NotFoundAction.IGNORE)
     @JoinColumn(name = "type_order_id")
     private TypeOrder typeOrder;
+
+    /**
+     * Discipline du bon. Fixée à la création :
+     * elle décide du circuit (macroscopie et compte-rendu, ou saisie de résultats).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "discipline", nullable = false, length = 20, updatable = false)
+    private Discipline discipline = Discipline.PATHOLOGY;
 
     /** Liste des analyses demandées dans ce bon, avec prix et remise individuels. */
     @OneToMany(mappedBy = "testOrder", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)

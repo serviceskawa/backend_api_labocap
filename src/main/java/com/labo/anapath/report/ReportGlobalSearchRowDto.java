@@ -24,5 +24,10 @@ public record ReportGlobalSearchRowDto(
         String hospitalName,
         String referenceHospital,
         LocalDateTime dateCreation,
-        Boolean isUrgent
+        Boolean isUrgent,
+        /**
+         * Discipline du compte-rendu. La recherche globale couvre les deux
+         * disciplines : l'écran doit savoir vers quel circuit ouvrir la ligne.
+         */
+        com.labo.anapath.common.Discipline discipline
 ) {}

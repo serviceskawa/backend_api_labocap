@@ -23,4 +23,6 @@ public interface ReportGlobalSearchProjection {
     String getReferenceHospital();
     LocalDateTime getDateCreation();
     Boolean getIsUrgent();
+    /** Discipline du compte-rendu ({@code PATHOLOGY}, {@code BIOLOGY}). */
+    String getDiscipline();
 }

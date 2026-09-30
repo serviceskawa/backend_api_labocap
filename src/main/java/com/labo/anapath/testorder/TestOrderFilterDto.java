@@ -1,5 +1,6 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.common.Discipline;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -80,4 +81,15 @@ public class TestOrderFilterDto {
 
     /** Filtre sur l'identifiant du type d'examen. */
     private UUID typeOrderId;
+
+    /**
+     * Discipline des bons listés — anatomie pathologique par défaut.
+     *
+     * <p>Le défaut n'est pas une commodité : les écrans d'anatomie
+     * pathologique et l'application mobile n'envoient pas ce critère, et
+     * doivent continuer de voir exactement ce qu'ils voyaient avant l'arrivée
+     * de la biologie. {@code null} ne filtre rien, pour un appelant interne qui
+     * voudrait les deux disciplines.</p>
+     */
+    private Discipline discipline = Discipline.PATHOLOGY;
 }

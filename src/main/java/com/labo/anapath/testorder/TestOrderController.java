@@ -1,5 +1,6 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.DuplicateResourceException;
@@ -109,8 +110,12 @@ public class TestOrderController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) UUID contratId,
             @RequestParam(required = false) UUID typeOrderId,
+            // Anatomie pathologique par défaut : les clients existants n'envoient
+            // pas ce paramètre et doivent voir la même liste qu'avant la biologie.
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         TestOrderFilterDto filter = new TestOrderFilterDto();
+        filter.setDiscipline(discipline);
         filter.setStatus(status);
         filter.setReportStatus(reportStatus);
         filter.setPatientId(patientId);
@@ -222,9 +227,10 @@ public class TestOrderController {
     @GetMapping("/myspace/stats")
     @PreAuthorize("hasAuthority('view-test-order-assignments')")
     public ResponseEntity<ApiResponse<MyspaceStatsDto>> getMyspaceStats(
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                testOrderService.getMyspaceStats(principal.getId(), principal.getBranchId())));
+                testOrderService.getMyspaceStats(principal.getId(), principal.getBranchId(), discipline)));
     }
 
     /**
@@ -248,11 +254,12 @@ public class TestOrderController {
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to,
             @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
                 testOrderService.getMyspaceOrders(
                         principal.getId(), principal.getBranchId(), page, size,
-                        status, typeOrderId, priority, from, to, search)));
+                        status, typeOrderId, priority, from, to, search, discipline)));
     }
 
     // -------------------------------------------------------------------------

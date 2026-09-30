@@ -1,5 +1,8 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.biology.BiologyResultsGuard;
+import com.labo.anapath.biology.results.BiologyResultsLifecycle;
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.NomComplet;
 
 import com.labo.anapath.common.dto.PageResponse;
@@ -7,6 +10,7 @@ import com.labo.anapath.common.exception.BusinessException;
 import com.labo.anapath.common.exception.DuplicateResourceException;
 import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
+import com.labo.anapath.common.module.ModulesProperties;
 import com.labo.anapath.client.Client;
 import com.labo.anapath.client.ClientRepository;
 import com.labo.anapath.contract.ContratRepository;
@@ -46,6 +50,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -89,6 +94,12 @@ public class TestOrderServiceImpl implements TestOrderService {
     private final TestOrderAssignmentDetailRepository assignmentDetailRepository;
     private final FileStorageService fileStorageService;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    /** Interrupteur du module Biologie : un bon de biologie ne se crée que s'il est actif. */
+    private final ModulesProperties modules;
+    /** Consulté avant de retirer une analyse d'un bon de biologie (jamais en anatomie pathologique). */
+    private final BiologyResultsGuard biologyResultsGuard;
+    /** Analyses à saisir d'un bon de biologie : créées à la validation, alignées à la modification. */
+    private final BiologyResultsLifecycle biologyResultsLifecycle;
 
     /** Clé du préfixe de code de bon d'examen, dans {@code setting_apps} (comme Laravel). */
     private static final String PREFIXE_CODE_EXAMEN_KEY = "prefixe_code_demande_examen";
@@ -223,6 +234,13 @@ public class TestOrderServiceImpl implements TestOrderService {
     @Override
     @Transactional
     public TestOrderResponseDto create(TestOrderRequestDto dto, UUID branchId) {
+        // Sans discipline, le client est un client d'anatomie pathologique (web
+        // actuel, mobile) : il crée ce qu'il a toujours créé.
+        Discipline discipline = dto.getDiscipline() != null ? dto.getDiscipline() : Discipline.PATHOLOGY;
+        if (discipline == Discipline.BIOLOGY) {
+            exigerLeModuleBiologie();
+            refuserLeTypeDeBonEnBiologie(dto);
+        }
         assertNoDuplicateTests(dto.getDetails());
         assertContractQuotaAvailable(dto.getContratId(), branchId);
 
@@ -230,6 +248,7 @@ public class TestOrderServiceImpl implements TestOrderService {
         order.setBranchId(branchId);
         order.setCode(null);
         order.setStatus(TestOrderStatus.PENDING);
+        order.setDiscipline(discipline);
         order.setPrelevementDate(dto.getPrelevementDate());
         order.setReferenceHopital(dto.getReferenceHopital());
         order.setIsUrgent(dto.getIsUrgent() != null ? dto.getIsUrgent() : false);
@@ -266,6 +285,7 @@ public class TestOrderServiceImpl implements TestOrderService {
             List<DetailTestOrder> details = dto.getDetails().stream().map(detailDto -> {
                 LabTest labTest = labTestRepository.findByIdAndBranchId(detailDto.getLabTestId(), branchId)
                         .orElseThrow(() -> new ResourceNotFoundException("Analyse", detailDto.getLabTestId()));
+                exigerLaDisciplineDuBon(labTest, order.getDiscipline());
                 DetailTestOrder detail = new DetailTestOrder();
                 detail.setTestOrder(order);
                 detail.setLabTest(labTest);
@@ -321,6 +341,14 @@ public class TestOrderServiceImpl implements TestOrderService {
             throw new InvalidOperationException(
                     "Facture déjà payée : les examens de ce bon ne peuvent plus être modifiés.");
         }
+        // La colonne n'est pas modifiable (updatable = false) : sans ce refus, une
+        // autre discipline serait acceptée puis ignorée en silence.
+        if (dto.getDiscipline() != null && dto.getDiscipline() != order.getDiscipline()) {
+            throw new BusinessException("La discipline d'un bon d'examen ne se modifie pas après sa création.");
+        }
+        if (order.getDiscipline() == Discipline.BIOLOGY) {
+            refuserLeTypeDeBonEnBiologie(dto);
+        }
         assertNoDuplicateTests(dto.getDetails());
         order.setPrelevementDate(dto.getPrelevementDate());
         order.setReferenceHopital(dto.getReferenceHopital());
@@ -356,10 +384,14 @@ public class TestOrderServiceImpl implements TestOrderService {
         // voulue à chaque ajout/modif/suppression. orphanRemoval supprime les
         // anciennes lignes, le cascade persiste les nouvelles.
         if (dto.getDetails() != null) {
+            if (order.getDiscipline() == Discipline.BIOLOGY) {
+                refuserLeRetraitDAnalysesAvecResultats(order, dto.getDetails());
+            }
             order.getDetails().clear();
             List<DetailTestOrder> details = dto.getDetails().stream().map(detailDto -> {
                 LabTest labTest = labTestRepository.findByIdAndBranchId(detailDto.getLabTestId(), branchId)
                         .orElseThrow(() -> new ResourceNotFoundException("Analyse", detailDto.getLabTestId()));
+                exigerLaDisciplineDuBon(labTest, order.getDiscipline());
                 DetailTestOrder detail = new DetailTestOrder();
                 detail.setTestOrder(order);
                 detail.setLabTest(labTest);
@@ -383,7 +415,14 @@ public class TestOrderServiceImpl implements TestOrderService {
             order.setDiscount(subtotal - total);
         }
 
-        return testOrderMapper.toResponseDto(testOrderRepository.save(order));
+        TestOrderResponseDto reponse = testOrderMapper.toResponseDto(testOrderRepository.save(order));
+        // Bon de biologie déjà validé (il a son code) : une analyse ajoutée s'ouvre à
+        // la saisie, une analyse retirée — forcément sans résultat, vérifié plus
+        // haut — quitte la liste de travail.
+        if (dto.getDetails() != null && order.getDiscipline() == Discipline.BIOLOGY && order.getCode() != null) {
+            biologyResultsLifecycle.aligner(order.getId(), branchId, analysesDuBon(order), null);
+        }
+        return reponse;
     }
 
     /**
@@ -464,16 +503,25 @@ public class TestOrderServiceImpl implements TestOrderService {
             report = new Report();
             report.setBranchId(branchId);
             report.setTestOrder(order);
+            // Le compte-rendu hérite de la discipline du bon : plusieurs
+            // requêtes filtrent sur reports sans joindre test_orders, et la
+            // colonne n'est plus modifiable après l'insertion.
+            report.setDiscipline(order.getDiscipline());
             report.setStatus(ReportStatus.DRAFT);
-            // Texte par défaut du compte rendu : Laravel lit `Setting::first()->placeholder`,
-            // le singleton de la table `settings`. L'ancienne lecture cherchait la clé
-            // `prefixe_code_demande_examen`, qui appartient à `setting_apps` et n'existe pas
-            // dans `settings` : le placeholder était donc toujours vide.
-            String placeholder = settingRepository
-                    .findFirstByBranchIdOrderByCreatedAtAscIdAsc(branchId)
-                    .map(s -> s.getPlaceholder() != null ? s.getPlaceholder() : "")
-                    .orElse("");
-            report.setDescription(placeholder);
+            // Le texte par défaut est un gabarit de compte-rendu rédigé : il n'a pas
+            // de sens en biologie, dont les résultats vivent dans leurs propres
+            // tables. Les champs rédactionnels du compte-rendu y restent nuls.
+            if (order.getDiscipline() != Discipline.BIOLOGY) {
+                // Texte par défaut du compte rendu : Laravel lit `Setting::first()->placeholder`,
+                // le singleton de la table `settings`. L'ancienne lecture cherchait la clé
+                // `prefixe_code_demande_examen`, qui appartient à `setting_apps` et n'existe pas
+                // dans `settings` : le placeholder était donc toujours vide.
+                String placeholder = settingRepository
+                        .findFirstByBranchIdOrderByCreatedAtAscIdAsc(branchId)
+                        .map(s -> s.getPlaceholder() != null ? s.getPlaceholder() : "")
+                        .orElse("");
+                report.setDescription(placeholder);
+            }
         }
         report.setCode("CO" + order.getCode());
         report = reportRepository.save(report);
@@ -488,6 +536,12 @@ public class TestOrderServiceImpl implements TestOrderService {
         logReport.setAction("Créer un nouveau report");
         logReportRepository.save(logReport);
         log.info("Report créé/mis à jour pour bon {}: code={}", id, report.getCode());
+
+        // Biologie : une analyse à saisir (PENDING) par analyse du bon. Rejouable —
+        // une seconde validation ne crée rien de plus.
+        if (order.getDiscipline() == Discipline.BIOLOGY) {
+            biologyResultsLifecycle.aligner(order.getId(), branchId, analysesDuBon(order), userId);
+        }
 
         // AC7/AC8: Facturation
         boolean invoiceGrouped = Boolean.TRUE.equals(order.getContrat().getInvoiceUnique());
@@ -544,7 +598,8 @@ public class TestOrderServiceImpl implements TestOrderService {
                 dto.archive(),
                 dto.testAffiliate(),
                 dto.option(),
-                assignedUserName
+                assignedUserName,
+                dto.discipline()
         );
     }
 
@@ -713,6 +768,105 @@ public class TestOrderServiceImpl implements TestOrderService {
         } catch (java.io.IOException e) {
             return false;
         }
+    }
+
+    /**
+     * Refuse un bon de biologie quand le module n'est pas activé sur ce déploiement.
+     *
+     * <p>{@code /test-orders} est commun aux deux disciplines : l'intercepteur du
+     * module ne le couvre pas, c'est donc ici que la biologie se ferme.</p>
+     */
+    private void exigerLeModuleBiologie() {
+        if (!modules.isBiology()) {
+            throw new BusinessException("Le module Biologie n'est pas activé sur ce laboratoire.");
+        }
+    }
+
+    /**
+     * Refuse un type de bon sur un bon de biologie.
+     *
+     * <p>Les types (biopsie, cytologie, immuno…) sont propres à l'anatomie
+     * pathologique, et les compteurs qui s'appuient sur eux — bons immuno, bons
+     * cyto/histo en attente — ne filtrent pas la discipline : un bon de biologie
+     * typé y serait compté.</p>
+     */
+    private static void refuserLeTypeDeBonEnBiologie(TestOrderRequestDto dto) {
+        if (dto.getTypeOrderId() != null) {
+            throw new BusinessException("Un bon de biologie ne porte pas de type de bon : "
+                    + "les types (biopsie, cytologie, immuno…) relèvent de l'anatomie pathologique.");
+        }
+    }
+
+    /**
+     * Refuse une analyse d'une autre discipline que celle du bon : un bon ne mélange
+     * pas les disciplines, sans quoi une analyse de biologie suivrait le circuit de
+     * macroscopie et de compte-rendu rédigé, ou l'inverse.
+     */
+    private static void exigerLaDisciplineDuBon(LabTest labTest, Discipline disciplineDuBon) {
+        Discipline duBon = disciplineDuBon != null ? disciplineDuBon : Discipline.PATHOLOGY;
+        Discipline deLAnalyse = labTest.getDiscipline() != null ? labTest.getDiscipline() : Discipline.PATHOLOGY;
+        if (deLAnalyse != duBon) {
+            throw new BusinessException("Un bon ne mélange pas les disciplines : l'analyse « "
+                    + labTest.getName() + " » relève de " + libelle(deLAnalyse)
+                    + ", ce bon de " + libelle(duBon) + ".");
+        }
+    }
+
+    private static String libelle(Discipline discipline) {
+        return discipline == Discipline.BIOLOGY ? "la biologie" : "l'anatomie pathologique";
+    }
+
+    /**
+     * Refuse de retirer d'un bon de biologie une analyse qui porte déjà des résultats.
+     *
+     * <p>La modification remplace toutes les lignes du bon ; une analyse absente de la
+     * nouvelle liste est une analyse retirée. Les résultats étant rattachés au couple
+     * (bon, analyse), la retirer les rendrait orphelins.</p>
+     *
+     * @param order     bon de biologie, avec ses lignes actuelles
+     * @param demandees nouvelle liste complète des analyses
+     * @throws BusinessException si une analyse retirée porte des résultats
+     */
+    private void refuserLeRetraitDAnalysesAvecResultats(TestOrder order,
+                                                        List<DetailTestOrderRequestDto> demandees) {
+        Set<UUID> conservees = demandees.stream()
+                .map(DetailTestOrderRequestDto::getLabTestId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<UUID, String> retirees = new LinkedHashMap<>();
+        for (DetailTestOrder detail : order.getDetails()) {
+            // Analyse supprimée du catalogue (@NotFound IGNORE) : plus d'identifiant
+            // à rapprocher, donc rien à protéger ici.
+            if (detail.getLabTest() == null || detail.getLabTest().getId() == null) continue;
+            UUID labTestId = detail.getLabTest().getId();
+            if (!conservees.contains(labTestId)) {
+                retirees.put(labTestId, detail.getTestName());
+            }
+        }
+        if (retirees.isEmpty()) return;
+
+        Set<UUID> avecResultats = biologyResultsGuard.analysesAvecResultats(order.getId(), retirees.keySet());
+        if (avecResultats == null || avecResultats.isEmpty()) return;
+        List<String> noms = retirees.entrySet().stream()
+                .filter(e -> avecResultats.contains(e.getKey()))
+                .map(e -> "« " + e.getValue() + " »")
+                .toList();
+        throw new BusinessException(noms.size() == 1
+                ? "Des résultats sont déjà saisis pour l'analyse " + noms.get(0)
+                        + " : elle ne peut plus être retirée du bon."
+                : "Des résultats sont déjà saisis pour les analyses " + String.join(", ", noms)
+                        + " : elles ne peuvent plus être retirées du bon.");
+    }
+
+    /** Analyses (catalogue) portées par les lignes du bon ; une analyse supprimée du catalogue est ignorée. */
+    private static List<UUID> analysesDuBon(TestOrder order) {
+        return order.getDetails().stream()
+                .map(DetailTestOrder::getLabTest)
+                .filter(java.util.Objects::nonNull)
+                .map(LabTest::getId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
     }
 
     private void assertNoDuplicateTests(List<DetailTestOrderRequestDto> details) {
@@ -1085,18 +1239,20 @@ public class TestOrderServiceImpl implements TestOrderService {
      */
     @Override
     @Transactional(readOnly = true)
-    public MyspaceStatsDto getMyspaceStats(UUID userId, UUID branchId) {
+    public MyspaceStatsDto getMyspaceStats(UUID userId, UUID branchId, Discipline discipline) {
         // Un super-admin voit TOUTE la donnée de la branche active (et non ses
         // seules assignations) : « Mon espace » lui sert de vue d'ensemble du labo.
         boolean seeAll = userRepository.isSuperAdmin(userId);
         // En attente / terminé sont déterminés par le statut du RAPPORT (comme Laravel),
         // car tous les bons assignés sont déjà au statut VALIDATED côté bon d'examen.
-        long totalAssigned  = testOrderRepository.countByAssignedToUserIdAndBranchId(userId, branchId, seeAll);
-        long totalPending   = testOrderRepository.countAssignedReportPending(userId, branchId, seeAll);
-        long totalValidated = testOrderRepository.countAssignedReportDone(userId, branchId, seeAll);
-        long totalUrgent    = testOrderRepository.countUrgentByAssignedToUserIdAndBranchId(userId, branchId, seeAll);
+        long totalAssigned  = testOrderRepository.countByAssignedToUserIdAndBranchId(userId, branchId, seeAll, discipline);
+        long totalPending   = testOrderRepository.countAssignedReportPending(userId, branchId, seeAll, discipline);
+        long totalValidated = testOrderRepository.countAssignedReportDone(userId, branchId, seeAll, discipline);
+        long totalUrgent    = testOrderRepository.countUrgentByAssignedToUserIdAndBranchId(userId, branchId, seeAll, discipline);
         LocalDateTime cutoff = LocalDateTime.now().minusDays(21);
-        long totalLate      = testOrderRepository.countLateByAssignedToUserIdAndBranchId(userId, branchId, cutoff, seeAll);
+        long totalLate      = testOrderRepository.countLateByAssignedToUserIdAndBranchId(userId, branchId, cutoff, seeAll, discipline);
+        // Les bons immuno sont retenus par leur type, qui n'existe qu'en
+        // anatomie pathologique : ce compteur n'a pas besoin de la discipline.
 
         List<UUID> immunoTypeIds = typeOrderRepository.findImmunoTypeIds(branchId);
         long totalImmunoPending = immunoTypeIds.isEmpty() ? 0L
@@ -1122,7 +1278,8 @@ public class TestOrderServiceImpl implements TestOrderService {
     @Transactional(readOnly = true)
     public PageResponse<TestOrderResponseDto> getMyspaceOrders(UUID userId, UUID branchId, int page, int size,
                                                                TestOrderStatus status, UUID typeOrderId,
-                                                               String priority, String from, String to, String search) {
+                                                               String priority, String from, String to, String search,
+                                                               Discipline discipline) {
         // La requête native findMyspaceOrders trie déjà par t.created_at DESC.
         // Ne PAS ajouter de Sort ici : Spring l'appliquerait tel quel sur la requête
         // native (ORDER BY t.createdAt) → "column t.createdat does not exist" (500).
@@ -1137,7 +1294,8 @@ public class TestOrderServiceImpl implements TestOrderService {
         boolean seeAll = userRepository.isSuperAdmin(userId);
         Page<TestOrder> orderPage = testOrderRepository
                 .findMyspaceOrders(userId, branchId, statusParam, typeOrderParam, priorityParam,
-                        fromParam, toParam, searchParam, seeAll, pageRequest);
+                        fromParam, toParam, searchParam, seeAll,
+                        (discipline != null ? discipline : Discipline.PATHOLOGY).name(), pageRequest);
 
         // Enrichissement report + facture (batch, anti N+1) pour que la colonne
         // « Compte rendu » reflète le vrai statut (Valider / En attente / Non enregistré)

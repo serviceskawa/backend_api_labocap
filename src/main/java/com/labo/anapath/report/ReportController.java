@@ -1,5 +1,6 @@
 package com.labo.anapath.report;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.security.UserPrincipal;
@@ -66,9 +67,13 @@ public class ReportController {
             @RequestParam(required = false) UUID doctorId,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String search,
+            // Anatomie pathologique par défaut : les clients existants n'envoient
+            // pas ce paramètre et doivent voir la même liste qu'avant la biologie.
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                reportService.findAll(page, size, principal.getBranchId(), month, year, doctorId, status, search)));
+                reportService.findAll(page, size, principal.getBranchId(), month, year, doctorId, status, search,
+                        discipline)));
     }
 
     @GetMapping("/suivi")
@@ -76,9 +81,10 @@ public class ReportController {
     public ResponseEntity<ApiResponse<ReportSuiviDto>> getSuivi(
             @RequestParam(required = false) Integer month,
             @RequestParam(required = false) Integer year,
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                reportService.getSuivi(principal.getBranchId(), month, year)));
+                reportService.getSuivi(principal.getBranchId(), month, year, discipline)));
     }
 
     @GetMapping("/suivi/list")
@@ -93,12 +99,13 @@ public class ReportController {
             @RequestParam(required = false) Boolean isUrgent,
             @RequestParam(required = false) Integer status,
             @RequestParam(required = false) Boolean isLate,
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
                 reportService.getSuiviList(
                         principal.getBranchId(), page, size,
                         search, typeOrderId, dateBegin, dateEnd,
-                        isUrgent, status, isLate)));
+                        isUrgent, status, isLate, discipline)));
     }
 
     @GetMapping("/logs")
@@ -143,10 +150,11 @@ public class ReportController {
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String dateBegin,
             @RequestParam(required = false) String dateEnd,
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
                 reportService.getList(principal.getBranchId(), page, size,
-                        search, status, dateBegin, dateEnd)));
+                        search, status, dateBegin, dateEnd, discipline)));
     }
 
     @GetMapping("/performance-stats")
@@ -155,9 +163,10 @@ public class ReportController {
             @RequestParam(required = false) String doctorId,
             @RequestParam(required = false) Integer month,
             @RequestParam(required = false) Integer year,
+            @RequestParam(defaultValue = "PATHOLOGY") Discipline discipline,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                reportService.getPerformanceStats(principal.getBranchId(), doctorId, month, year)));
+                reportService.getPerformanceStats(principal.getBranchId(), doctorId, month, year, discipline)));
     }
 
     /**

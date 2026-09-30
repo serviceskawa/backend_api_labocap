@@ -1,5 +1,7 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.common.Discipline;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -87,5 +89,7 @@ public record TestOrderResponseDto(
          * la plus récente qui est retenue.
          * </p>
          */
-        String assignedUserName
+        String assignedUserName,
+        /** Discipline du bon (PATHOLOGY ou BIOLOGY), fixée à sa création. */
+        Discipline discipline
 ) {}

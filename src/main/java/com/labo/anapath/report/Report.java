@@ -1,5 +1,6 @@
 package com.labo.anapath.report;
 
+import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.audit.AuditableEntity;
 import com.labo.anapath.testorder.TestOrder;
 import com.labo.anapath.user.User;
@@ -84,6 +85,14 @@ public class Report extends AuditableEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     private ReportStatus status = ReportStatus.DRAFT;
+
+    /**
+     * Discipline du compte-rendu, recopiée depuis le bon. Fixée à la création :
+     * plusieurs requêtes filtrent sur reports sans joindre test_orders.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "discipline", nullable = false, length = 20, updatable = false)
+    private Discipline discipline = Discipline.PATHOLOGY;
 
     /** Utilisateur ayant relu et approuvé le compte-rendu. */
     @ManyToOne(fetch = FetchType.LAZY)

@@ -52,4 +52,21 @@ public interface TestOrderAssignmentRepository extends JpaRepository<TestOrderAs
            "WHERE a.branchId = :branchId AND ty.slug IN ('immuno-interne','immuno-exterme') " +
            "ORDER BY a.createdAt DESC")
     Page<TestOrderAssignment> findImmuno(@Param("branchId") UUID branchId, Pageable pageable);
+
+    /**
+     * Les lots d'une discipline autre que l'anatomie pathologique.
+     *
+     * <p>Un bon de biologie n'a pas de type de bon : {@link #findHistoCyto} le
+     * perd dans sa jointure sur {@code typeOrder}, et c'est voulu — la liste
+     * d'anatomie pathologique reste celle d'avant. Ici, on ne lit que la
+     * discipline des demandes. Un lot ne mêlant pas les disciplines, une seule
+     * de ses demandes suffit à le classer. Comme pour les autres listes, un lot
+     * encore vide n'apparaît pas.</p>
+     */
+    @Query("SELECT DISTINCT a FROM TestOrderAssignment a JOIN a.details d JOIN d.testOrder o " +
+           "WHERE a.branchId = :branchId AND o.discipline = :discipline " +
+           "ORDER BY a.createdAt DESC")
+    Page<TestOrderAssignment> findByDiscipline(@Param("branchId") UUID branchId,
+                                               @Param("discipline") com.labo.anapath.common.Discipline discipline,
+                                               Pageable pageable);
 }

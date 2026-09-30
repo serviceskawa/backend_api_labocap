@@ -125,11 +125,13 @@ public interface TestOrderAssignmentDetailRepository
               AND d.deletedAt IS NULL
               AND d.remplaceeLe IS NULL
               AND (d.docteurStatus <> 'termine' OR a.date >= :depuis)
+              AND (o.id IS NULL OR o.discipline = :discipline)
             ORDER BY a.date ASC, d.createdAt ASC
             """)
     List<TestOrderAssignmentDetail> fileDuMedecin(
             @Param("docteurId") UUID docteurId,
-            @Param("depuis") java.time.LocalDate depuis);
+            @Param("depuis") java.time.LocalDate depuis,
+            @Param("discipline") com.labo.anapath.common.Discipline discipline);
 
     /**
      * La même file, bornée à une année.
@@ -152,13 +154,15 @@ public interface TestOrderAssignmentDetailRepository
               AND (d.docteurStatus <> 'termine' OR a.date >= :depuis)
               AND o.createdAt >= :debutAnnee
               AND o.createdAt < :finAnnee
+              AND o.discipline = :discipline
             ORDER BY a.date ASC, d.createdAt ASC
             """)
     List<TestOrderAssignmentDetail> fileDuMedecinPourLannee(
             @Param("docteurId") UUID docteurId,
             @Param("depuis") java.time.LocalDate depuis,
             @Param("debutAnnee") java.time.LocalDateTime debutAnnee,
-            @Param("finAnnee") java.time.LocalDateTime finAnnee);
+            @Param("finAnnee") java.time.LocalDateTime finAnnee,
+            @Param("discipline") com.labo.anapath.common.Discipline discipline);
 
     /**
      * Combien de dossiers de la file datent d'avant l'année demandée.
@@ -177,8 +181,10 @@ public interface TestOrderAssignmentDetailRepository
               AND d.remplaceeLe IS NULL
               AND (d.docteurStatus <> 'termine' OR a.date >= :depuis)
               AND (o.createdAt IS NULL OR o.createdAt < :debutAnnee)
+              AND (o.id IS NULL OR o.discipline = :discipline)
             """)
     long compterAnterieures(@Param("docteurId") UUID docteurId,
                             @Param("depuis") java.time.LocalDate depuis,
-                            @Param("debutAnnee") java.time.LocalDateTime debutAnnee);
+                            @Param("debutAnnee") java.time.LocalDateTime debutAnnee,
+                            @Param("discipline") com.labo.anapath.common.Discipline discipline);
 }
