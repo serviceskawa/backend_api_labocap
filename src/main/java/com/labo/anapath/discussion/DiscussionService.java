@@ -79,7 +79,7 @@ public class DiscussionService {
         exigerUnMetierDuSoin(lecteurId);
         TestOrder demande = testOrderRepository.findByIdAndBranchId(testOrderId, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", testOrderId));
-        Discussion fil = ouvrirOuCreer(demande, lecteurId, branchId);
+        Discussion fil = ouvrirOuCreer(demande, branchId);
 
         List<DiscussionMessage> liste =
                 messages.findByDiscussionIdOrderByCreatedAtAsc(fil.getId());
@@ -90,10 +90,7 @@ public class DiscussionService {
                 fil.getId(),
                 demande.getId(),
                 demande.getCode(),
-                fil.getParticipants().stream()
-                        .map(p -> new ParticipantDto(p.getUserId(),
-                                nomDe(gens.get(p.getUserId())), p.getRole()))
-                        .toList(),
+                lesGensDuFil(fil, gens),
                 liste.stream().map(m -> versDto(m, gens, fil, nonLus)).toList());
     }
 
@@ -114,7 +111,8 @@ public class DiscussionService {
 
         TestOrder demande = testOrderRepository.findByIdAndBranchId(testOrderId, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", testOrderId));
-        Discussion fil = ouvrirOuCreer(demande, auteurId, branchId);
+        Discussion fil = ouvrirOuCreer(demande, branchId);
+        inscrireCeluiQuiEcrit(fil, auteurId);
 
         // Taguer quelqu'un le fait entrer au fil : c'est la traduction de la
         // règle d'adressage, inscrite une fois plutôt que rejouée à chaque
@@ -182,7 +180,8 @@ public class DiscussionService {
 
         TestOrder demande = testOrderRepository.findByIdAndBranchId(testOrderId, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", testOrderId));
-        Discussion fil = ouvrirOuCreer(demande, auteurId, branchId);
+        Discussion fil = ouvrirOuCreer(demande, branchId);
+        inscrireCeluiQuiEcrit(fil, auteurId);
 
         if (taggedUserId != null) {
             userRepository.findById(taggedUserId)
@@ -379,7 +378,7 @@ public class DiscussionService {
         return jpeg || png;
     }
 
-    private Discussion ouvrirOuCreer(TestOrder demande, UUID venantId, UUID branchId) {
+    private Discussion ouvrirOuCreer(TestOrder demande, UUID branchId) {
         Discussion fil = discussions.findByTestOrderId(demande.getId())
                 .orElseGet(() -> discussions.save(
                         new Discussion(demande.getId(), branchId)));
@@ -400,8 +399,24 @@ public class DiscussionService {
                     }
                 });
 
-        userRepository.findById(venantId).ifPresent(u -> ajouterAuFil(fil, u.getId(), roleDe(u)));
         return fil;
+    }
+
+    /**
+     * Fait entrer au fil celui qui vient d'y écrire.
+     *
+     * <p>Écrire inscrit ; lire n'inscrit plus. L'inscription se faisait à
+     * l'ouverture du fil, ce qui était sans conséquence tant que deux personnes
+     * seulement pouvaient l'ouvrir. Depuis que le fil se montre à tout le soin,
+     * un seul coup d'œil abonnait pour de bon — et l'on aurait reçu, des mois
+     * durant, les notifications d'un dossier ouvert par curiosité.</p>
+     *
+     * <p>La ligne est nette : on entre dans une conversation en y parlant, pas
+     * en la regardant.</p>
+     */
+    private void inscrireCeluiQuiEcrit(Discussion fil, UUID auteurId) {
+        userRepository.findById(auteurId)
+                .ifPresent(u -> ajouterAuFil(fil, u.getId(), roleDe(u)));
     }
 
     private void ajouterAuFil(Discussion fil, UUID userId, String role) {
@@ -440,18 +455,26 @@ public class DiscussionService {
      * <p>Contrôlé au serveur et non seulement à l'écran : cacher un bouton
      * n'empêche personne d'appeler le point d'entrée.</p>
      */
-    private void exigerUnMetierDuSoin(UUID userId) {
+    /**
+     * Cette personne exerce-t-elle au soin ?
+     *
+     * <p>Publique parce que l'appel se pose la même question que le fil : qui
+     * peut parler d'un dossier peut appeler à son sujet. Deux règles écrites
+     * séparément auraient divergé — et c'est déjà arrivé ici, l'appel exigeant
+     * d'être participant enregistré quand le fil se contentait du rôle.</p>
+     */
+    public boolean exerceUnMetierDuSoin(UUID userId) {
         User u = userRepository.findById(userId).orElse(null);
-        if (u == null || u.getRoles() == null) {
-            throw new org.springframework.security.access.AccessDeniedException(
-                    "La discussion d'un dossier est réservée aux médecins et aux laborantins.");
-        }
-        boolean autorise = u.getRoles().stream()
+        if (u == null || u.getRoles() == null) return false;
+        return u.getRoles().stream()
                 .map(r -> r.getSlug() == null ? "" : r.getSlug().toLowerCase())
                 .anyMatch(slug -> slug.equals("docteur")
                         || slug.equals("laborantin")
                         || slug.equals("super-admin"));
-        if (!autorise) {
+    }
+
+    private void exigerUnMetierDuSoin(UUID userId) {
+        if (!exerceUnMetierDuSoin(userId)) {
             throw new org.springframework.security.access.AccessDeniedException(
                     "La discussion d'un dossier est réservée aux médecins et aux laborantins.");
         }
@@ -461,6 +484,39 @@ public class DiscussionService {
         boolean medecin = u.getRoles().stream()
                 .anyMatch(r -> "docteur".equalsIgnoreCase(r.getSlug()));
         return medecin ? DiscussionParticipant.MEDECIN : DiscussionParticipant.TECHNICIEN;
+    }
+
+    /**
+     * Qui figure dans le fil : le dossier, puis tout le soin.
+     *
+     * <h2>Deux notions qu'on confondait sous un même mot</h2>
+     *
+     * <p><b>Qui a accès</b> n'a jamais dépendu de cette liste : les cinq points
+     * d'entrée du fil contrôlent le rôle, et tout médecin ou technicien peut
+     * déjà ouvrir n'importe quel dossier. <b>Qui est notifié</b>, en revanche,
+     * se lit sur les participants enregistrés — le médecin affecté, le
+     * composeur du lot, et qui a été interpellé.</p>
+     *
+     * <p>D'où cet élargissement à l'affichage seulement, sans rien écrire en
+     * base : le fil montre et laisse mentionner tout le monde, et personne
+     * n'est réveillé par un dossier qui ne le concerne pas. Les enregistrer
+     * comme participants aurait fait vibrer chaque téléphone à chaque phrase,
+     * et l'on aurait fini par couper les notifications — y compris celles qui
+     * comptent.</p>
+     *
+     * <p>Les participants du dossier passent devant : leur rôle a été fixé au
+     * moment où on les a fait entrer, et il fait foi.</p>
+     */
+    private List<ParticipantDto> lesGensDuFil(Discussion fil, Map<UUID, User> gens) {
+        java.util.LinkedHashMap<UUID, ParticipantDto> vus = new java.util.LinkedHashMap<>();
+        for (DiscussionParticipant p : fil.getParticipants()) {
+            vus.put(p.getUserId(), new ParticipantDto(
+                    p.getUserId(), nomDe(gens.get(p.getUserId())), p.getRole()));
+        }
+        for (User u : userRepository.findMetiersDuSoin()) {
+            vus.putIfAbsent(u.getId(), new ParticipantDto(u.getId(), nomDe(u), roleDe(u)));
+        }
+        return List.copyOf(vus.values());
     }
 
     private Map<UUID, User> chargerLesGens(Discussion fil, List<DiscussionMessage> liste) {
