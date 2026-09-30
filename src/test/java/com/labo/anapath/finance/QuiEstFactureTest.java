@@ -61,7 +61,12 @@ class QuiEstFactureTest {
         Invoice f = new Invoice();
         poser(f, demandeDe(null, null));
 
-        assertThat(f.getClientName()).isEqualTo("DOTOU Justine");
+        // « Prénom Nom », le même ordre que `FinanceMapper.patientName`.
+        // Ce test figeait l'ordre inverse, écrit avant que main ne corrige le
+        // défaut du bandeau « informations à actualiser » : le bouton
+        // « Actualiser » réécrivait la même valeur sans jamais le faire
+        // disparaître. C'était le test qui avait tort.
+        assertThat(f.getClientName()).isEqualTo("Justine DOTOU");
         assertThat(f.getClientAddress()).isEqualTo("Cotonou, Akpakpa");
         // Un patient n'a pas d'IFU, et en laisser un d'une facturation
         // précédente déclarerait cette vente au nom d'un établissement qu'elle
