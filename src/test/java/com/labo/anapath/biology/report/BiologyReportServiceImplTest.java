@@ -262,7 +262,12 @@ class BiologyReportServiceImplTest {
                 userRepository, mock(SettingReportTemplateRepository.class), reportMapper,
                 mock(EmailService.class), mock(NotificationSettings.class), publisher,
                 mock(MobileDeviceRepository.class), mock(SignatureAppareil.class), provenance,
-                mock(TestOrderAssignmentDetailRepository.class), new ObjectMapper());
+                mock(TestOrderAssignmentDetailRepository.class),
+                // Périmètre de validation : ce test porte sur le cœur commun et
+                // non sur la règle par type d'examen. Un mock la laisse passer.
+                mock(com.labo.anapath.report.ServicePerimetreDeValidation.class),
+                mock(com.labo.anapath.report.JournalDesRefus.class),
+                new ObjectMapper());
         private final BiologyReportServiceImpl service = new BiologyReportServiceImpl(reportRepository,
                 coeur, reportMapper, userRepository, analysisRepo, reglages, avancement);
 
