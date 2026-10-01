@@ -69,6 +69,40 @@ public class DiscussionService {
     private static final long TAILLE_MAX = 10L * 1024 * 1024;
 
     /**
+     * Le fil d'un dossier, LU sans jamais être créé.
+     *
+     * <p>Destiné au préchargement hors ligne, qui parcourt des centaines de
+     * dossiers : {@link #fil} crée le fil s'il n'existe pas, ce qui est juste
+     * quand quelqu'un vient y écrire, mais ouvrirait ici neuf cents fils vides
+     * que personne n'a demandés. Une demande sans fil rend donc un fil sans
+     * identifiant et sans message — ce qui est la vérité.</p>
+     */
+    @Transactional(readOnly = true)
+    public FilDto filSansCreer(UUID testOrderId, UUID lecteurId, UUID branchId) {
+        exigerUnMetierDuSoin(lecteurId);
+        TestOrder demande = testOrderRepository.findByIdAndBranchId(testOrderId, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", testOrderId));
+
+        Discussion fil = discussions.findByTestOrderId(testOrderId).orElse(null);
+        if (fil == null) {
+            return new FilDto(null, demande.getId(), demande.getCode(),
+                    java.util.List.of(), java.util.List.of());
+        }
+
+        List<DiscussionMessage> liste =
+                messages.findByDiscussionIdOrderByCreatedAtAsc(fil.getId());
+        Map<UUID, User> gens = chargerLesGens(fil, liste);
+        Set<UUID> nonLus = Set.copyOf(lectures.nonLusDuFil(fil.getId(), lecteurId));
+
+        return new FilDto(
+                fil.getId(),
+                demande.getId(),
+                demande.getCode(),
+                lesGensDuFil(fil, gens),
+                liste.stream().map(m -> versDto(m, gens, fil, nonLus)).toList());
+    }
+
+    /**
      * Le fil d'un dossier, créé s'il n'existe pas.
      *
      * <p>Créé et non refusé : la maquette veut qu'un médecin puisse écrire le

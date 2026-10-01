@@ -95,7 +95,8 @@ class DisciplineParDefautDesPointsDEntreeTest {
     @BeforeEach
     void monter() {
         mvc = MockMvcBuilders.standaloneSetup(
-                        new TestOrderController(testOrderService, reportService),
+                        new TestOrderController(testOrderService, reportService,
+                                mock(com.labo.anapath.discussion.DiscussionService.class)),
                         new ReportController(reportService, mock(NotificationService.class),
                                 mock(PdfReportService.class)),
                         new TestOrderAssignmentController(assignmentService))

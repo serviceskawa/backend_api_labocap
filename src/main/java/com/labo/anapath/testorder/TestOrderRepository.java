@@ -666,4 +666,59 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             """)
     long countPendingReportByTypeIds(@Param("branchId") UUID branchId,
                                      @Param("typeIds") List<UUID> typeIds);
+
+    /**
+     * L'index des demandes que l'application mobile garde pour travailler
+     * sans réseau.
+     *
+     * <p>Projeté directement dans le DTO, sans charger les entités : les
+     * 3 133 lignes du jeu de travail amèneraient sinon leurs patients, leurs
+     * contrats et leurs types d'examen, pour quatre champs retenus.</p>
+     *
+     * <p>Le périmètre est borné par le statut et par la date : les demandes
+     * remises ne se scannent plus, et celles d'avant l'année précédente
+     * n'arrivent plus au laboratoire. Sans ces bornes l'index pèserait le
+     * double, dont la moitié ne servirait jamais.</p>
+     *
+     * <h2>Pourquoi deux bornes de date, et un second critère de tri</h2>
+     *
+     * <p>L'index descend page par page, et le téléphone met plusieurs minutes
+     * à les rapatrier toutes sur un lien médiocre. Pendant ce temps le
+     * comptoir enregistre des demandes : chacune s'insère en tête du tri par
+     * date décroissante et décale tout d'un rang, de sorte qu'une entrée
+     * passerait de la page lue à celle qu'on vient de quitter — et manquerait
+     * définitivement. [jusqua] fige donc le jeu au premier appel ; ce qui naît
+     * après viendra au rapatriement suivant.</p>
+     *
+     * <p>Le tri sur la seule date ne suffit pas davantage : deux demandes
+     * créées dans la même milliseconde — ce que fait une importation — n'ont
+     * pas d'ordre défini entre deux requêtes, et la même entrée peut revenir
+     * deux fois pendant qu'une autre disparaît. L'identifiant départage.</p>
+     */
+    @Query(value = """
+            SELECT new com.labo.anapath.testorder.EntreeDIndexDto(
+                     t.id, t.code,
+                     CONCAT(COALESCE(p.firstname, ''), ' ', COALESCE(p.lastname, '')),
+                     t.status)
+            FROM TestOrder t LEFT JOIN t.patient p
+            WHERE t.branchId = :branchId
+              AND t.deletedAt IS NULL
+              AND t.status <> com.labo.anapath.testorder.TestOrderStatus.DELIVERED
+              AND t.createdAt >= :depuis
+              AND t.createdAt <= :jusqua
+            ORDER BY t.createdAt DESC, t.id DESC
+            """,
+            countQuery = """
+            SELECT COUNT(t) FROM TestOrder t
+            WHERE t.branchId = :branchId
+              AND t.deletedAt IS NULL
+              AND t.status <> com.labo.anapath.testorder.TestOrderStatus.DELIVERED
+              AND t.createdAt >= :depuis
+              AND t.createdAt <= :jusqua
+            """)
+    Page<EntreeDIndexDto> indexPourLeMobile(
+            @Param("branchId") UUID branchId,
+            @Param("depuis") java.time.LocalDateTime depuis,
+            @Param("jusqua") java.time.LocalDateTime jusqua,
+            Pageable pageable);
 }

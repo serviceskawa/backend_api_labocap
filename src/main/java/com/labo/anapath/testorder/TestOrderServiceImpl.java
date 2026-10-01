@@ -1433,4 +1433,40 @@ public class TestOrderServiceImpl implements TestOrderService {
         BigDecimal contractPrice = details.getPrice();
         return new DiscountDto(basePrice, contractPrice, discount, priceAfterDiscount);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageDIndexDto indexPourLeMobile(UUID branchId, int mois, int page, int taille,
+                                           java.time.LocalDateTime jusqua) {
+        // Borné des deux côtés : un appel sans limite rendrait toute
+        // l'histoire du laboratoire sur un lien qu'on cherche à ménager, et
+        // une profondeur démesurée reviendrait au même.
+        int profondeur = Math.max(1, Math.min(mois, 36));
+
+        // La taille de tranche est plafonnée ici et non laissée au client.
+        // C'est le serveur qui connaît le poids d'une entrée ; un appel à
+        // « size=100000 » rétablirait exactement le défaut qu'on corrige, et
+        // le téléphone n'a aucun moyen de savoir ce qu'il demande.
+        int parTranche = Math.max(50, Math.min(taille, 2000));
+        int rang = Math.max(0, page);
+
+        // Le jeu est figé au premier appel. Le client repasse ensuite
+        // l'instant qu'on lui rend, de sorte que les tranches décrivent toutes
+        // le même ensemble, même si le comptoir enregistre entre-temps.
+        java.time.LocalDateTime borne = jusqua != null ? jusqua : java.time.LocalDateTime.now();
+
+        Page<EntreeDIndexDto> tranche = testOrderRepository.indexPourLeMobile(
+                branchId,
+                borne.minusMonths(profondeur),
+                borne,
+                org.springframework.data.domain.PageRequest.of(rang, parTranche));
+
+        return new PageDIndexDto(
+                tranche.getContent(),
+                rang,
+                parTranche,
+                tranche.getTotalElements(),
+                tranche.isLast(),
+                borne);
+    }
 }

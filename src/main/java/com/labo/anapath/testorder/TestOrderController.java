@@ -48,10 +48,12 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/test-orders")
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class TestOrderController {
 
     private final TestOrderService testOrderService;
     private final com.labo.anapath.report.ReportService reportService;
+    private final com.labo.anapath.discussion.DiscussionService discussionService;
 
     /**
      * Retourne la liste paginée des bons d'examen de la branche de l'utilisateur connecté,
@@ -495,5 +497,106 @@ public class TestOrderController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Médecin assigné",
                 testOrderService.assignDoctor(id, dto.doctorId(), principal.getBranchId())));
+    }
+
+    /**
+     * L'index compact des demandes, pour le travail hors ligne du mobile.
+     *
+     * <p>L'application le garde sur l'appareil et s'en sert à résoudre un code
+     * scanné sans réseau. Sans lui, un technicien hors couverture ne peut pas
+     * même savoir à quelle demande correspond le tube qu'il tient, et tout le
+     * reste du travail hors ligne s'arrête là.</p>
+     *
+     * <p>Quatre champs par demande, et le périmètre borné au jeu de travail :
+     * mesuré sur la base de production, l'index pèse environ 370 Ko quand la
+     * même liste au format complet en pèse 4,1. C'est onze fois moins sur le
+     * lien que ce dispositif existe justement pour ménager.</p>
+     *
+     * <p>[mois] remonte dans le passé depuis aujourd'hui. Douze par défaut :
+     * une demande plus ancienne et non remise existe, mais elle ne revient plus
+     * au laboratoire sous forme de tube à scanner.</p>
+     *
+     * <h2>Pourquoi il se rend par tranches</h2>
+     *
+     * <p>Il tenait en un seul appel, et c'était le défaut. Mesuré sur le jeu de
+     * travail, cet appel rend 709 Ko ; l'application borne une requête à vingt
+     * secondes, soit 284 kbit/s à tenir de bout en bout. En EDGE ou en 3G
+     * faible, le délai expire et rien n'est gardé — le téléphone jette six
+     * cents kilo-octets déjà descendus, et le nouvel essai repart de zéro.
+     * L'index n'arrivait donc jamais là où il sert le plus.</p>
+     *
+     * <p>Par tranches de cinq cents, chaque appel pèse une soixantaine de
+     * kilo-octets. Ce qui est arrivé est gardé : une coupure à la septième
+     * tranche en laisse six acquises au lieu de rien.</p>
+     *
+     * <p>[jusqua] fige le jeu : le serveur le rend au premier appel, le client
+     * le repasse aux suivants. Sans lui, une demande enregistrée au comptoir
+     * pendant le rapatriement décalerait les pages et en ferait manquer une
+     * entrée.</p>
+     */
+    /**
+     * Tout ce que l'ouverture d'un dossier demande, pour plusieurs dossiers à
+     * la fois.
+     *
+     * <p>L'application descend d'avance les lots confiés au laboratoire pour
+     * qu'ils s'ouvrent sans réseau. Les lots seuls ne suffisent pas : toucher
+     * un dossier demande ses images, l'historique de son patient et son fil,
+     * soit trois appels. Pour les 991 demandes des soixante lots préchargés,
+     * cela faisait 2 973 requêtes — une demi-heure sur un lien de brousse, et
+     * autant d'occasions d'échouer. Groupées par cinquante, une vingtaine
+     * suffisent.</p>
+     *
+     * <p>Le fil est LU et jamais créé : l'ouverture ordinaire d'une discussion
+     * le crée s'il manque, ce qui est juste quand quelqu'un vient y écrire mais
+     * ouvrirait ici neuf cents fils vides.</p>
+     *
+     * <p>Un dossier introuvable est simplement absent de la réponse. Faire
+     * échouer l'appel entier pour une demande supprimée entre-temps priverait
+     * l'agent des quarante-neuf autres.</p>
+     */
+    @GetMapping("/dossiers-hors-ligne")
+    @PreAuthorize("hasAuthority('view-test-orders')")
+    public ResponseEntity<ApiResponse<java.util.List<DossierHorsLigneDto>>> dossiersHorsLigne(
+            @RequestParam java.util.List<UUID> ids,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        // Plafonné au serveur : lui seul connaît le poids d'une réponse, et un
+        // appel à « ids=<mille> » rétablirait le défaut qu'on corrige.
+        var demandes = ids.size() > 50 ? ids.subList(0, 50) : ids;
+
+        var dossiers = new java.util.ArrayList<DossierHorsLigneDto>(demandes.size());
+        for (UUID id : demandes) {
+            try {
+                // Sans la fiche : les trois chemins que l'application garde
+                // sont tous indexés par l'identifiant, et charger le DTO
+                // complet d'une demande pour son seul code pèserait 1 375
+                // octets par dossier — plus que les trois réponses réunies.
+                dossiers.add(new DossierHorsLigneDto(
+                        id,
+                        testOrderService.getImages(id, principal.getBranchId()),
+                        testOrderService.historiqueDuPatient(id, principal.getBranchId()),
+                        discussionService.filSansCreer(
+                                id, principal.getId(), principal.getBranchId())));
+            } catch (RuntimeException e) {
+                // Supprimée, hors branche, ou sans droit sur le fil : on passe.
+                log.debug("Dossier {} écarté du préchargement : {}", id, e.toString());
+            }
+        }
+        return ResponseEntity.ok(ApiResponse.success(dossiers));
+    }
+
+    @GetMapping("/index")
+    @PreAuthorize("hasAuthority('view-test-orders')")
+    public ResponseEntity<ApiResponse<PageDIndexDto>> index(
+            @RequestParam(defaultValue = "12") int mois,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "500") int taille,
+            @RequestParam(required = false)
+            @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME)
+            java.time.LocalDateTime jusqua,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                testOrderService.indexPourLeMobile(
+                        principal.getBranchId(), mois, page, taille, jusqua)));
     }
 }
