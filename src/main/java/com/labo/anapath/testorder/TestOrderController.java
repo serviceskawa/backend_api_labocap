@@ -48,10 +48,12 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/test-orders")
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class TestOrderController {
 
     private final TestOrderService testOrderService;
     private final com.labo.anapath.report.ReportService reportService;
+    private final com.labo.anapath.discussion.DiscussionService discussionService;
 
     /**
      * Retourne la liste paginée des bons d'examen de la branche de l'utilisateur connecté,
@@ -532,6 +534,56 @@ public class TestOrderController {
      * pendant le rapatriement décalerait les pages et en ferait manquer une
      * entrée.</p>
      */
+    /**
+     * Tout ce que l'ouverture d'un dossier demande, pour plusieurs dossiers à
+     * la fois.
+     *
+     * <p>L'application descend d'avance les lots confiés au laboratoire pour
+     * qu'ils s'ouvrent sans réseau. Les lots seuls ne suffisent pas : toucher
+     * un dossier demande ses images, l'historique de son patient et son fil,
+     * soit trois appels. Pour les 991 demandes des soixante lots préchargés,
+     * cela faisait 2 973 requêtes — une demi-heure sur un lien de brousse, et
+     * autant d'occasions d'échouer. Groupées par cinquante, une vingtaine
+     * suffisent.</p>
+     *
+     * <p>Le fil est LU et jamais créé : l'ouverture ordinaire d'une discussion
+     * le crée s'il manque, ce qui est juste quand quelqu'un vient y écrire mais
+     * ouvrirait ici neuf cents fils vides.</p>
+     *
+     * <p>Un dossier introuvable est simplement absent de la réponse. Faire
+     * échouer l'appel entier pour une demande supprimée entre-temps priverait
+     * l'agent des quarante-neuf autres.</p>
+     */
+    @GetMapping("/dossiers-hors-ligne")
+    @PreAuthorize("hasAuthority('view-test-orders')")
+    public ResponseEntity<ApiResponse<java.util.List<DossierHorsLigneDto>>> dossiersHorsLigne(
+            @RequestParam java.util.List<UUID> ids,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        // Plafonné au serveur : lui seul connaît le poids d'une réponse, et un
+        // appel à « ids=<mille> » rétablirait le défaut qu'on corrige.
+        var demandes = ids.size() > 50 ? ids.subList(0, 50) : ids;
+
+        var dossiers = new java.util.ArrayList<DossierHorsLigneDto>(demandes.size());
+        for (UUID id : demandes) {
+            try {
+                // Sans la fiche : les trois chemins que l'application garde
+                // sont tous indexés par l'identifiant, et charger le DTO
+                // complet d'une demande pour son seul code pèserait 1 375
+                // octets par dossier — plus que les trois réponses réunies.
+                dossiers.add(new DossierHorsLigneDto(
+                        id,
+                        testOrderService.getImages(id, principal.getBranchId()),
+                        testOrderService.historiqueDuPatient(id, principal.getBranchId()),
+                        discussionService.filSansCreer(
+                                id, principal.getId(), principal.getBranchId())));
+            } catch (RuntimeException e) {
+                // Supprimée, hors branche, ou sans droit sur le fil : on passe.
+                log.debug("Dossier {} écarté du préchargement : {}", id, e.toString());
+            }
+        }
+        return ResponseEntity.ok(ApiResponse.success(dossiers));
+    }
+
     @GetMapping("/index")
     @PreAuthorize("hasAuthority('view-test-orders')")
     public ResponseEntity<ApiResponse<PageDIndexDto>> index(
