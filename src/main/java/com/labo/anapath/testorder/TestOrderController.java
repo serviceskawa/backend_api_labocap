@@ -513,13 +513,38 @@ public class TestOrderController {
      * <p>[mois] remonte dans le passé depuis aujourd'hui. Douze par défaut :
      * une demande plus ancienne et non remise existe, mais elle ne revient plus
      * au laboratoire sous forme de tube à scanner.</p>
+     *
+     * <h2>Pourquoi il se rend par tranches</h2>
+     *
+     * <p>Il tenait en un seul appel, et c'était le défaut. Mesuré sur le jeu de
+     * travail, cet appel rend 709 Ko ; l'application borne une requête à vingt
+     * secondes, soit 284 kbit/s à tenir de bout en bout. En EDGE ou en 3G
+     * faible, le délai expire et rien n'est gardé — le téléphone jette six
+     * cents kilo-octets déjà descendus, et le nouvel essai repart de zéro.
+     * L'index n'arrivait donc jamais là où il sert le plus.</p>
+     *
+     * <p>Par tranches de cinq cents, chaque appel pèse une soixantaine de
+     * kilo-octets. Ce qui est arrivé est gardé : une coupure à la septième
+     * tranche en laisse six acquises au lieu de rien.</p>
+     *
+     * <p>[jusqua] fige le jeu : le serveur le rend au premier appel, le client
+     * le repasse aux suivants. Sans lui, une demande enregistrée au comptoir
+     * pendant le rapatriement décalerait les pages et en ferait manquer une
+     * entrée.</p>
      */
     @GetMapping("/index")
     @PreAuthorize("hasAuthority('view-test-orders')")
-    public ResponseEntity<ApiResponse<java.util.List<EntreeDIndexDto>>> index(
+    public ResponseEntity<ApiResponse<PageDIndexDto>> index(
             @RequestParam(defaultValue = "12") int mois,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "500") int taille,
+            @RequestParam(required = false)
+            @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE_TIME)
+            java.time.LocalDateTime jusqua,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
-                testOrderService.indexPourLeMobile(principal.getBranchId(), mois)));
+                testOrderService.indexPourLeMobile(
+                        principal.getBranchId(), mois, page, taille, jusqua)));
     }
 }

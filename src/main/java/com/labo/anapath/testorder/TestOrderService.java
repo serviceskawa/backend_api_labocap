@@ -151,7 +151,8 @@ public interface TestOrderService {
      *
      * @param mois profondeur en mois depuis aujourd'hui
      */
-    List<EntreeDIndexDto> indexPourLeMobile(UUID branchId, int mois);
+    PageDIndexDto indexPourLeMobile(UUID branchId, int mois, int page, int taille,
+                                    java.time.LocalDateTime jusqua);
 
     List<ImageDto> getImages(UUID id, UUID branchId);
 
