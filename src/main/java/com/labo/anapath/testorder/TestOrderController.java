@@ -496,4 +496,30 @@ public class TestOrderController {
                 "Médecin assigné",
                 testOrderService.assignDoctor(id, dto.doctorId(), principal.getBranchId())));
     }
+
+    /**
+     * L'index compact des demandes, pour le travail hors ligne du mobile.
+     *
+     * <p>L'application le garde sur l'appareil et s'en sert à résoudre un code
+     * scanné sans réseau. Sans lui, un technicien hors couverture ne peut pas
+     * même savoir à quelle demande correspond le tube qu'il tient, et tout le
+     * reste du travail hors ligne s'arrête là.</p>
+     *
+     * <p>Quatre champs par demande, et le périmètre borné au jeu de travail :
+     * mesuré sur la base de production, l'index pèse environ 370 Ko quand la
+     * même liste au format complet en pèse 4,1. C'est onze fois moins sur le
+     * lien que ce dispositif existe justement pour ménager.</p>
+     *
+     * <p>[mois] remonte dans le passé depuis aujourd'hui. Douze par défaut :
+     * une demande plus ancienne et non remise existe, mais elle ne revient plus
+     * au laboratoire sous forme de tube à scanner.</p>
+     */
+    @GetMapping("/index")
+    @PreAuthorize("hasAuthority('view-test-orders')")
+    public ResponseEntity<ApiResponse<java.util.List<EntreeDIndexDto>>> index(
+            @RequestParam(defaultValue = "12") int mois,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                testOrderService.indexPourLeMobile(principal.getBranchId(), mois)));
+    }
 }

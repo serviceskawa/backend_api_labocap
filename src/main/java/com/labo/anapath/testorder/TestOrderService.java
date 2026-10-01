@@ -146,6 +146,13 @@ public interface TestOrderService {
 
     List<String> uploadImages(UUID id, UUID branchId, List<MultipartFile> files);
 
+    /**
+     * L'index compact des demandes, pour le travail hors ligne du mobile.
+     *
+     * @param mois profondeur en mois depuis aujourd'hui
+     */
+    List<EntreeDIndexDto> indexPourLeMobile(UUID branchId, int mois);
+
     List<ImageDto> getImages(UUID id, UUID branchId);
 
     /**

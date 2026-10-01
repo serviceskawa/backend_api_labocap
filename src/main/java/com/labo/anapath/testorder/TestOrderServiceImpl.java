@@ -1433,4 +1433,15 @@ public class TestOrderServiceImpl implements TestOrderService {
         BigDecimal contractPrice = details.getPrice();
         return new DiscountDto(basePrice, contractPrice, discount, priceAfterDiscount);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<EntreeDIndexDto> indexPourLeMobile(UUID branchId, int mois) {
+        // Borné des deux côtés : un appel sans limite rendrait toute
+        // l'histoire du laboratoire sur un lien qu'on cherche à ménager, et
+        // une profondeur démesurée reviendrait au même.
+        int profondeur = Math.max(1, Math.min(mois, 36));
+        return testOrderRepository.indexPourLeMobile(
+                branchId, java.time.LocalDateTime.now().minusMonths(profondeur));
+    }
 }

@@ -666,4 +666,33 @@ public interface TestOrderRepository extends JpaRepository<TestOrder, UUID>, Jpa
             """)
     long countPendingReportByTypeIds(@Param("branchId") UUID branchId,
                                      @Param("typeIds") List<UUID> typeIds);
+
+    /**
+     * L'index des demandes que l'application mobile garde pour travailler
+     * sans réseau.
+     *
+     * <p>Projeté directement dans le DTO, sans charger les entités : les
+     * 3 133 lignes du jeu de travail amèneraient sinon leurs patients, leurs
+     * contrats et leurs types d'examen, pour quatre champs retenus.</p>
+     *
+     * <p>Le périmètre est borné par le statut et par la date : les demandes
+     * remises ne se scannent plus, et celles d'avant l'année précédente
+     * n'arrivent plus au laboratoire. Sans ces bornes l'index pèserait le
+     * double, dont la moitié ne servirait jamais.</p>
+     */
+    @Query("""
+            SELECT new com.labo.anapath.testorder.EntreeDIndexDto(
+                     t.id, t.code,
+                     CONCAT(COALESCE(p.firstname, ''), ' ', COALESCE(p.lastname, '')),
+                     t.status)
+            FROM TestOrder t LEFT JOIN t.patient p
+            WHERE t.branchId = :branchId
+              AND t.deletedAt IS NULL
+              AND t.status <> com.labo.anapath.testorder.TestOrderStatus.DELIVERED
+              AND t.createdAt >= :depuis
+            ORDER BY t.createdAt DESC
+            """)
+    List<EntreeDIndexDto> indexPourLeMobile(
+            @Param("branchId") UUID branchId,
+            @Param("depuis") java.time.LocalDateTime depuis);
 }
