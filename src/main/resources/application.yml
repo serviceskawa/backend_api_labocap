@@ -70,6 +70,9 @@ app:
   # Sert à construire le lien de téléchargement envoyé par SMS : il doit être
   # joignable depuis l'extérieur, pas seulement depuis le réseau du laboratoire.
   public-base-url: ${PUBLIC_BASE_URL:https://api.caap.bj}
+  # Adresse du front web. Sert au lien de réinitialisation du mot de passe
+  # envoyé par courriel : à renseigner en production.
+  front-url: ${APP_FRONT_URL:http://localhost:3000}
   invoice:
     share-link:
       # Durée de vie du lien public de facture. Un SMS reste indéfiniment dans le

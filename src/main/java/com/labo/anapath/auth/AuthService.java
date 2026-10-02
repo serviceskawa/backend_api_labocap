@@ -4,7 +4,6 @@ import com.labo.anapath.branch.UserBranchResponseDto;
 import com.labo.anapath.user.UserResponseDto;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -66,16 +65,12 @@ public interface AuthService {
     UserResponseDto me(UUID userId, UUID branchId);
 
     /**
-     * Génère un token de réinitialisation de mot de passe et le stocke en base.
-     * <p>
-     * Pour les besoins du développement (pas de MailService), le token est retourné
-     * directement dans la réponse.
-     * </p>
+     * Envoie par courriel un lien de réinitialisation valable une heure.
+     * Ne renvoie rien : le jeton ne doit jamais transiter par la réponse HTTP.
      *
      * @param request requête contenant l'adresse e-mail du compte
-     * @return map contenant le token généré (clé {@code "token"})
      */
-    Map<String, String> forgotPassword(ForgotPasswordRequest request);
+    void forgotPassword(ForgotPasswordRequest request);
 
     /**
      * Réinitialise le mot de passe d'un utilisateur à partir d'un token valide et non expiré.

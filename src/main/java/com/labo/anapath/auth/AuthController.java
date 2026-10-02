@@ -25,7 +25,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Contrôleur REST gérant l'authentification et les opérations 2FA.
@@ -317,20 +316,18 @@ public class AuthController {
     }
 
     /**
-     * Initie la réinitialisation du mot de passe en générant un token UUID.
-     * <p>
-     * Comme aucun MailService n'est disponible, le token est retourné directement
-     * dans la réponse JSON à des fins de développement et de test.
-     * </p>
+     * Envoie un lien de réinitialisation à l'adresse indiquée, si un compte y
+     * correspond. La réponse est identique dans les deux cas.
      *
      * @param request corps contenant l'adresse e-mail du compte
-     * @return map JSON contenant le token de réinitialisation (clé {@code "token"})
+     * @return confirmation générique
      */
     @PostMapping("/forgot-password")
-    public ResponseEntity<ApiResponse<Map<String, String>>> forgotPassword(
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(
             @Valid @RequestBody ForgotPasswordRequest request) {
-        Map<String, String> result = authService.forgotPassword(request);
-        return ResponseEntity.ok(ApiResponse.success("Token de réinitialisation généré", result));
+        authService.forgotPassword(request);
+        return ResponseEntity.ok(ApiResponse.success(
+                "Si un compte correspond à cette adresse, un lien de réinitialisation vient d'y être envoyé.", null));
     }
 
     /**

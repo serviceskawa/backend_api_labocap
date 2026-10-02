@@ -29,15 +29,14 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -84,6 +83,10 @@ public class AuthServiceImpl implements AuthService {
      */
     @org.springframework.beans.factory.annotation.Value("${app.otp.log-plaintext:false}")
     private boolean logOtpPlaintext;
+
+    /** Adresse du front, où mène le lien de réinitialisation envoyé par courriel. */
+    @org.springframework.beans.factory.annotation.Value("${app.front-url}")
+    private String frontUrl;
 
     /**
      * {@inheritDoc}
@@ -258,25 +261,35 @@ public class AuthServiceImpl implements AuthService {
     /**
      * {@inheritDoc}
      * <p>
-     * Génère un UUID aléatoire comme token de réinitialisation, le persiste avec
-     * une expiration à +1 heure, puis le retourne dans la réponse (pas de MailService).
-     * Si l'email est introuvable, retourne silencieusement un token fictif pour ne pas
-     * révéler l'existence du compte.
+     * Le jeton ne quitte le serveur que par courriel : seule la boîte de
+     * l'utilisateur prouve que la demande vient de lui. La base n'en garde que
+     * l'empreinte SHA-256, si bien qu'une copie de la table ne permet pas de
+     * réinitialiser un compte. Un e-mail inconnu ne produit rien, et la réponse
+     * reste la même pour ne pas révéler quels comptes existent.
      * </p>
      */
     @Override
     @Transactional
-    public Map<String, String> forgotPassword(ForgotPasswordRequest request) {
-        String token = UUID.randomUUID().toString();
+    public void forgotPassword(ForgotPasswordRequest request) {
         userRepository.findByEmail(request.getEmail()).ifPresent(user -> {
-            user.setResetToken(token);
+            String token = UUID.randomUUID().toString();
+            user.setResetToken(sha256(token));
             user.setResetTokenExpiresAt(LocalDateTime.now().plusHours(1));
             userRepository.save(user);
-            log.info("Token de réinitialisation généré pour: {}", maskEmail(request.getEmail()));
+            String lien = frontUrl + "/reset-password?token=" + token
+                    + "&email=" + URLEncoder.encode(user.getEmail(), StandardCharsets.UTF_8);
+            emailService.sendPasswordReset(user.getEmail(), user.getFirstname(), lien);
+            log.info("Lien de réinitialisation envoyé à: {}", maskEmail(request.getEmail()));
         });
-        Map<String, String> result = new HashMap<>();
-        result.put("token", token);
-        return result;
+    }
+
+    private static String sha256(String valeur) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(valeur.getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /**
@@ -296,7 +309,7 @@ public class AuthServiceImpl implements AuthService {
         if (!request.getPassword().equals(request.getPasswordConfirmation())) {
             throw new BusinessException("Les mots de passe ne correspondent pas");
         }
-        User user = userRepository.findByResetToken(request.getToken())
+        User user = userRepository.findByResetToken(sha256(request.getToken()))
                 .filter(u -> u.getResetTokenExpiresAt() != null
                         && u.getResetTokenExpiresAt().isAfter(LocalDateTime.now()))
                 .orElseThrow(() -> new UnauthorizedException("Token de réinitialisation invalide ou expiré"));
