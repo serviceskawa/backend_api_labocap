@@ -18,6 +18,8 @@ public interface EmailService {
      * @param testOrderCode code de la demande d'examen concernée
      * @param labName       nom du laboratoire (en-tête / signature)
      */
+    void sendPasswordReset(String to, String firstname, String resetLink);
+
     void sendMacroAlert(String to, String testOrderCode, String labName);
 
     /**

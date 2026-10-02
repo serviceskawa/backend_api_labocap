@@ -26,9 +26,13 @@ import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,7 +41,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -393,5 +399,78 @@ class AuthServiceImplTest {
     @DisplayName("logout - should handle null token gracefully")
     void logout_nullToken_noException() {
         authService.logout(null);
+    }
+
+    // ── Réinitialisation du mot de passe ──────────────────────────────────
+
+    private static String sha256(String v) throws Exception {
+        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(v.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @DisplayName("forgotPassword - le jeton part par courriel, la base n'en garde que l'empreinte")
+    void forgotPassword_envoieLeLienEtStockeLEmpreinte() throws Exception {
+        ReflectionTestUtils.setField(authService, "frontUrl", "https://new.caap.bj");
+        User user = buildUser();
+        when(userRepository.findByEmail("admin@test.com")).thenReturn(Optional.of(user));
+        ForgotPasswordRequest request = new ForgotPasswordRequest();
+        request.setEmail("admin@test.com");
+
+        authService.forgotPassword(request);
+
+        ArgumentCaptor<String> lien = ArgumentCaptor.forClass(String.class);
+        verify(emailService).sendPasswordReset(eq("admin@test.com"), eq("Admin"), lien.capture());
+        assertThat(lien.getValue()).startsWith("https://new.caap.bj/reset-password?token=")
+                .endsWith("&email=admin%40test.com");
+        String jeton = lien.getValue().replaceAll(".*token=([^&]+).*", "$1");
+        assertThat(user.getResetToken()).isEqualTo(sha256(jeton)).isNotEqualTo(jeton);
+        assertThat(user.getResetTokenExpiresAt()).isAfter(LocalDateTime.now().plusMinutes(59));
+    }
+
+    @Test
+    @DisplayName("forgotPassword - e-mail inconnu : aucun envoi")
+    void forgotPassword_emailInconnu_aucunEnvoi() {
+        when(userRepository.findByEmail("x@test.com")).thenReturn(Optional.empty());
+        ForgotPasswordRequest request = new ForgotPasswordRequest();
+        request.setEmail("x@test.com");
+
+        authService.forgotPassword(request);
+
+        verify(emailService, never()).sendPasswordReset(anyString(), any(), anyString());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("resetPassword - le jeton reçu est cherché par son empreinte")
+    void resetPassword_chercheParEmpreinte() throws Exception {
+        User user = buildUser();
+        user.setResetToken(sha256("jeton-clair"));
+        user.setResetTokenExpiresAt(LocalDateTime.now().plusMinutes(30));
+        when(userRepository.findByResetToken(sha256("jeton-clair"))).thenReturn(Optional.of(user));
+        when(passwordEncoder.encode("NouveauMdp1!")).thenReturn("$2a$hash");
+        ResetPasswordRequest request = new ResetPasswordRequest();
+        request.setToken("jeton-clair");
+        request.setPassword("NouveauMdp1!");
+        request.setPasswordConfirmation("NouveauMdp1!");
+
+        authService.resetPassword(request);
+
+        assertThat(user.getPassword()).isEqualTo("$2a$hash");
+        assertThat(user.getResetToken()).isNull();
+    }
+
+    @Test
+    @DisplayName("resetPassword - l'empreinte stockée elle-même n'est pas un jeton valide")
+    void resetPassword_empreinteVolee_refusee() throws Exception {
+        String empreinte = sha256("jeton-clair");
+        when(userRepository.findByResetToken(sha256(empreinte))).thenReturn(Optional.empty());
+        ResetPasswordRequest request = new ResetPasswordRequest();
+        request.setToken(empreinte);
+        request.setPassword("NouveauMdp1!");
+        request.setPasswordConfirmation("NouveauMdp1!");
+
+        assertThatThrownBy(() -> authService.resetPassword(request))
+                .isInstanceOf(UnauthorizedException.class);
     }
 }

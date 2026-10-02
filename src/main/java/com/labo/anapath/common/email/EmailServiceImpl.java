@@ -59,6 +59,30 @@ public class EmailServiceImpl implements EmailService {
 
     @Async
     @Override
+    public void sendPasswordReset(String to, String firstname, String resetLink) {
+        try {
+            Context context = new Context();
+            context.setVariable("firstname", firstname);
+            context.setVariable("resetLink", resetLink);
+
+            String htmlContent = templateEngine.process("email/reset-password", context);
+
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(to);
+            helper.setSubject("Réinitialisation de votre mot de passe — Labo AnaPath");
+            helper.setText(htmlContent, true);
+
+            mailSender.send(message);
+            log.info("Email de réinitialisation envoyé à: {}", maskEmail(to));
+        } catch (Exception e) {
+            log.error("Échec d'envoi de l'email de réinitialisation à {}: {}", maskEmail(to), e.getMessage());
+        }
+    }
+
+    @Async
+    @Override
     public void sendMacroAlert(String to, String testOrderCode, String labName) {
         try {
             Context context = new Context();

@@ -75,6 +75,8 @@ services:
       # médecin, qui quitte son écran pour lire une lame et y revient.
       JWT_REFRESH: ${JWT_REFRESH:-1800000}
       JWT_REFRESH_MEDECIN: ${JWT_REFRESH_MEDECIN:-3600000}
+      # Adresse du front : destination du lien de réinitialisation du mot de passe
+      APP_FRONT_URL: ${APP_FRONT_URL:-http://localhost:3000}
       # Origines frontend autorisées par CORS (lues par CorsConfig.java au runtime)
       APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:3001}
       # Attribut Secure des cookies d'auth. TOUJOURS true en prod HTTPS ; à mettre
