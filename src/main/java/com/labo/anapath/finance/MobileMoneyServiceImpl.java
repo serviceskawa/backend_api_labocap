@@ -53,7 +53,7 @@ public class MobileMoneyServiceImpl implements MobileMoneyService {
             }
         });
 
-        Invoice invoice = invoiceRepository.findById(dto.getInvoiceId())
+        Invoice invoice = invoiceRepository.findByIdAndBranchId(dto.getInvoiceId(), branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Facture", dto.getInvoiceId()));
 
         String tokenValue = requireTokenPayment(branchId);
@@ -100,7 +100,7 @@ public class MobileMoneyServiceImpl implements MobileMoneyService {
     @Override
     @Transactional
     public MobileMoneyStatusResponseDto checkStatus(UUID paymentId, UUID branchId) {
-        Payment payment = paymentRepository.findById(paymentId)
+        Payment payment = paymentRepository.findByIdAndBranchId(paymentId, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Paiement", paymentId));
 
         String tokenValue = requireTokenPayment(branchId);

@@ -1,5 +1,7 @@
 package com.labo.anapath.discussion;
 
+import com.labo.anapath.common.storage.FichierStockeRepository;
+import com.labo.anapath.common.storage.FichierStocke;
 import com.labo.anapath.common.NomComplet;
 import com.labo.anapath.common.exception.BusinessException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
@@ -55,6 +57,7 @@ public class DiscussionService {
     private final TestOrderAssignmentDetailRepository detailRepository;
     private final UserRepository userRepository;
     private final com.labo.anapath.testorder.FileStorageService fichiers;
+    private final FichierStockeRepository rattachements;
     private final com.labo.anapath.mobile.NotificationsPush notifications;
     private final com.labo.anapath.mobile.MobileDeviceRepository appareils;
 
@@ -235,6 +238,7 @@ public class DiscussionService {
         DiscussionMessage message = messages.save(
                 new DiscussionMessage(fil, auteurId, voulu, nom, taggedUserId));
         lectures.save(new DiscussionLecture(message.getId(), auteurId));
+        rattachements.rattacher(nom, FichierStocke.DISCUSSION_MESSAGE, message.getId(), demande.getBranchId());
 
         log.info("Fichier posté au fil : dossier={} auteur={} type={} taille={}",
                 testOrderId, auteurId, voulu, fichier.getSize());

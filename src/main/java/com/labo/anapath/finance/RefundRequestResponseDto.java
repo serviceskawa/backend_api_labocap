@@ -1,5 +1,7 @@
 package com.labo.anapath.finance;
 
+import com.labo.anapath.common.storage.FichierStocke;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,4 +25,10 @@ public record RefundRequestResponseDto(
         LocalDateTime createdAt,
         /** Alimente la colonne « Dernière actualisation ». */
         LocalDateTime updatedAt
-) {}
+) {
+    /** L'identifiant du fichier pour {@code GET /files/{id}}, déduit du chemin. */
+    @JsonProperty
+    public UUID fileId() {
+        return FichierStocke.idPour(attachment);
+    }
+}

@@ -57,6 +57,7 @@ public class InvoiceSmsNotifier {
     @TransactionalEventListener
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onInvoiceValidated(InvoiceValidatedEvent event) {
+        // Global : réagit à un événement, hors requête, donc sans agence courante.
         Invoice invoice = invoiceRepository.findById(event.invoiceId()).orElse(null);
         if (invoice == null) {
             log.warn("SMS facture ignoré : facture {} introuvable", event.invoiceId());

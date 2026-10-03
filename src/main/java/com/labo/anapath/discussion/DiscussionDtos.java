@@ -1,5 +1,7 @@
 package com.labo.anapath.discussion;
 
+import com.labo.anapath.common.storage.FichierStocke;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -47,6 +49,17 @@ public final class DiscussionDtos {
             String taggedNom,
             LocalDateTime createdAt,
             boolean lu) {
+        /**
+         * L'identifiant du fichier d'une photo ou d'une note vocale, pour
+         * {@code GET /files/{id}} ; nul pour un texte. Le contenu porte l'URL
+         * ancienne manière, on en retire le préfixe pour retrouver le chemin.
+         */
+        @JsonProperty
+        public UUID fileId() {
+            return DiscussionMessage.TEXTE.equals(type) || contenu == null
+                    ? null
+                    : FichierStocke.idPour(contenu.replaceFirst("^/api/v1/files/", ""));
+        }
     }
 
     /** Un message à poster. */

@@ -37,6 +37,7 @@ class EmployeeDocumentControllerTest {
     @Mock EmployeeDocumentRepository documentRepository;
     @Mock EmployeeRepository employeeRepository;
     @Mock FileStorageService fileStorageService;
+    @Mock com.labo.anapath.common.storage.FichierStockeRepository fichiers;
 
     EmployeeDocumentController controller;
 
@@ -46,7 +47,7 @@ class EmployeeDocumentControllerTest {
 
     @BeforeEach
     void setup() {
-        controller = new EmployeeDocumentController(documentRepository, employeeRepository, fileStorageService);
+        controller = new EmployeeDocumentController(documentRepository, employeeRepository, fileStorageService, fichiers);
     }
 
     private UserPrincipal mockPrincipal() {
@@ -81,7 +82,7 @@ class EmployeeDocumentControllerTest {
         saved.setFilePath("documents/file.pdf");
         saved.setFileSize(1024L);
 
-        when(employeeRepository.findById(EMP_ID)).thenReturn(Optional.of(emp));
+        when(employeeRepository.findByIdAndBranchId(eq(EMP_ID), any())).thenReturn(Optional.of(emp));
         when(fileStorageService.store(any(), eq("documents"))).thenReturn("documents/file.pdf");
         when(documentRepository.save(any())).thenReturn(saved);
 
@@ -100,7 +101,7 @@ class EmployeeDocumentControllerTest {
         Employee emp = buildEmployee();
         EmployeeDocument saved = buildDoc(emp);
 
-        when(employeeRepository.findById(EMP_ID)).thenReturn(Optional.of(emp));
+        when(employeeRepository.findByIdAndBranchId(eq(EMP_ID), any())).thenReturn(Optional.of(emp));
         when(documentRepository.save(any())).thenReturn(saved);
 
         ResponseEntity<?> response = controller.upload(EMP_ID, "Note interne", null, null, mockPrincipal());
@@ -111,7 +112,7 @@ class EmployeeDocumentControllerTest {
     @Test
     @DisplayName("upload - employé inconnu → ResourceNotFoundException")
     void uploadDocument_unknownEmployee_throws() {
-        when(employeeRepository.findById(EMP_ID)).thenReturn(Optional.empty());
+        when(employeeRepository.findByIdAndBranchId(eq(EMP_ID), any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> controller.upload(EMP_ID, "Doc", null, null, mockPrincipal()))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -135,9 +136,9 @@ class EmployeeDocumentControllerTest {
     void getDocument_byId_returns200() {
         Employee emp = buildEmployee();
         EmployeeDocument doc = buildDoc(emp);
-        when(documentRepository.findById(DOC_ID)).thenReturn(Optional.of(doc));
+        when(documentRepository.findByIdAndBranchId(eq(DOC_ID), any())).thenReturn(Optional.of(doc));
 
-        ResponseEntity<?> response = controller.findById(DOC_ID);
+        ResponseEntity<?> response = controller.findById(DOC_ID, mockPrincipal());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
@@ -145,9 +146,9 @@ class EmployeeDocumentControllerTest {
     @Test
     @DisplayName("findById - ID inconnu → ResourceNotFoundException")
     void getDocument_unknownId_throws() {
-        when(documentRepository.findById(DOC_ID)).thenReturn(Optional.empty());
+        when(documentRepository.findByIdAndBranchId(eq(DOC_ID), any())).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> controller.findById(DOC_ID))
+        assertThatThrownBy(() -> controller.findById(DOC_ID, mockPrincipal()))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -156,7 +157,7 @@ class EmployeeDocumentControllerTest {
     void updateDocument_changesNameAndType_returns200() {
         Employee emp = buildEmployee();
         EmployeeDocument doc = buildDoc(emp);
-        when(documentRepository.findById(DOC_ID)).thenReturn(Optional.of(doc));
+        when(documentRepository.findByIdAndBranchId(eq(DOC_ID), any())).thenReturn(Optional.of(doc));
         when(documentRepository.save(any())).thenReturn(doc);
 
         EmployeeDocumentController.EmployeeDocumentUpdateDto dto =
@@ -164,7 +165,7 @@ class EmployeeDocumentControllerTest {
         dto.setName("Diplôme mis à jour");
         dto.setType("diplome");
 
-        ResponseEntity<?> response = controller.update(DOC_ID, dto);
+        ResponseEntity<?> response = controller.update(DOC_ID, dto, mockPrincipal());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(doc.getName()).isEqualTo("Diplôme mis à jour");
@@ -176,9 +177,9 @@ class EmployeeDocumentControllerTest {
     void deleteDocument_softDeletes_returnsOk() {
         Employee emp = buildEmployee();
         EmployeeDocument doc = buildDoc(emp);
-        when(documentRepository.findById(DOC_ID)).thenReturn(Optional.of(doc));
+        when(documentRepository.findByIdAndBranchId(eq(DOC_ID), any())).thenReturn(Optional.of(doc));
 
-        ResponseEntity<?> response = controller.delete(DOC_ID);
+        ResponseEntity<?> response = controller.delete(DOC_ID, mockPrincipal());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         verify(documentRepository).delete(doc);
@@ -196,10 +197,10 @@ class EmployeeDocumentControllerTest {
             @Override public boolean exists() { return true; }
         };
 
-        when(documentRepository.findById(DOC_ID)).thenReturn(Optional.of(doc));
+        when(documentRepository.findByIdAndBranchId(eq(DOC_ID), any())).thenReturn(Optional.of(doc));
         when(fileStorageService.load(anyString())).thenReturn(resource);
 
-        ResponseEntity<Resource> response = controller.download(DOC_ID);
+        ResponseEntity<Resource> response = controller.download(DOC_ID, mockPrincipal());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getHeaders().getFirst("Content-Disposition")).contains("attachment");
@@ -216,10 +217,10 @@ class EmployeeDocumentControllerTest {
             @Override public boolean exists() { return false; }
         };
 
-        when(documentRepository.findById(DOC_ID)).thenReturn(Optional.of(doc));
+        when(documentRepository.findByIdAndBranchId(eq(DOC_ID), any())).thenReturn(Optional.of(doc));
         when(fileStorageService.load(anyString())).thenReturn(resource);
 
-        assertThatThrownBy(() -> controller.download(DOC_ID))
+        assertThatThrownBy(() -> controller.download(DOC_ID, mockPrincipal()))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 }

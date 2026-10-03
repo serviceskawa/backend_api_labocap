@@ -1,5 +1,8 @@
 package com.labo.anapath.hr;
 
+import com.labo.anapath.common.branch.BranchContext;
+import com.labo.anapath.common.storage.FichierStockeRepository;
+import com.labo.anapath.common.storage.FichierStocke;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
@@ -24,10 +27,12 @@ import java.util.UUID;
 @Slf4j
 public class EmployeeServiceImpl implements EmployeeService {
 
+    // Les utilisateurs (findById) sont un référentiel global, pas un dossier.
     private final EmployeeRepository employeeRepository;
     private final UserRepository userRepository;
     private final EmployeeMapper employeeMapper;
     private final FileStorageService fileStorageService;
+    private final FichierStockeRepository fichiers;
 
     /**
      * {@inheritDoc}
@@ -45,7 +50,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     @Override
     @Transactional(readOnly = true)
     public EmployeeResponseDto findById(UUID id) {
-        return employeeMapper.toResponseDto(employeeRepository.findById(id)
+        return employeeMapper.toResponseDto(employeeRepository.findByIdAndBranchId(id, BranchContext.get())
                 .orElseThrow(() -> new ResourceNotFoundException("Employé", id)));
     }
 
@@ -82,7 +87,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     @Override
     @Transactional
     public EmployeeResponseDto update(UUID id, EmployeeRequestDto dto) {
-        Employee employee = employeeRepository.findById(id)
+        Employee employee = employeeRepository.findByIdAndBranchId(id, BranchContext.get())
                 .orElseThrow(() -> new ResourceNotFoundException("Employé", id));
         employee.setFirstName(dto.getFirstName());
         employee.setLastName(dto.getLastName());
@@ -113,7 +118,7 @@ public class EmployeeServiceImpl implements EmployeeService {
     @Override
     @Transactional
     public void delete(UUID id) {
-        Employee employee = employeeRepository.findById(id)
+        Employee employee = employeeRepository.findByIdAndBranchId(id, BranchContext.get())
                 .orElseThrow(() -> new ResourceNotFoundException("Employé", id));
         employeeRepository.delete(employee);
     }
@@ -130,11 +135,12 @@ public class EmployeeServiceImpl implements EmployeeService {
         if (file == null || file.isEmpty()) {
             throw new InvalidOperationException("Aucun fichier fourni");
         }
-        Employee employee = employeeRepository.findById(id)
+        Employee employee = employeeRepository.findByIdAndBranchId(id, BranchContext.get())
                 .orElseThrow(() -> new ResourceNotFoundException("Employé", id));
         String oldPhoto = employee.getPhotoUrl();
         String path = fileStorageService.store(file, "employees/photos");
         employee.setPhotoUrl(path);
+        fichiers.rattacher(path, FichierStocke.EMPLOYEE, employee.getId(), employee.getBranchId());
         EmployeeResponseDto dto = employeeMapper.toResponseDto(employeeRepository.save(employee));
         if (oldPhoto != null && !oldPhoto.isBlank()) {
             try {

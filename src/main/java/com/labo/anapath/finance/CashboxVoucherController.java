@@ -1,5 +1,7 @@
 package com.labo.anapath.finance;
 
+import com.labo.anapath.common.storage.FichierStockeRepository;
+import com.labo.anapath.common.storage.FichierStocke;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.security.UserPrincipal;
@@ -33,6 +35,7 @@ public class CashboxVoucherController {
 
     private final CashboxVoucherService voucherService;
     private final FileStorageService fileStorageService;
+    private final FichierStockeRepository fichiers;
 
     @GetMapping
     @PreAuthorize("hasAuthority('view-cashbox-tickets')")
@@ -87,11 +90,14 @@ public class CashboxVoucherController {
     public ResponseEntity<ApiResponse<CashboxVoucherResponseDto>> update(
             @PathVariable UUID id,
             @Valid @RequestPart("data") CashboxVoucherRequestDto dto,
-            @RequestPart(value = "file", required = false) MultipartFile file) {
+            @RequestPart(value = "file", required = false) MultipartFile file,
+            @AuthenticationPrincipal UserPrincipal principal) {
         if (file != null && !file.isEmpty()) {
             dto.setTicketFile(fileStorageService.store(file, "bons"));
         }
-        return ResponseEntity.ok(ApiResponse.success(voucherService.update(id, dto)));
+        CashboxVoucherResponseDto bon = voucherService.update(id, dto);
+        fichiers.rattacher(dto.getTicketFile(), FichierStocke.CASHBOX_VOUCHER, id, principal.getBranchId());
+        return ResponseEntity.ok(ApiResponse.success(bon));
     }
 
     @DeleteMapping("/{id}")

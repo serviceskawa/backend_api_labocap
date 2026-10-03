@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -147,7 +148,7 @@ class CatalogueEtiquettesTest {
         ligne.setBranchId(BRANCHE);
         ligne.setLabels("[\"L1\",\"Immuno non payé\"]");
         ligne.setNote("urgent");
-        when(detailRepository.findById(any())).thenReturn(java.util.Optional.of(ligne));
+        when(detailRepository.findByIdAndBranchId(any(), any())).thenReturn(java.util.Optional.of(ligne));
         when(detailRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(labelRepository.chercher(any(), any())).thenReturn(java.util.Optional.empty());
 
@@ -166,7 +167,7 @@ class CatalogueEtiquettesTest {
         TestOrderAssignmentDetail ligne = new TestOrderAssignmentDetail();
         ligne.setBranchId(BRANCHE);
         ligne.setNote("à traiter avant midi");
-        when(detailRepository.findById(any())).thenReturn(java.util.Optional.of(ligne));
+        when(detailRepository.findByIdAndBranchId(any(), any())).thenReturn(java.util.Optional.of(ligne));
         when(detailRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(labelRepository.chercher(any(), any())).thenReturn(java.util.Optional.empty());
 
@@ -181,9 +182,9 @@ class CatalogueEtiquettesTest {
     @Test
     @DisplayName("on ne corrige pas la ligne d'une autre branche")
     void correctionCloisonnee() {
-        TestOrderAssignmentDetail ligne = new TestOrderAssignmentDetail();
-        ligne.setBranchId(AUTRE_BRANCHE);
-        when(detailRepository.findById(any())).thenReturn(java.util.Optional.of(ligne));
+        // Le cloisonnement est celui du dépôt : dans l'agence de l'appelant, la
+        // ligne d'une autre agence n'existe pas.
+        when(detailRepository.findByIdAndBranchId(any(), eq(BRANCHE))).thenReturn(java.util.Optional.empty());
 
         assertThatThrownBy(() -> service.modifierDetail(UUID.randomUUID(),
                 new CorrectionDetailDto(List.of("L1"), null), BRANCHE))

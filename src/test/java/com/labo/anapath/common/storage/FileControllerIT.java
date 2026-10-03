@@ -69,6 +69,10 @@ class FileControllerIT {
     @Autowired private UserRepository userRepository;
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private Jetons jetons;
+    @Autowired private com.labo.anapath.role.RoleRepository roleRepository;
+    @Autowired private FichierStockeRepository fichiers;
+
+    private static final UUID AGENCE = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     private static final String EMAIL = "fichiers_it@labo.bj";
 
@@ -83,6 +87,9 @@ class FileControllerIT {
             user.setEmail(EMAIL);
             user.setPassword(passwordEncoder.encode("fichiersPass123"));
             user.setActive(true);
+            // Admin du jeu de données : le fichier n'est servi qu'à qui peut
+            // lire l'entité qui le possède.
+            user.setRoles(java.util.List.of(roleRepository.findBySlugAndBranchId("admin", AGENCE).orElseThrow()));
             userRepository.save(user);
         }
     }
@@ -101,6 +108,7 @@ class FileControllerIT {
         String uuid = UUID.randomUUID().toString();
         Path file = docDir.resolve(uuid + ".pdf");
         Files.write(file, "PDF content".getBytes());
+        fichiers.rattacher("documents/" + uuid + ".pdf", FichierStocke.DOC, UUID.randomUUID(), AGENCE);
 
         ResponseEntity<byte[]> response = restTemplate.exchange(
                 "http://localhost:" + port + "/api/v1/files/documents/" + uuid + ".pdf",

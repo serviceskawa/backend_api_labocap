@@ -1,5 +1,6 @@
 package com.labo.anapath.prestationorder;
 
+import com.labo.anapath.common.branch.BranchContext;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.patient.Patient;
@@ -43,7 +44,7 @@ public class PrestationOrderServiceImpl implements PrestationOrderService {
     public PrestationOrderResponseDto create(PrestationOrderRequestDto dto, UUID branchId) {
         Prestation prestation = prestationRepository.findById(dto.getPrestationId())
                 .orElseThrow(() -> new ResourceNotFoundException("Prestation", dto.getPrestationId()));
-        Patient patient = patientRepository.findById(dto.getPatientId())
+        Patient patient = patientRepository.findByIdAndBranchId(dto.getPatientId(), branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Patient", dto.getPatientId()));
         PrestationOrder order = new PrestationOrder();
         order.setBranchId(branchId);
@@ -62,7 +63,7 @@ public class PrestationOrderServiceImpl implements PrestationOrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Order prestation", id));
         Prestation prestation = prestationRepository.findById(dto.getPrestationId())
                 .orElseThrow(() -> new ResourceNotFoundException("Prestation", dto.getPrestationId()));
-        Patient patient = patientRepository.findById(dto.getPatientId())
+        Patient patient = patientRepository.findByIdAndBranchId(dto.getPatientId(), BranchContext.get())
                 .orElseThrow(() -> new ResourceNotFoundException("Patient", dto.getPatientId()));
         order.setPrestation(prestation);
         order.setPatient(patient);

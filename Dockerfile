@@ -22,7 +22,10 @@ FROM eclipse-temurin:21.0.12.1_1-jre-alpine
 #
 # Version 16, celle du serveur : `pg_dump` refuse de sauvegarder une base dont
 # la version majeure dépasse la sienne. À faire suivre si le serveur monte.
-RUN apk add --no-cache postgresql16-client
+#
+# `age` chiffre chaque export à la volée (pg_dump | age -r <clé publique>) :
+# aucun SQL en clair ne touche le disque, et la clé privée n'est pas ici.
+RUN apk add --no-cache age postgresql16-client
 
 # Utilisateur non-root pour la sécurité
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
@@ -47,7 +50,8 @@ ENV STORAGE_PATH=/var/lib/labo/storage
 # conteneur tourne en non-root. Il vivait auparavant dans /app, hors de tout
 # volume : chaque redéploiement l'emportait.
 ENV APP_BACKUP_DIR=/var/lib/labo/backups
-RUN mkdir -p "$STORAGE_PATH" "$APP_BACKUP_DIR" && chown -R appuser:appgroup /var/lib/labo
+# Le journal applicatif aussi (LOG_FILE sous /var/lib/labo/logs, volume `logs`).
+RUN mkdir -p "$STORAGE_PATH" "$APP_BACKUP_DIR" /var/lib/labo/logs && chown -R appuser:appgroup /var/lib/labo
 
 USER appuser
 

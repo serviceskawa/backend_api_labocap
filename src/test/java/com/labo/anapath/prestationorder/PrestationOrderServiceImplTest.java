@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -64,7 +65,7 @@ class PrestationOrderServiceImplTest {
                 "Nouveau", BRANCH_ID, null);
 
         when(prestationRepository.findById(PRESTATION_ID)).thenReturn(Optional.of(prestation));
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdAndBranchId(eq(PATIENT_ID), any())).thenReturn(Optional.of(patient));
         when(repository.save(any())).thenReturn(saved);
         when(mapper.toResponseDto(saved)).thenReturn(responseDto);
 
@@ -101,7 +102,7 @@ class PrestationOrderServiceImplTest {
         dto.setPatientId(PATIENT_ID);
 
         when(prestationRepository.findById(PRESTATION_ID)).thenReturn(Optional.of(prestation));
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.empty());
+        when(patientRepository.findByIdAndBranchId(eq(PATIENT_ID), any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(dto, BRANCH_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -136,7 +137,7 @@ class PrestationOrderServiceImplTest {
         dto.setPatientId(PATIENT_ID);
 
         when(prestationRepository.findById(PRESTATION_ID)).thenReturn(Optional.of(prestation));
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdAndBranchId(eq(PATIENT_ID), any())).thenReturn(Optional.of(patient));
         when(repository.save(any())).thenReturn(saved);
         when(mapper.toResponseDto(saved)).thenReturn(
                 new PrestationOrderResponseDto(UUID.randomUUID(), PATIENT_ID, "Marie KONE",

@@ -1,5 +1,6 @@
 package com.labo.anapath.finance;
 
+import com.labo.anapath.common.branch.BranchContext;
 import com.labo.anapath.common.NomComplet;
 
 import com.labo.anapath.common.dto.PageResponse;
@@ -32,7 +33,7 @@ public class RefundServiceImpl implements RefundService {
             throw new InvalidOperationException("REFUND_ALREADY_EXISTS");
         }
 
-        Invoice invoice = invoiceRepository.findById(dto.getInvoiceId())
+        Invoice invoice = invoiceRepository.findByIdAndBranchId(dto.getInvoiceId(), branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Facture", dto.getInvoiceId()));
 
         if (dto.getMontant().compareTo(invoice.getTotal()) > 0) {
@@ -67,7 +68,7 @@ public class RefundServiceImpl implements RefundService {
         RefundRequest refund = refundRequestRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Demande de remboursement", id));
 
-        Invoice invoice = invoiceRepository.findById(dto.getInvoiceId())
+        Invoice invoice = invoiceRepository.findByIdAndBranchId(dto.getInvoiceId(), BranchContext.get())
                 .orElseThrow(() -> new ResourceNotFoundException("Facture", dto.getInvoiceId()));
 
         if (dto.getMontant().compareTo(invoice.getTotal()) > 0) {

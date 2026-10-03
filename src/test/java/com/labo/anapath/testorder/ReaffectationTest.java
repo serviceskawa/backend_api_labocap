@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -109,9 +110,9 @@ class ReaffectationTest {
 
     private void monterLeDecor(TestOrderAssignment nouveauLot,
                                Optional<TestOrderAssignmentDetail> courante) {
-        when(assignmentRepository.findById(nouveauLot.getId()))
+        when(assignmentRepository.findByIdAndBranchId(eq(nouveauLot.getId()), any()))
                 .thenReturn(Optional.of(nouveauLot));
-        when(testOrderRepository.findById(DEMANDE)).thenReturn(Optional.of(demande()));
+        when(testOrderRepository.findByIdAndBranchId(eq(DEMANDE), any())).thenReturn(Optional.of(demande()));
         when(detailRepository.findByTestOrderId(DEMANDE)).thenReturn(courante);
         when(detailRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         when(macroRepository.findByTestOrderId(any())).thenReturn(Optional.empty());

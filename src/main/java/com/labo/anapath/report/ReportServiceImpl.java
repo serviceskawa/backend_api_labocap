@@ -1,11 +1,13 @@
 package com.labo.anapath.report;
 
+import com.labo.anapath.common.branch.BranchContext;
 import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.NomComplet;
 
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.email.EmailService;
 import com.labo.anapath.common.email.NotificationSettings;
+import com.labo.anapath.common.exception.AccesRefuseExplique;
 import com.labo.anapath.common.exception.InvalidOperationException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.setting.SettingReportTemplate;
@@ -26,7 +28,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 /**
  * Implémentation du service de gestion des comptes-rendus anatomopathologiques.
@@ -57,9 +61,24 @@ public class ReportServiceImpl implements ReportService {
     private final com.labo.anapath.mobile.ProvenanceRequete provenanceRequete;
     private final com.labo.anapath.testorder.TestOrderAssignmentDetailRepository assignmentDetailRepository;
     private final ServicePerimetreDeValidation perimetreDeValidation;
+    private final com.labo.anapath.testorder.PerimetreDuMedecin perimetreDuMedecin;
     private final JournalDesRefus journalDesRefus;
     /** Pour relire les étiquettes, rangées en tableau JSON sur la ligne d'affectation. */
     private final tools.jackson.databind.ObjectMapper objectMapper;
+    private final ReportVersionRepository reportVersionRepository;
+
+    // Les findById restants (utilisateurs, titres, modèles) visent des
+    // référentiels globaux, pas des dossiers.
+
+    /**
+     * Le compte rendu, dans l'agence de la requête : un identifiant d'une
+     * autre agence est introuvable, pas interdit — le second message
+     * révélerait qu'il existe.
+     */
+    private Report charger(UUID id) {
+        return reportRepository.findByIdAndBranchId(id, BranchContext.get())
+                .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -99,15 +118,15 @@ public class ReportServiceImpl implements ReportService {
         String searchParam = (search != null && !search.isBlank()) ? search.trim() : null;
         return PageResponse.of(reportRepository.findFilteredWithSearch(
                 branchId, month, year, doctorId, statusParam, searchParam,
-                disciplineOuDefaut(discipline).name(), PageRequest.of(page, size))
+                disciplineOuDefaut(discipline).name(), perimetreDuMedecin.medecinBorne(),
+                PageRequest.of(page, size))
                 .map(reportMapper::toResponseDto));
     }
 
     @Override
     @Transactional(readOnly = true)
     public ReportResponseDto findById(UUID id) {
-        return reportMapper.toResponseDto(reportRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id)));
+        return reportMapper.toResponseDto(charger(id));
     }
 
     @Override
@@ -161,11 +180,10 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public ReportDetailDto findDetailById(UUID id, UUID branchId) {
-        Report report = reportRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
-        if (!report.getBranchId().equals(branchId)) {
-            throw new ResourceNotFoundException("Compte-rendu", id);
-        }
+        Report report = charger(id);
+        // Hors périmètre du médecin : introuvable aussi, pas interdit — le
+        // second message révélerait que le compte rendu existe.
+        perimetreDuMedecin.exiger(report);
 
         List<LogReport> logs = logReportRepository.findByReportIdOrderByCreatedAtDesc(id);
         List<ReportDetailDto.LogReportDto> logDtos = logs.stream()
@@ -282,33 +300,35 @@ public class ReportServiceImpl implements ReportService {
                 .orElse(Affectation.AUCUNE);
     }
 
+    /** Message rendu quand {@code POST /reports} reçoit un {@code reportId}. */
+    static final String MODIFICATION_PAR_PUT =
+            "Un compte-rendu existant se modifie par PUT /reports/{id}, pas par POST /reports.";
+
+    /**
+     * Crée un compte-rendu. Création seulement : cette méthode acceptait un
+     * {@code reportId} et réécrivait alors le compte-rendu sans passer par la
+     * trace « après signature » ni, désormais, par la prise de version — un
+     * chemin de modification qui échappait à tout ce que {@link #update}
+     * garantit. Le contrôleur répond 400 avant d'arriver ici ; la garde reste
+     * pour tout autre appelant.
+     */
     @Override
     @Transactional
     public ReportResponseDto createOrUpdate(ReportRequestDto dto, UUID branchId) {
-        Report report;
-        boolean isCreate = dto.getReportId() == null;
-
-        if (!isCreate) {
-            report = reportRepository.findById(dto.getReportId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", dto.getReportId()));
-            exigerAnatomiePathologique(report);
-            // Un compte-rendu livré reste modifiable : voir la note sur
-            // `update` ci-dessous — la livraison est un fait matériel, pas un
-            // scellé éditorial, et les compléments arrivent après la remise.
-        } else {
-            report = new Report();
-            report.setBranchId(branchId);
-            if (dto.getTestOrderId() == null) {
-                throw new InvalidOperationException("Le bon d'examen est obligatoire à la création.");
-            }
-            report.setTestOrder(testOrderRepository.findById(dto.getTestOrderId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", dto.getTestOrderId())));
-            exigerBonDAnatomiePathologique(report.getTestOrder());
+        if (dto.getReportId() != null) {
+            throw new InvalidOperationException(MODIFICATION_PAR_PUT);
         }
+        Report report = new Report();
+        report.setBranchId(branchId);
+        if (dto.getTestOrderId() == null) {
+            throw new InvalidOperationException("Le bon d'examen est obligatoire à la création.");
+        }
+        report.setTestOrder(testOrderRepository.findByIdAndBranchId(dto.getTestOrderId(), branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", dto.getTestOrderId())));
+        exigerBonDAnatomiePathologique(report.getTestOrder());
 
         // Statut d'avant écriture : c'est la transition vers VALIDATED, et non le
-        // fait d'être validé, qui prévient le patient. Sans cette comparaison, tout
-        // réenregistrement d'un compte-rendu déjà validé le rappellerait.
+        // fait d'être validé, qui prévient le patient — voir signalerValidation.
         ReportStatus statutInitial = report.getStatus();
 
         report.setContent(dto.getContent());
@@ -364,7 +384,8 @@ public class ReportServiceImpl implements ReportService {
         }
 
         Report saved = reportRepository.save(report);
-        logAction(saved.getId(), isCreate ? "CREATE" : "UPDATE", branchId);
+        // L'auteur, pas l'agence : avec branchId la ligne restait sans utilisateur.
+        logAction(saved.getId(), "CREATE", utilisateurCourant());
         signalerValidation(statutInitial, saved, utilisateurCourant());
         return reportMapper.toResponseDto(saved);
     }
@@ -398,6 +419,7 @@ public class ReportServiceImpl implements ReportService {
                 isUrgent, statusFilter,
                 Boolean.TRUE.equals(isLate) ? Boolean.TRUE : null,
                 disciplineOuDefaut(discipline).name(),
+                perimetreDuMedecin.medecinBorne(),
                 pageRequest);
 
         return PageResponse.of(resultPage.map(p -> new ReportSuiviRowDto(
@@ -501,7 +523,7 @@ public class ReportServiceImpl implements ReportService {
         report.setReceiverName(dto.getReceiverName());
         report.setStatus(ReportStatus.DRAFT);
 
-        report.setTestOrder(testOrderRepository.findById(dto.getTestOrderId())
+        report.setTestOrder(testOrderRepository.findByIdAndBranchId(dto.getTestOrderId(), branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", dto.getTestOrderId())));
         exigerBonDAnatomiePathologique(report.getTestOrder());
 
@@ -522,7 +544,7 @@ public class ReportServiceImpl implements ReportService {
         }
 
         Report saved = reportRepository.save(report);
-        logAction(saved.getId(), "CREATE", branchId);
+        logAction(saved.getId(), "CREATE", utilisateurCourant());
         return reportMapper.toResponseDto(saved);
     }
 
@@ -559,6 +581,11 @@ public class ReportServiceImpl implements ReportService {
      * moment même où elle devient utile, et bloquait la correction de dossiers
      * déjà sortis.</p>
      *
+     * <p>Mais un compte-rendu validé ou livré ne s'écrase pas sans mémoire :
+     * son état complet est conservé dans {@link ReportVersion} avant
+     * l'écriture, et un compte-rendu livré n'est retouché que par un
+     * signataire, avec un motif — voir {@link #exigerSignataireEtMotif}.</p>
+     *
      * @param id  identifiant UUID du CR
      * @param dto nouvelles données
      * @return le CR mis à jour
@@ -566,19 +593,30 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional
     public ReportResponseDto update(UUID id, ReportRequestDto dto, UUID userId, UUID branchId) {
-        Report report = reportRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
+        Report report = charger(id);
         exigerAnatomiePathologique(report);
-
-        // Un compte-rendu est signé dès qu'un médecin y est apposé et que la
-        // validation a posé la date. L'empreinte est prise AVANT toute écriture :
-        // au-delà, l'état d'origine est perdu et la comparaison impossible.
-        EmpreinteCompteRendu empreinte = EmpreinteCompteRendu.concerne(report)
-                ? EmpreinteCompteRendu.de(report) : null;
 
         // Statut d'avant écriture : seule la transition vers VALIDATED prévient le
         // patient — voir signalerValidation.
         ReportStatus statutInitial = report.getStatus();
+
+        if (statutInitial == ReportStatus.DELIVERED) {
+            exigerSignataireEtMotif(report, dto.getReason(), userId);
+        }
+
+        // Empreinte et photographie prises AVANT toute écriture : au-delà,
+        // l'état d'origine est perdu, la comparaison impossible et la version
+        // antérieure irrécupérable.
+        //   - l'empreinte dit si quelque chose a réellement changé (l'écran
+        //     réenregistre tous les champs, y compris à l'identique) ;
+        //   - « signé » (un médecin apposé, une date de signature) déclenche la
+        //     trace et l'alerte « après signature » ;
+        //   - validé ou livré déclenche la conservation de l'état complet.
+        EmpreinteCompteRendu empreinte = EmpreinteCompteRendu.de(report);
+        boolean signe = EmpreinteCompteRendu.concerne(report);
+        ReportVersion etatAvant = statutInitial == ReportStatus.VALIDATED || statutInitial == ReportStatus.DELIVERED
+                ? ReportVersion.de(report, userRepository.findById(userId).orElse(null))
+                : null;
 
         // -------------------------------------------------------------------
         // Réplique EXACTE de ReportController@store (Laravel) : un unique
@@ -666,10 +704,14 @@ public class ReportServiceImpl implements ReportService {
         }
         logAction(saved.getId(), "Mettre à jour", userId);
 
-        if (empreinte != null) {
-            List<String> champsModifies = empreinte.champsModifies(saved);
-            if (!champsModifies.isEmpty()) {
-                tracerModificationApresSignature(saved, champsModifies, userId);
+        List<String> champsModifies = empreinte.champsModifies(saved);
+        if (!champsModifies.isEmpty()) {
+            if (etatAvant != null) {
+                etatAvant.setVersion((int) reportVersionRepository.countByReportId(saved.getId()) + 1);
+                reportVersionRepository.save(etatAvant);
+            }
+            if (signe) {
+                tracerModificationApresSignature(saved, champsModifies, userId, dto.getReason());
             }
         }
 
@@ -690,7 +732,7 @@ public class ReportServiceImpl implements ReportService {
     public List<ModificationApresSignatureDto> getModificationsApresSignature(UUID reportId) {
         // Un compte-rendu inconnu garde le comportement d'origine — une liste
         // vide — et seul un compte-rendu d'une autre discipline est refusé.
-        reportRepository.findById(reportId).ifPresent(ReportServiceImpl::exigerAnatomiePathologique);
+        reportRepository.findByIdAndBranchId(reportId, BranchContext.get()).ifPresent(ReportServiceImpl::exigerAnatomiePathologique);
         return logReportRepository
                 .findByReportIdAndActionOrderByCreatedAtAsc(reportId, ACTION_APRES_SIGNATURE)
                 .stream()
@@ -704,6 +746,77 @@ public class ReportServiceImpl implements ReportService {
                 .toList();
     }
 
+    /** Longueur minimale du motif exigé pour retoucher un compte-rendu livré. */
+    static final int MOTIF_MINIMUM = 20;
+
+    /**
+     * Qui peut encore toucher un compte-rendu livré.
+     *
+     * <p>Le résultat est sorti : le patient ou le prescripteur l'a en main.
+     * Le modifier engage ceux dont la signature y figure, et eux seuls (ou la
+     * personne qui a posé la validation) peuvent en décider — avec un motif,
+     * qui suit la modification dans le journal et dans l'alerte envoyée aux
+     * administrateurs.</p>
+     *
+     * <p><b>Choix du laboratoire.</b> Pour interdire toute modification après
+     * livraison, remplacer le corps de cette méthode par un refus
+     * inconditionnel : {@code throw new AccesRefuseExplique("Un compte-rendu
+     * livré ne se modifie plus.")}. Rien d'autre n'a à changer.</p>
+     */
+    private static void exigerSignataireEtMotif(Report report, String motif, UUID userId) {
+        boolean signataire = Stream.of(report.getSignatory1(), report.getSignatory2(),
+                        report.getSignatory3(), report.getValidatedBy())
+                .filter(Objects::nonNull)
+                .anyMatch(u -> u.getId().equals(userId));
+        if (!signataire) {
+            // Motif montré : il ne parle que du compte-rendu que la personne a
+            // déjà sous les yeux, et lui dit à qui s'adresser.
+            throw new AccesRefuseExplique("Ce compte-rendu a été livré : seul un de ses signataires, "
+                    + "ou la personne qui l'a validé, peut encore le modifier.");
+        }
+        if (motif == null || motif.strip().length() < MOTIF_MINIMUM) {
+            throw new InvalidOperationException("Modifier un compte-rendu livré exige un motif d'au moins "
+                    + MOTIF_MINIMUM + " caractères.");
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional(readOnly = true)
+    public List<VersionDeCompteRenduDto.Resume> listerVersions(UUID reportId, UUID branchId) {
+        exigerDansLAgence(reportId, branchId);
+        return reportVersionRepository.findByReportIdOrderByVersionAsc(reportId).stream()
+                .map(v -> new VersionDeCompteRenduDto.Resume(
+                        v.getVersion(), v.getSavedAt(), nomDe(v.getSavedBy()), v.getStatus().name()))
+                .toList();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional(readOnly = true)
+    public VersionDeCompteRenduDto lireVersion(UUID reportId, int numero, UUID branchId) {
+        exigerDansLAgence(reportId, branchId);
+        ReportVersion v = reportVersionRepository.findByReportIdAndVersion(reportId, numero)
+                .orElseThrow(() -> new ResourceNotFoundException("Version " + numero + " du compte-rendu", reportId));
+        return new VersionDeCompteRenduDto(v.getVersion(), v.getSavedAt(), nomDe(v.getSavedBy()),
+                v.getStatus().name(), v.getTitle(), v.getSignataires(), v.getContent(), v.getContentMicro(),
+                v.getComment(), v.getCommentSup(), v.getDescriptionSupplementaire(),
+                v.getDescriptionSupplementaireMicro());
+    }
+
+    /** Un compte-rendu d'une autre agence n'existe pas pour l'appelant — même réponse qu'un inconnu. */
+    private void exigerDansLAgence(UUID reportId, UUID branchId) {
+        Report report = reportRepository.findById(reportId)
+                .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", reportId));
+        if (!report.getBranchId().equals(branchId)) {
+            throw new ResourceNotFoundException("Compte-rendu", reportId);
+        }
+    }
+
+    private static String nomDe(User u) {
+        return u != null ? NomComplet.de(u.getLastname(), u.getFirstname()) : "Utilisateur supprimé";
+    }
+
     /**
      * Extrait la liste des champs de la description journalisée.
      *
@@ -715,7 +828,7 @@ public class ReportServiceImpl implements ReportService {
         if (description == null) {
             return "";
         }
-        int position = description.indexOf(MARQUEUR_CHAMPS);
+        int position = description.lastIndexOf(MARQUEUR_CHAMPS);
         return position >= 0
                 ? description.substring(position + MARQUEUR_CHAMPS.length())
                 : description;
@@ -736,19 +849,24 @@ public class ReportServiceImpl implements ReportService {
      * absorbe déjà ses propres erreurs ; on protège ici la résolution des
      * destinataires, qui dépend d'un paramétrage pouvant manquer.</p>
      */
-    private void tracerModificationApresSignature(Report report, List<String> champs, UUID userId) {
+    private void tracerModificationApresSignature(Report report, List<String> champs, UUID userId,
+                                                  String motif) {
         User auteur = userRepository.findById(userId).orElse(null);
         String nomAuteur = auteur != null
                 ? NomComplet.de(auteur.getLastname(), auteur.getFirstname())
                 : "Utilisateur inconnu";
         String listeChamps = String.join(", ", champs);
+        String motifNet = motif != null && !motif.isBlank() ? motif.strip() : null;
 
         LogReport trace = new LogReport();
         trace.setBranchId(report.getBranchId());
         trace.setReport(report);
         trace.setUser(auteur);
         trace.setAction(ACTION_APRES_SIGNATURE);
+        // Le motif précède le marqueur des champs, que la relecture cherche en
+        // dernière position.
         trace.setDescription("Modifié par " + nomAuteur + " après signature. "
+                + (motifNet != null ? "Motif : " + motifNet + ". " : "")
                 + MARQUEUR_CHAMPS + listeChamps);
         logReportRepository.save(trace);
 
@@ -763,7 +881,7 @@ public class ReportServiceImpl implements ReportService {
                     : "";
             for (String destinataire : notificationSettings.adminEmails(report.getBranchId())) {
                 emailService.sendPostSignatureChangeAlert(destinataire, report.getCode(),
-                        codeDemande, signataire, nomAuteur, listeChamps, nomLabo);
+                        codeDemande, signataire, nomAuteur, listeChamps, motifNet, nomLabo);
             }
         } catch (Exception e) {
             log.error("Alerte de modification après signature non envoyée pour {}: {}",
@@ -779,8 +897,9 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional
     public void delete(UUID id) {
-        Report report = reportRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
+        Report report = charger(id);
+        // Suppression douce (deleted_at) : la trace survit au compte rendu.
+        logAction(id, "DELETE", utilisateurCourant());
         reportRepository.delete(report);
     }
 
@@ -800,8 +919,7 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional
     public ReportResponseDto validate(UUID id, UUID userId, ValidationSigneeDto preuve) {
-        Report report = reportRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
+        Report report = charger(id);
         // Point d'entrée d'anatomie pathologique (web et mobile) : un compte-rendu
         // de biologie se valide par son propre circuit, qui appellera le cœur
         // commun ci-dessous après ses propres contrôles.
@@ -935,8 +1053,7 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional
     public ReportResponseDto deliver(UUID id, String receiverName, UUID userId) {
-        Report report = reportRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
+        Report report = charger(id);
         if (report.getStatus() != ReportStatus.VALIDATED) {
             throw new InvalidOperationException("Le compte-rendu doit être validé avant d'être livré.");
         }
@@ -957,8 +1074,7 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional
     public ReportResponseDto markDelivered(UUID id, UUID userId) {
-        Report report = reportRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
+        Report report = charger(id);
         report.setDelivered(true);
         report.setDeliveryDate(LocalDateTime.now());
         // Cohérence : statut du rapport ET de la demande passent à DELIVERED.
@@ -974,8 +1090,7 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional
     public ReportResponseDto markInformed(UUID id, UUID userId) {
-        Report report = reportRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
+        Report report = charger(id);
         report.setCalled(true);
         report.setCallDate(LocalDateTime.now());
         Report saved = reportRepository.save(report);
@@ -986,8 +1101,7 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional
     public ReportResponseDto storeSignature(UUID id, StoreSignatureRequestDto dto, UUID userId) {
-        Report report = reportRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
+        Report report = charger(id);
         // RÈGLE R5 : isDelivered ET isCalled positionnés SIMULTANÉMENT dans la même transaction
         report.setDelivered(true);
         report.setDeliveryDate(LocalDateTime.now());
@@ -995,7 +1109,7 @@ public class ReportServiceImpl implements ReportService {
         report.setCallDate(LocalDateTime.now());
         report.setRetrieverName(dto.getSignatorName());
         report.setRetrieverRelation(dto.getRelation());
-        report.setRetrieverSignature(dto.getSignature());
+        report.setRetrieverSignature(com.labo.anapath.common.security.SignatureNettoyee.nettoyer(dto.getSignature()));
         // Cohérence de statut, comme dans deliver() et markDelivered().
         //
         // Cette méthode posait `isDelivered` sans toucher au statut : le compte-rendu
@@ -1108,8 +1222,7 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public SettingReportTemplate getTemplate(UUID reportId) {
-        Report report = reportRepository.findById(reportId)
-                .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", reportId));
+        Report report = charger(reportId);
         exigerAnatomiePathologique(report);
         if (report.getTemplateId() == null) {
             throw new ResourceNotFoundException("Template", reportId);
@@ -1121,8 +1234,7 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional
     public ReportResponseDto setTemplate(UUID reportId, UUID templateId) {
-        Report report = reportRepository.findById(reportId)
-                .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", reportId));
+        Report report = charger(reportId);
         exigerAnatomiePathologique(report);
         templateRepository.findById(templateId)
                 .orElseThrow(() -> new ResourceNotFoundException("Template", templateId));
@@ -1153,7 +1265,7 @@ public class ReportServiceImpl implements ReportService {
                 (dateBegin != null && !dateBegin.isBlank()) ? dateBegin : null,
                 (dateEnd != null && !dateEnd.isBlank()) ? dateEnd : null,
                 (content != null && !content.isBlank()) ? content : null,
-                isUrgent, pageRequest);
+                isUrgent, perimetreDuMedecin.medecinBorne(), pageRequest);
 
         var rows = result.stream().map(p -> new ReportGlobalSearchRowDto(
                 p.getReportId() != null ? UUID.fromString(p.getReportId()) : null,
@@ -1196,6 +1308,7 @@ public class ReportServiceImpl implements ReportService {
                 (dateBegin != null && !dateBegin.isBlank()) ? dateBegin : null,
                 (dateEnd != null && !dateEnd.isBlank()) ? dateEnd : null,
                 disciplineOuDefaut(discipline).name(),
+                perimetreDuMedecin.medecinBorne(),
                 pageRequest);
 
         var content = result.stream().map(p -> new ReportListDto(
@@ -1279,13 +1392,16 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional
     public void logAction(UUID reportId, String action, UUID userId) {
+        // Global : journal interne d'un compte rendu que l'appelant vient de charger dans son agence.
         reportRepository.findById(reportId).ifPresent(report -> {
             LogReport logReport = new LogReport();
             logReport.setBranchId(report.getBranchId());
             logReport.setReport(report);
             logReport.setAction(action);
             logReport.setDescription("Action: " + action + " on report: " + reportId);
-            userRepository.findById(userId).ifPresent(logReport::setUser);
+            if (userId != null) {
+                userRepository.findById(userId).ifPresent(logReport::setUser);
+            }
             logReportRepository.save(logReport);
         });
     }

@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -59,7 +60,7 @@ class EmployeePayrollServiceTest {
         Employee emp = buildEmployee();
         BigDecimal gross = new BigDecimal("350000");
         BigDecimal deductions = new BigDecimal("25000");
-        when(employeeRepository.findById(EMP_ID)).thenReturn(Optional.of(emp));
+        when(employeeRepository.findByIdAndBranchId(eq(EMP_ID), any())).thenReturn(Optional.of(emp));
         when(payrollRepository.save(any())).thenReturn(buildPayroll(emp, gross, deductions));
 
         EmployeePayrollRequestDto dto = new EmployeePayrollRequestDto();
@@ -80,7 +81,7 @@ class EmployeePayrollServiceTest {
     void create_nullDeductions_usesZero() {
         Employee emp = buildEmployee();
         BigDecimal gross = new BigDecimal("300000");
-        when(employeeRepository.findById(EMP_ID)).thenReturn(Optional.of(emp));
+        when(employeeRepository.findByIdAndBranchId(eq(EMP_ID), any())).thenReturn(Optional.of(emp));
         when(payrollRepository.save(any())).thenReturn(buildPayroll(emp, gross, BigDecimal.ZERO));
 
         EmployeePayrollRequestDto dto = new EmployeePayrollRequestDto();
@@ -100,7 +101,7 @@ class EmployeePayrollServiceTest {
     @Test
     @DisplayName("create - employé inconnu → ResourceNotFoundException")
     void create_unknownEmployee_throws() {
-        when(employeeRepository.findById(EMP_ID)).thenReturn(Optional.empty());
+        when(employeeRepository.findByIdAndBranchId(eq(EMP_ID), any())).thenReturn(Optional.empty());
 
         EmployeePayrollRequestDto dto = new EmployeePayrollRequestDto();
         dto.setMonth(5);

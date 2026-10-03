@@ -62,7 +62,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     public AppointmentResponseDto create(AppointmentRequestDto dto, UUID branchId) {
         Appointment appointment = new Appointment();
         appointment.setBranchId(branchId);
-        appointment.setPatient(patientRepository.findById(dto.getPatientId())
+        appointment.setPatient(patientRepository.findByIdAndBranchId(dto.getPatientId(), branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Patient", dto.getPatientId())));
         if (dto.getDoctorId() != null) {
             appointment.setDoctorInterne(userRepository.findById(dto.getDoctorId())
@@ -83,7 +83,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (!appointment.getBranchId().equals(branchId)) {
             throw new ResourceNotFoundException("Appointment", id);
         }
-        appointment.setPatient(patientRepository.findById(dto.getPatientId())
+        appointment.setPatient(patientRepository.findByIdAndBranchId(dto.getPatientId(), branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Patient", dto.getPatientId())));
         if (dto.getDoctorId() != null) {
             appointment.setDoctorInterne(userRepository.findById(dto.getDoctorId())

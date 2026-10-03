@@ -70,7 +70,7 @@ class NormalisationEtEncaissementTest {
         ligne.setTotal(java.math.BigDecimal.valueOf(15000));
         ligne.setQuantity(1);
         facture.getDetails().add(ligne);
-        when(invoiceRepository.findById(FACTURE)).thenReturn(Optional.of(facture));
+        when(invoiceRepository.findByIdAndBranchId(eq(FACTURE), any())).thenReturn(Optional.of(facture));
         when(invoiceRepository.save(any())).thenAnswer(i -> i.getArgument(0));
     }
 

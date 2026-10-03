@@ -39,6 +39,7 @@ class DocServiceTest {
     @Mock NotificationSettings notificationSettings;
     @Mock DocMapper docMapper;
     @Mock DocVersionMapper docVersionMapper;
+    @Mock com.labo.anapath.common.storage.FichierStockeRepository fichiers;
 
     DocServiceImpl service;
 
@@ -49,7 +50,7 @@ class DocServiceTest {
     @BeforeEach
     void setup() {
         service = new DocServiceImpl(docRepository, docVersionRepository, documentationCategoryRepository,
-                userRepository, roleRepository, fileStorageService, emailService, notificationSettings,
+                userRepository, roleRepository, fileStorageService, fichiers, emailService, notificationSettings,
                 docMapper, docVersionMapper);
     }
 

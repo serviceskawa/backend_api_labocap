@@ -133,7 +133,7 @@ class UserIntegrationTest {
         dto.setFirstname("Nouveau");
         dto.setLastname("Technicien");
         dto.setEmail("technicien_new@labo.bj");
-        dto.setPassword("tech1234!");
+        dto.setPassword("Vq7-tz9Lp2-Xw4");
         dto.setRoleIds(List.of(adminRole.getId()));
 
         ResponseEntity<ApiResponse<UserResponseDto>> response = restTemplate.exchange(
@@ -163,7 +163,7 @@ class UserIntegrationTest {
         dto.setFirstname("Duplicate");
         dto.setLastname("User");
         dto.setEmail(ADMIN_EMAIL); // email déjà utilisé
-        dto.setPassword("password123");
+        dto.setPassword("Vq7-tz9Lp2-Xw4");
 
         ResponseEntity<String> response = restTemplate.exchange(
                 baseUrl(),
@@ -253,7 +253,7 @@ class UserIntegrationTest {
 
         UpdatePasswordRequest request = new UpdatePasswordRequest();
         request.setCurrentPassword(ADMIN_PASSWORD);
-        request.setNewPassword("newSecure456!");
+        request.setNewPassword("Rk3-mb8Qz5-Hn6");
 
         ResponseEntity<ApiResponse<Void>> response = restTemplate.exchange(
                 baseUrl() + "/" + admin.getId() + "/password",
@@ -280,7 +280,7 @@ class UserIntegrationTest {
 
         UpdatePasswordRequest request = new UpdatePasswordRequest();
         request.setCurrentPassword("wrongPassword999");
-        request.setNewPassword("newSecure456!");
+        request.setNewPassword("Rk3-mb8Qz5-Hn6");
 
         ResponseEntity<String> response = restTemplate.exchange(
                 baseUrl() + "/" + admin.getId() + "/password",

@@ -20,6 +20,29 @@ import java.util.UUID;
 @Repository
 public interface ReportRepository extends JpaRepository<Report, UUID> {
 
+    /** Dans l'agence donnée seulement : un identifiant d'ailleurs est introuvable. */
+    Optional<Report> findByIdAndBranchId(UUID id, UUID branchId);
+
+    /**
+     * Périmètre d'un médecin borné (voir {@code PerimetreDuMedecin}) ; nul =
+     * pas de borne. Un compte rendu lui est visible s'il l'a relu, validé ou
+     * signé, ou si la demande lui est confiée — directement ou par un lot en
+     * cours. Le {@code CAST} donne son type au paramètre nul, sans quoi
+     * PostgreSQL refuse de le lire.
+     */
+    String PERIMETRE_DU_MEDECIN = """
+              AND (CAST(:medecinId AS uuid) IS NULL
+                   OR CAST(:medecinId AS uuid) = ANY(ARRAY[r.signatory1, r.signatory2, r.signatory3,
+                                                           r.validated_by_user_id, r.reviewed_by_user_id])
+                   OR EXISTS (SELECT 1 FROM test_orders tm
+                              LEFT JOIN test_order_assignment_details dm
+                                     ON dm.test_order_id = tm.id AND dm.deleted_at IS NULL AND dm.remplacee_le IS NULL
+                              LEFT JOIN test_order_assignments am
+                                     ON am.id = dm.test_order_assignment_id AND am.deleted_at IS NULL
+                              WHERE tm.id = r.test_order_id
+                                AND CAST(:medecinId AS uuid) IN (tm.attribuate_doctor_id, tm.assigned_to_user_id, am.user_id)))
+            """;
+
     Page<Report> findByBranchId(UUID branchId, Pageable pageable);
 
     /** Les comptes-rendus d'une discipline dans la branche. */
@@ -127,6 +150,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             JOIN patients   pat ON pat.id = tor.patient_id  AND pat.deleted_at IS NULL
             WHERE r.deleted_at IS NULL
               AND r.branch_id = :branchId
+            """ + PERIMETRE_DU_MEDECIN + """
               AND (:month    IS NULL OR EXTRACT(MONTH FROM r.signature_date) = :month)
               AND (:year     IS NULL OR EXTRACT(YEAR  FROM r.signature_date) = :year)
               AND (:doctorId IS NULL OR r.signatory1 = CAST(:doctorId AS uuid))
@@ -153,6 +177,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             JOIN patients   pat ON pat.id = tor.patient_id  AND pat.deleted_at IS NULL
             WHERE r.deleted_at IS NULL
               AND r.branch_id = :branchId
+            """ + PERIMETRE_DU_MEDECIN + """
               AND (:month    IS NULL OR EXTRACT(MONTH FROM r.signature_date) = :month)
               AND (:year     IS NULL OR EXTRACT(YEAR  FROM r.signature_date) = :year)
               AND (:doctorId IS NULL OR r.signatory1 = CAST(:doctorId AS uuid))
@@ -181,6 +206,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             @Param("status") String status,
             @Param("search") String search,
             @Param("discipline") String discipline,
+            @Param("medecinId") UUID medecinId,
             Pageable pageable);
 
     @Query(value = """
@@ -286,6 +312,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             ) latest_a ON true
             LEFT JOIN users u ON latest_a.user_id = u.id
             WHERE r.branch_id = :branchId
+            """ + PERIMETRE_DU_MEDECIN + """
               AND r.deleted_at IS NULL
               AND (:search IS NULL OR :search = ''
                    OR unaccent(LOWER(COALESCE(r.code, ''))) LIKE unaccent(LOWER(CONCAT('%', CAST(:search AS text), '%')))
@@ -319,6 +346,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             JOIN test_orders t ON r.test_order_id = t.id
             JOIN patients p ON t.patient_id = p.id
             WHERE r.branch_id = :branchId
+            """ + PERIMETRE_DU_MEDECIN + """
               AND r.deleted_at IS NULL
               AND (:search IS NULL OR :search = ''
                    OR unaccent(LOWER(COALESCE(r.code, ''))) LIKE unaccent(LOWER(CONCAT('%', CAST(:search AS text), '%')))
@@ -356,6 +384,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             @Param("statusFilter") Integer statusFilter,
             @Param("isLate") Boolean isLate,
             @Param("discipline") String discipline,
+            @Param("medecinId") UUID medecinId,
             Pageable pageable);
 
     @Query(value = """
@@ -385,6 +414,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             LEFT JOIN doctors d ON t.doctor_id = d.id
             LEFT JOIN hospitals h ON t.hospital_id = h.id
             WHERE r.branch_id = :branchId
+            """ + PERIMETRE_DU_MEDECIN + """
               AND r.deleted_at IS NULL
               AND (CAST(:typeOrderIds AS text) IS NULL OR t.type_order_id::text = ANY(string_to_array(CAST(:typeOrderIds AS text), ',')))
               AND (CAST(:contratIds AS text) IS NULL OR t.contrat_id::text = ANY(string_to_array(CAST(:contratIds AS text), ',')))
@@ -420,6 +450,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             LEFT JOIN doctors d ON t.doctor_id = d.id
             LEFT JOIN hospitals h ON t.hospital_id = h.id
             WHERE r.branch_id = :branchId
+            """ + PERIMETRE_DU_MEDECIN + """
               AND r.deleted_at IS NULL
               AND (CAST(:typeOrderIds AS text) IS NULL OR t.type_order_id::text = ANY(string_to_array(CAST(:typeOrderIds AS text), ',')))
               AND (CAST(:contratIds AS text) IS NULL OR t.contrat_id::text = ANY(string_to_array(CAST(:contratIds AS text), ',')))
@@ -457,6 +488,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             @Param("dateEnd") String dateEnd,
             @Param("content") String content,
             @Param("isUrgent") Boolean isUrgent,
+            @Param("medecinId") UUID medecinId,
             Pageable pageable);
 
     @Query(value = """
@@ -481,6 +513,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             JOIN patients p ON t.patient_id = p.id
             LEFT JOIN type_orders ty ON t.type_order_id = ty.id
             WHERE r.branch_id = :branchId
+            """ + PERIMETRE_DU_MEDECIN + """
               AND r.deleted_at IS NULL
               AND (CAST(:search AS text) IS NULL OR CAST(:search AS text) = ''
                    OR unaccent(LOWER(COALESCE(r.code, ''))) LIKE unaccent(LOWER(CONCAT('%', CAST(:search AS text), '%')))
@@ -511,6 +544,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             JOIN test_orders t ON r.test_order_id = t.id
             JOIN patients p ON t.patient_id = p.id
             WHERE r.branch_id = :branchId
+            """ + PERIMETRE_DU_MEDECIN + """
               AND r.deleted_at IS NULL
               AND (CAST(:search AS text) IS NULL OR CAST(:search AS text) = ''
                    OR unaccent(LOWER(COALESCE(r.code, ''))) LIKE unaccent(LOWER(CONCAT('%', CAST(:search AS text), '%')))
@@ -542,6 +576,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
             @Param("dateBegin") String dateBegin,
             @Param("dateEnd") String dateEnd,
             @Param("discipline") String discipline,
+            @Param("medecinId") UUID medecinId,
             Pageable pageable);
 
     @Query(value = """

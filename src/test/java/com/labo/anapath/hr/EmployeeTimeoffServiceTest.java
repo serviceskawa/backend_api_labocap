@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -66,7 +67,7 @@ class EmployeeTimeoffServiceTest {
     void create_statusIsPending() {
         Employee emp = buildEmployee();
         EmployeeTimeoff saved = buildTimeoff(emp, TimeoffStatus.PENDING);
-        when(employeeRepository.findById(EMP_ID)).thenReturn(Optional.of(emp));
+        when(employeeRepository.findByIdAndBranchId(eq(EMP_ID), any())).thenReturn(Optional.of(emp));
         when(timeoffRepository.save(any())).thenReturn(saved);
 
         EmployeeTimeoffRequestDto dto = new EmployeeTimeoffRequestDto();
@@ -81,7 +82,7 @@ class EmployeeTimeoffServiceTest {
     @Test
     @DisplayName("create - employé inconnu → ResourceNotFoundException")
     void create_unknownEmployee_throws() {
-        when(employeeRepository.findById(EMP_ID)).thenReturn(Optional.empty());
+        when(employeeRepository.findByIdAndBranchId(eq(EMP_ID), any())).thenReturn(Optional.empty());
 
         EmployeeTimeoffRequestDto dto = new EmployeeTimeoffRequestDto();
         dto.setStartDate(LocalDate.of(2026, 6, 1));

@@ -92,4 +92,10 @@ public class TestOrderFilterDto {
      * voudrait les deux disciplines.</p>
      */
     private Discipline discipline = Discipline.PATHOLOGY;
+
+    /**
+     * Posé par le service, jamais par le client : le médecin dont la liste se
+     * borne aux dossiers confiés — voir {@link PerimetreDuMedecin}.
+     */
+    private UUID medecinId;
 }

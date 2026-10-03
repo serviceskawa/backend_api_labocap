@@ -83,6 +83,13 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- Métriques au format Prometheus (/actuator/prometheus). Version
+             gérée par Spring Boot. L'exposition reste éteinte par défaut :
+             voir management.endpoint.prometheus.enabled dans application.yml. -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
 
         <!-- Database -->
         <dependency>

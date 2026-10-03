@@ -119,7 +119,7 @@ class RenduPdfAnatomiePathologiqueTest {
         ReportRepository reports = mock(ReportRepository.class);
         SettingAppRepository reglages = mock(SettingAppRepository.class);
         UserRepository users = mock(UserRepository.class);
-        when(reports.findById(REPORT_ID)).thenReturn(Optional.of(compteRendu()));
+        when(reports.findByIdAndBranchId(org.mockito.ArgumentMatchers.eq(REPORT_ID), org.mockito.ArgumentMatchers.any())).thenReturn(Optional.of(compteRendu()));
         when(reglages.findByKey(anyString())).thenReturn(Optional.empty());
         when(reglages.findByKey("report_footer"))
                 .thenReturn(Optional.of(reglage("report_footer", "Centre ADECHINA • Cotonou • www.caap.bj")));

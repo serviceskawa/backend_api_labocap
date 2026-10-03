@@ -57,6 +57,7 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     @Transactional
     public CallResponseDto callPatient(UUID reportId, UUID userId) {
+        // Global : appelé aussi hors requête (événement de validation, rattrapage planifié), sans agence courante.
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", reportId));
 
@@ -105,6 +106,7 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     @Transactional
     public SmsResponseDto sendSms(UUID reportId, UUID userId) {
+        // Global : appelé aussi hors requête (événement de validation, rattrapage planifié), sans agence courante.
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", reportId));
 
@@ -154,6 +156,7 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     @Transactional
     public NotifyResponseDto notifyPatient(UUID reportId, UUID userId) {
+        // Global : appelé aussi hors requête (événement de validation, rattrapage planifié), sans agence courante.
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", reportId));
 

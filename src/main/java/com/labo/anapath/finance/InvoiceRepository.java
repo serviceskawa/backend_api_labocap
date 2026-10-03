@@ -21,6 +21,9 @@ import java.util.UUID;
 @Repository
 public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
 
+    /** Dans l'agence donnée seulement : un identifiant d'ailleurs est introuvable. */
+    Optional<Invoice> findByIdAndBranchId(UUID id, UUID branchId);
+
     Page<Invoice> findByBranchId(UUID branchId, Pageable pageable);
 
     List<Invoice> findByPatientOrderByCreatedAtDesc(Patient patient);
