@@ -23,10 +23,30 @@ jobs:
           java-version: '21'
           cache: maven
 
+      # Deux branches qui prennent le même numéro passent chacune leurs tests
+      # (Flyway est éteint dans la suite) ; Flyway refuse ensuite de démarrer
+      # en production (V100 en double, 03/10). La PR teste le résultat fusionné.
+      - name: Numéros de migration uniques
+        run: |
+          d=$(ls src/main/resources/db/migration | sed -n 's/^V\([0-9.]*\)__.*/\1/p' | sort | uniq -d)
+          [ -z "$d" ] || { echo "::error::Version(s) de migration en double : $d"; exit 1; }
+
       # Testcontainers trouve seul le démon Docker du runner GitHub : pas de
       # service `postgres` à déclarer, contrairement aux projets Laravel.
       - name: Compiler et tester
         run: mvn -B --no-transfer-progress verify
+
+  # L'image livrée démarre-t-elle ? La suite teste le classpath de test, pas le
+  # jar : un 03/10, tests verts et production qui refuse de démarrer.
+  demarrage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construire l'image (Dockerfile de production)
+        run: docker build -t labo-anapath-api:ci .
+      - name: Démarrer en profil prod
+        run: scripts/demarrage-ci.sh labo-anapath-api:ci
 
   # Dépendances connues vulnérables (lot 4). Demande la clé NVD en secret
   # (NVD_API_KEY, gratuite sur nvd.nist.gov/developers/request-an-api-key) :
