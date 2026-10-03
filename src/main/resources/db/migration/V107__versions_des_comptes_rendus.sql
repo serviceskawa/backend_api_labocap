@@ -114,7 +114,7 @@ DECLARE
     g RECORD;
 BEGIN
     FOREACH t IN ARRAY ARRAY['log_reports', 'report_versions', 'journal_acces'] LOOP
-        -- `journal_acces` arrive avec le lot 6 (V101) ; la révocation ne doit
+        -- `journal_acces` arrive avec le lot 6 (V105) ; la révocation ne doit
         -- pas dépendre de l'ordre de livraison.
         IF NOT EXISTS (
             SELECT 1 FROM information_schema.tables
@@ -142,7 +142,7 @@ BEGIN
     END LOOP;
 
     IF (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) THEN
-        RAISE NOTICE 'V103 : % est superutilisateur, la révocation d''UPDATE/DELETE ne le contraint pas — prévoir un rôle applicatif distinct.',
+        RAISE NOTICE 'V107 : % est superutilisateur, la révocation d''UPDATE/DELETE ne le contraint pas — prévoir un rôle applicatif distinct.',
             current_user;
     END IF;
 END $$;

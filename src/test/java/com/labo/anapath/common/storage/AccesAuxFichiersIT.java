@@ -190,7 +190,7 @@ class AccesAuxFichiersIT {
     }
 
     @Test
-    @DisplayName("V102 reprend les chemins existants, normalisés, avec le même identifiant que le code")
+    @DisplayName("V106 reprend les chemins existants, normalisés, avec le même identifiant que le code")
     void migrationReprendLExistant() throws IOException {
         Patient p = new Patient();
         p.setBranchId(AGENCE_A);
@@ -209,10 +209,10 @@ class AccesAuxFichiersIT {
         demande = demandes.save(demande);
 
         // Hibernate crée `permissions` depuis l'entité, qui ignore `updated_at`
-        // (colonne héritée de Laravel que V98 et V102 renseignent) : on l'ajoute
+        // (colonne héritée de Laravel que V98 et V106 renseignent) : on l'ajoute
         // pour jouer le script tel qu'il tournera en production.
         jdbc.execute("ALTER TABLE permissions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP");
-        String sql = new ClassPathResource("db/migration/V102__fichiers_rattaches_et_tableau_de_bord.sql")
+        String sql = new ClassPathResource("db/migration/V106__fichiers_rattaches_et_tableau_de_bord.sql")
                 .getContentAsString(StandardCharsets.UTF_8);
         jdbc.execute(sql);
 

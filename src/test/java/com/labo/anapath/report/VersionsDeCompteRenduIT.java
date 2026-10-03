@@ -271,7 +271,7 @@ class VersionsDeCompteRenduIT {
     // ------------------------------------------------------------------ ajout seul
 
     /**
-     * Rejoue le bloc de révocation de V103 — le vrai, découpé entre ses
+     * Rejoue le bloc de révocation de V107 — le vrai, découpé entre ses
      * marqueurs — sur un rôle {@code appli} qui vient de recevoir tous les
      * droits, puis tente une modification sous ce rôle.
      *
@@ -281,9 +281,9 @@ class VersionsDeCompteRenduIT {
      * l'exploitant de mettre en place.</p>
      */
     @Test
-    @DisplayName("V103 : après révocation, un rôle applicatif ne peut plus modifier ni supprimer dans report_versions et log_reports")
+    @DisplayName("V107 : après révocation, un rôle applicatif ne peut plus modifier ni supprimer dans report_versions et log_reports")
     void revocation_interditUpdateEtDelete() throws Exception {
-        String migration = new ClassPathResource("db/migration/V103__versions_des_comptes_rendus.sql")
+        String migration = new ClassPathResource("db/migration/V107__versions_des_comptes_rendus.sql")
                 .getContentAsString(StandardCharsets.UTF_8);
         String revocation = migration.substring(
                 migration.indexOf("-- >>> revocation"), migration.indexOf("-- <<< revocation"));
