@@ -82,6 +82,7 @@ class AuthServiceImplTest {
 
     @Mock
     private com.labo.anapath.common.security.PolitiqueDeMotDePasse politiqueDeMotDePasse;
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     @Mock
     private EmailService emailService;

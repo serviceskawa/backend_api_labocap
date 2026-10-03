@@ -68,6 +68,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final TwoFaRepository twoFaRepository;
     private final com.labo.anapath.common.security.PolitiqueDeMotDePasse politiqueDeMotDePasse;
+    private final org.springframework.transaction.PlatformTransactionManager transactionManager;
     private final TwoFaService twoFaService;
     private final com.labo.anapath.common.email.EmailService emailService;
     private final BranchRepository branchRepository;
@@ -102,6 +103,11 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public LoginResponse login(LoginRequest request) {
+        if (userRepository.findByEmail(request.getEmail()).filter(this::estVerrouille).isPresent()) {
+            log.warn("Échec de connexion (compte verrouillé) pour: {} depuis {}",
+                    maskEmail(request.getEmail()), adresseClient());
+            throw new UnauthorizedException("Identifiants invalides.");
+        }
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
@@ -371,6 +377,73 @@ public class AuthServiceImpl implements AuthService {
         emailService.sendOtp(user.getEmail(), user.getFirstname(), otp);
     }
 
+    /** Codes faux consécutifs avant d'invalider le code en cours. */
+    static final int ECHECS_AVANT_NOUVEAU_CODE = 5;
+    /** Codes faux dans la fenêtre d'une heure avant de verrouiller le compte. */
+    static final int ECHECS_AVANT_VERROU = 10;
+    static final int MINUTES_DE_VERROU = 15;
+
+    private boolean estVerrouille(User user) {
+        return user.getLockedUntil() != null && user.getLockedUntil().isAfter(LocalDateTime.now());
+    }
+
+    /**
+     * Compte un code faux pour ce compte et rend l'exception à lever.
+     *
+     * <p>Au 5ᵉ échec, le code en cours est invalidé : il faut en redemander un,
+     * ce qui coupe toute énumération. Au 10ᵉ échec en une heure, le compte est
+     * verrouillé un quart d'heure. Le compteur est sauvé ici même, car l'exception
+     * levée ensuite annule la transaction.</p>
+     */
+    private InvalidCodeException codeFaux(User user, String message) {
+        LocalDateTime maintenant = LocalDateTime.now();
+        if (user.getOtpFailuresSince() == null || user.getOtpFailuresSince().plusHours(1).isBefore(maintenant)) {
+            user.setOtpFailuresSince(maintenant);
+            user.setOtpFailedAttempts((short) 0);
+        }
+        user.setOtpFailedAttempts((short) (user.getOtpFailedAttempts() + 1));
+        int echecs = user.getOtpFailedAttempts();
+        boolean invaliderLeCode = echecs % ECHECS_AVANT_NOUVEAU_CODE == 0;
+        if (echecs >= ECHECS_AVANT_VERROU) {
+            user.setLockedUntil(maintenant.plusMinutes(MINUTES_DE_VERROU));
+            invaliderLeCode = true;
+            log.warn("Compte verrouillé {} min après {} codes faux : {} depuis {}",
+                    MINUTES_DE_VERROU, echecs, maskEmail(user.getEmail()), adresseClient());
+            message = "Code invalide.";
+        } else if (invaliderLeCode) {
+            log.warn("Code invalidé après {} codes faux : {} depuis {}",
+                    echecs, maskEmail(user.getEmail()), adresseClient());
+            message = "Code invalide. Veuillez en demander un nouveau.";
+        }
+        sauverHorsTransaction(user, invaliderLeCode);
+        return new InvalidCodeException(message);
+    }
+
+    /**
+     * Le compteur, et l'invalidation du code, doivent survivre à l'exception
+     * qui va annuler la transaction appelante : transaction à part.
+     */
+    private void sauverHorsTransaction(User user, boolean invaliderLeCode) {
+        var t = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        t.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        t.executeWithoutResult(status -> {
+            userRepository.saveAndFlush(user);
+            if (invaliderLeCode) {
+                twoFaRepository.deleteByUserId(user.getId());
+            }
+        });
+    }
+
+    /** Adresse du client, telle que Tomcat l'a rétablie derrière nginx (voir server.forward-headers-strategy). */
+    private String adresseClient() {
+        try {
+            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            return attrs == null ? "?" : attrs.getRequest().getRemoteAddr();
+        } catch (Exception e) {
+            return "?";
+        }
+    }
+
     private String maskEmail(String email) {
         if (email == null || !email.contains("@")) return "***";
         String[] parts = email.split("@", 2);
@@ -467,11 +540,17 @@ public class AuthServiceImpl implements AuthService {
         //
         // L'application est essayée en premier : c'est la voie normale d'un
         // utilisateur équipé, et le plus souvent aucun code n'a été envoyé.
+        // Un compte verrouillé répond comme à un code faux : rien n'indique
+        // de l'extérieur que le verrou existe.
+        if (estVerrouille(user)) {
+            throw new InvalidCodeException("Code invalide.");
+        }
+
         boolean parApplication = twoFaService.verifierCodeApplication(userId, request.getCode());
 
         if (!parApplication) {
             TwoFa twoFa = twoFaRepository.findByUserId(userId)
-                    .orElseThrow(() -> new InvalidCodeException("Code invalide ou expiré."));
+                    .orElseThrow(() -> codeFaux(user, "Code invalide ou expiré."));
 
             // Vérifier l'expiration (10 minutes)
             if (twoFa.getCreatedAt().plusMinutes(10).isBefore(LocalDateTime.now())) {
@@ -481,12 +560,14 @@ public class AuthServiceImpl implements AuthService {
 
             // Vérifier le code (comparaison bcrypt)
             if (!passwordEncoder.matches(request.getCode().trim(), twoFa.getCode())) {
-                throw new InvalidCodeException("Code invalide.");
+                throw codeFaux(user, "Code invalide.");
             }
 
             // Supprimer le code utilisé
             twoFaRepository.deleteByUserId(userId);
         }
+        user.setOtpFailedAttempts((short) 0);
+        user.setOtpFailuresSince(null);
 
         // Blacklister le tempToken
         String tempJti = jwtTokenProvider.extractJti(tempToken);
