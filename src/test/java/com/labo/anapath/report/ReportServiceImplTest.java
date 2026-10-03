@@ -38,6 +38,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ReportServiceImplTest {
 
+    @Mock private com.labo.anapath.testorder.PerimetreDuMedecin perimetreDuMedecin;
+
     @Mock private ReportRepository reportRepository;
     @Mock private LogReportRepository logReportRepository;
     @Mock private TagRepository tagRepository;
@@ -109,7 +111,7 @@ class ReportServiceImplTest {
         Tag tag1 = buildTag("Histologie");
         Tag tag2 = buildTag("Cytologie");
 
-        when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(buildOrder()));
+        when(testOrderRepository.findByIdAndBranchId(eq(ORDER_ID), any())).thenReturn(Optional.of(buildOrder()));
         when(tagRepository.findAllById(List.of(TAG_1, TAG_2))).thenReturn(List.of(tag1, tag2));
         when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(reportMapper.toResponseDto(any())).thenReturn(null);
@@ -131,7 +133,7 @@ class ReportServiceImplTest {
         dto.setReportId(REPORT_ID);
         dto.setStatus("VALIDATED");
 
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(existing));
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(existing));
         when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(reportMapper.toResponseDto(any())).thenReturn(null);
         connecteAvecLeDroitDeValider();
@@ -161,7 +163,7 @@ class ReportServiceImplTest {
         doctor.setFirstname("Dr");
         doctor.setLastname("Test");
 
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(existing));
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(existing));
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(doctor));
         when(testOrderRepository.save(any())).thenReturn(order);
         when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -208,7 +210,7 @@ class ReportServiceImplTest {
         dto.setReportId(REPORT_ID);
         dto.setDescriptionSupplementaire("Complément après remise du résultat.");
 
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(delivered));
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(delivered));
         when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(reportMapper.toResponseDto(any())).thenReturn(null);
 
@@ -226,7 +228,7 @@ class ReportServiceImplTest {
     @DisplayName("validate - DRAFT → VALIDATED + signatureDate posée")
     void validate_setsStatusValidatedAndSignatureDate() {
         Report report = buildDraftReport();
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(report));
         when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(reportMapper.toResponseDto(any())).thenReturn(null);
 
@@ -243,7 +245,7 @@ class ReportServiceImplTest {
     void validate_alreadyValidated_throws() {
         Report report = buildDraftReport();
         report.setStatus(ReportStatus.VALIDATED);
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(report));
 
         assertThatThrownBy(() -> service.validate(REPORT_ID, USER_ID))
                 .isInstanceOf(InvalidOperationException.class);
@@ -254,7 +256,7 @@ class ReportServiceImplTest {
     @DisplayName("markDelivered - isDelivered=true + deliveryDate posée")
     void markDelivered_setsIsDeliveredTrueAndLogsAction() {
         Report report = buildDraftReport();
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(report));
         when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(reportMapper.toResponseDto(any())).thenReturn(null);
 
@@ -270,7 +272,7 @@ class ReportServiceImplTest {
     @DisplayName("markInformed - isCalled=true + callDate posée")
     void markInformed_setsIsCalledTrueAndLogsAction() {
         Report report = buildDraftReport();
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(report));
         when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(reportMapper.toResponseDto(any())).thenReturn(null);
 
@@ -290,7 +292,7 @@ class ReportServiceImplTest {
         dto.setSignatorName("Jean Dupont");
         dto.setSignature("data:image/png;base64,abc123");
 
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(report));
         when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(reportMapper.toResponseDto(any())).thenReturn(null);
 
@@ -351,7 +353,7 @@ class ReportServiceImplTest {
         auteur.setFirstname("Coralie");
         auteur.setLastname("OGOUSSAN");
 
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(report));
         when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(reportMapper.toResponseDto(any())).thenReturn(null);
         when(userRepository.findById(medecinId))
@@ -386,7 +388,7 @@ class ReportServiceImplTest {
         UUID medecinId = UUID.randomUUID();
         Report report = compteRenduSigne(medecinId);
 
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(report));
         when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(reportMapper.toResponseDto(any())).thenReturn(null);
         when(userRepository.findById(medecinId))
@@ -409,7 +411,7 @@ class ReportServiceImplTest {
         Report report = buildDraftReport();
         report.setContent("<p>Brouillon</p>");
 
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(report));
         when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(reportMapper.toResponseDto(any())).thenReturn(null);
 

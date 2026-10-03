@@ -87,7 +87,7 @@ class MobileMoneyServiceImplTest {
     @DisplayName("initiate - Sckaler indisponible → ExternalApiException")
     void initiatePayment_skkalerDown_throwsExternalApiException() {
         when(paymentRepository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.empty());
-        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(buildInvoice()));
+        when(invoiceRepository.findByIdAndBranchId(eq(INVOICE_ID), any())).thenReturn(Optional.of(buildInvoice()));
         when(settingRepository.findByKeyAndBranchId("token_payment", BRANCH_ID)).thenReturn(Optional.of(buildTokenSetting()));
         when(restTemplate.exchange(contains("mtn"), eq(HttpMethod.POST), any(), eq(MobileMoneyServiceImpl.SckalerCollectionResponse.class)))
                 .thenThrow(new ResourceAccessException("Connection refused"));
@@ -104,7 +104,7 @@ class MobileMoneyServiceImplTest {
         sckalerResp.setTransactionId("txn-abc");
 
         when(paymentRepository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.empty());
-        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(buildInvoice()));
+        when(invoiceRepository.findByIdAndBranchId(eq(INVOICE_ID), any())).thenReturn(Optional.of(buildInvoice()));
         when(settingRepository.findByKeyAndBranchId("token_payment", BRANCH_ID)).thenReturn(Optional.of(buildTokenSetting()));
         when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(MobileMoneyServiceImpl.SckalerCollectionResponse.class)))
                 .thenReturn(ResponseEntity.ok(sckalerResp));
@@ -131,7 +131,7 @@ class MobileMoneyServiceImplTest {
         sckalerResp.setTransactionId("txn-xyz");
 
         when(paymentRepository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.empty());
-        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(buildInvoice()));
+        when(invoiceRepository.findByIdAndBranchId(eq(INVOICE_ID), any())).thenReturn(Optional.of(buildInvoice()));
         when(settingRepository.findByKeyAndBranchId("token_payment", BRANCH_ID)).thenReturn(Optional.of(buildTokenSetting()));
         when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(MobileMoneyServiceImpl.SckalerCollectionResponse.class)))
                 .thenReturn(ResponseEntity.ok(sckalerResp));
@@ -159,7 +159,7 @@ class MobileMoneyServiceImplTest {
         sckalerResp.setTransactionId("txn-new");
 
         when(paymentRepository.findByInvoiceId(INVOICE_ID)).thenReturn(Optional.of(existing));
-        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(buildInvoice()));
+        when(invoiceRepository.findByIdAndBranchId(eq(INVOICE_ID), any())).thenReturn(Optional.of(buildInvoice()));
         when(settingRepository.findByKeyAndBranchId("token_payment", BRANCH_ID)).thenReturn(Optional.of(buildTokenSetting()));
         when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(MobileMoneyServiceImpl.SckalerCollectionResponse.class)))
                 .thenReturn(ResponseEntity.ok(sckalerResp));
@@ -179,7 +179,7 @@ class MobileMoneyServiceImplTest {
         Payment payment = new Payment();
         payment.setPaymentId("txn-123");
 
-        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(paymentRepository.findByIdAndBranchId(eq(PAYMENT_ID), any())).thenReturn(Optional.of(payment));
         when(settingRepository.findByKeyAndBranchId("token_payment", BRANCH_ID)).thenReturn(Optional.of(buildTokenSetting()));
         when(restTemplate.exchange(contains("txn-123"), eq(HttpMethod.GET), any(),
                 eq(MobileMoneyServiceImpl.SckalerStatusResponse.class)))
@@ -198,7 +198,7 @@ class MobileMoneyServiceImplTest {
         MobileMoneyServiceImpl.SckalerStatusResponse statusResp = new MobileMoneyServiceImpl.SckalerStatusResponse();
         statusResp.setStatus("SUCCESS");
 
-        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(paymentRepository.findByIdAndBranchId(eq(PAYMENT_ID), any())).thenReturn(Optional.of(payment));
         when(settingRepository.findByKeyAndBranchId("token_payment", BRANCH_ID)).thenReturn(Optional.of(buildTokenSetting()));
         when(restTemplate.exchange(contains("txn-123"), eq(HttpMethod.GET), any(),
                 eq(MobileMoneyServiceImpl.SckalerStatusResponse.class)))

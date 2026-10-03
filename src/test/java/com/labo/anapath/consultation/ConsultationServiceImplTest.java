@@ -23,6 +23,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -40,6 +41,7 @@ class ConsultationServiceImplTest {
     @Mock private UserRepository userRepository;
     @Mock private ConsultationMapper consultationMapper;
     @Mock private FileStorageService fileStorageService;
+    @Mock private com.labo.anapath.common.storage.FichierStockeRepository fichiers;
 
     @InjectMocks private ConsultationServiceImpl service;
 
@@ -81,7 +83,7 @@ class ConsultationServiceImplTest {
 
         when(consultationRepository.countByBranchId(BRANCH_ID)).thenReturn(0L);
         when(prestationRepository.findById(PRESTATION_ID)).thenReturn(Optional.of(prestation));
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdAndBranchId(eq(PATIENT_ID), any())).thenReturn(Optional.of(patient));
         when(consultationRepository.save(any())).thenReturn(saved);
         when(consultationMapper.toResponseDto(saved)).thenReturn(
                 new ConsultationResponseDto(UUID.randomUUID(), "CON0001", PATIENT_ID, "Jean", "DUPONT",
@@ -112,7 +114,7 @@ class ConsultationServiceImplTest {
 
         when(consultationRepository.countByBranchId(BRANCH_ID)).thenReturn(5L);
         when(prestationRepository.findById(PRESTATION_ID)).thenReturn(Optional.of(prestation));
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdAndBranchId(eq(PATIENT_ID), any())).thenReturn(Optional.of(patient));
         when(consultationRepository.save(any())).thenReturn(saved);
         when(consultationMapper.toResponseDto(saved)).thenReturn(null);
 
@@ -138,7 +140,7 @@ class ConsultationServiceImplTest {
 
         when(consultationRepository.countByBranchId(BRANCH_ID)).thenReturn(0L);
         when(prestationRepository.findById(PRESTATION_ID)).thenReturn(Optional.of(prestation));
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdAndBranchId(eq(PATIENT_ID), any())).thenReturn(Optional.of(patient));
         when(consultationRepository.save(any())).thenReturn(saved);
         when(consultationMapper.toResponseDto(saved)).thenReturn(null);
 
@@ -233,7 +235,7 @@ class ConsultationServiceImplTest {
 
         when(consultationRepository.countByBranchId(BRANCH_ID)).thenReturn(0L);
         when(prestationRepository.findById(PRESTATION_ID)).thenReturn(Optional.of(prestation));
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdAndBranchId(eq(PATIENT_ID), any())).thenReturn(Optional.of(patient));
         when(userRepository.findById(doctorUserId)).thenReturn(Optional.of(doctorUser));
         when(consultationRepository.save(any())).thenReturn(saved);
         when(consultationMapper.toResponseDto(saved)).thenReturn(null);

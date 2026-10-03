@@ -1,5 +1,7 @@
 package com.labo.anapath.finance;
 
+import com.labo.anapath.common.storage.FichierStockeRepository;
+import com.labo.anapath.common.storage.FichierStocke;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.security.UserPrincipal;
@@ -30,6 +32,7 @@ public class BankDepositController {
 
     private final BankService bankService;
     private final FileStorageService fileStorageService;
+    private final FichierStockeRepository fichiers;
 
     /**
      * Enregistre un dépôt bancaire depuis la Caisse de vente. La pièce jointe
@@ -44,9 +47,10 @@ public class BankDepositController {
         if (file != null && !file.isEmpty()) {
             dto.setAttachement(fileStorageService.store(file, "depots"));
         }
+        BankDepositResponseDto depot = bankService.createDeposit(dto, principal.getBranchId(), principal.getId());
+        fichiers.rattacher(dto.getAttachement(), FichierStocke.BANK_DEPOSIT, depot.id(), principal.getBranchId());
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Dépôt bancaire enregistré",
-                        bankService.createDeposit(dto, principal.getBranchId(), principal.getId())));
+                .body(ApiResponse.success("Dépôt bancaire enregistré", depot));
     }
 
     @GetMapping

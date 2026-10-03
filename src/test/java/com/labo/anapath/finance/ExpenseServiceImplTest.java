@@ -30,6 +30,7 @@ import static org.mockito.Mockito.when;
 class ExpenseServiceImplTest {
 
     @Mock private ExpenseRepository expenseRepository;
+    @Mock private com.labo.anapath.common.storage.FichierStockeRepository fichiers;
     @Mock private ExpenceDetailRepository expenceDetailRepository;
     @Mock private CashboxRepository cashboxRepository;
     @Mock private CashboxOperationRepository cashboxOperationRepository;

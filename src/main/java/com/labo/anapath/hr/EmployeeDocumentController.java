@@ -1,5 +1,7 @@
 package com.labo.anapath.hr;
 
+import com.labo.anapath.common.storage.FichierStockeRepository;
+import com.labo.anapath.common.storage.FichierStocke;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
@@ -44,6 +46,7 @@ public class EmployeeDocumentController {
     private final EmployeeDocumentRepository documentRepository;
     private final EmployeeRepository employeeRepository;
     private final FileStorageService fileStorageService;
+    private final FichierStockeRepository fichiers;
 
     @Getter
     @Setter
@@ -62,7 +65,7 @@ public class EmployeeDocumentController {
             @RequestParam(value = "type", required = false) String type,
             @RequestPart(value = "file", required = false) MultipartFile file,
             @AuthenticationPrincipal UserPrincipal principal) {
-        Employee employee = employeeRepository.findById(employeeId)
+        Employee employee = employeeRepository.findByIdAndBranchId(employeeId, principal.getBranchId())
                 .orElseThrow(() -> new ResourceNotFoundException("Employé", employeeId));
         String filePath = null;
         Long fileSize = null;
@@ -78,6 +81,7 @@ public class EmployeeDocumentController {
         doc.setFilePath(filePath);
         doc.setFileSize(fileSize);
         EmployeeDocument saved = documentRepository.save(doc);
+        fichiers.rattacher(filePath, FichierStocke.EMPLOYEE_DOCUMENT, saved.getId(), principal.getBranchId());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Document uploadé", toDto(saved)));
     }
@@ -96,8 +100,9 @@ public class EmployeeDocumentController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('view-employees')")
-    public ResponseEntity<ApiResponse<EmployeeDocumentResponseDto>> findById(@PathVariable UUID id) {
-        EmployeeDocument doc = documentRepository.findById(id)
+    public ResponseEntity<ApiResponse<EmployeeDocumentResponseDto>> findById(
+            @PathVariable UUID id, @AuthenticationPrincipal UserPrincipal principal) {
+        EmployeeDocument doc = documentRepository.findByIdAndBranchId(id, principal.getBranchId())
                 .orElseThrow(() -> new ResourceNotFoundException("Document", id));
         return ResponseEntity.ok(ApiResponse.success(toDto(doc)));
     }
@@ -107,8 +112,9 @@ public class EmployeeDocumentController {
     @Transactional
     public ResponseEntity<ApiResponse<EmployeeDocumentResponseDto>> update(
             @PathVariable UUID id,
-            @RequestBody @jakarta.validation.Valid EmployeeDocumentUpdateDto dto) {
-        EmployeeDocument doc = documentRepository.findById(id)
+            @RequestBody @jakarta.validation.Valid EmployeeDocumentUpdateDto dto,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        EmployeeDocument doc = documentRepository.findByIdAndBranchId(id, principal.getBranchId())
                 .orElseThrow(() -> new ResourceNotFoundException("Document", id));
         doc.setName(dto.getName());
         doc.setType(dto.getType());
@@ -118,8 +124,9 @@ public class EmployeeDocumentController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('edit-employees')")
     @Transactional
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
-        EmployeeDocument doc = documentRepository.findById(id)
+    public ResponseEntity<ApiResponse<Void>> delete(
+            @PathVariable UUID id, @AuthenticationPrincipal UserPrincipal principal) {
+        EmployeeDocument doc = documentRepository.findByIdAndBranchId(id, principal.getBranchId())
                 .orElseThrow(() -> new ResourceNotFoundException("Document", id));
         documentRepository.delete(doc);
         return ResponseEntity.ok(ApiResponse.success("Document supprimé", null));
@@ -127,8 +134,9 @@ public class EmployeeDocumentController {
 
     @GetMapping("/{id}/download")
     @PreAuthorize("hasAuthority('view-employees')")
-    public ResponseEntity<Resource> download(@PathVariable UUID id) {
-        EmployeeDocument doc = documentRepository.findById(id)
+    public ResponseEntity<Resource> download(
+            @PathVariable UUID id, @AuthenticationPrincipal UserPrincipal principal) {
+        EmployeeDocument doc = documentRepository.findByIdAndBranchId(id, principal.getBranchId())
                 .orElseThrow(() -> new ResourceNotFoundException("Document", id));
         if (doc.getFilePath() == null) {
             throw new ResourceNotFoundException("Fichier physique introuvable", id);

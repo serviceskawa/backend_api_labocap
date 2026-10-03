@@ -41,7 +41,7 @@ public class ProblemReportServiceImpl implements ProblemReportService {
         ProblemReport report = new ProblemReport();
         report.setBranchId(branchId);
         report.setDescription(dto.getDescription());
-        report.setTestOrder(testOrderRepository.findById(dto.getTestOrderId())
+        report.setTestOrder(testOrderRepository.findByIdAndBranchId(dto.getTestOrderId(), branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Demande d'examen", dto.getTestOrderId())));
         if (dto.getProblemCategoryId() != null) {
             report.setProblemCategory(problemCategoryRepository.findById(dto.getProblemCategoryId())

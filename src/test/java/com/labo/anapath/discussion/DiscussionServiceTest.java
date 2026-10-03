@@ -49,6 +49,7 @@ class DiscussionServiceTest {
     @Mock private TestOrderAssignmentDetailRepository detailRepository;
     @Mock private UserRepository userRepository;
     @Mock private com.labo.anapath.testorder.FileStorageService fichiers;
+    @Mock private com.labo.anapath.common.storage.FichierStockeRepository rattachements;
     @Mock private com.labo.anapath.mobile.NotificationsPush notifications;
     @Mock private com.labo.anapath.mobile.MobileDeviceRepository appareils;
 

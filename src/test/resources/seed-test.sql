@@ -119,6 +119,8 @@ INSERT INTO permissions (id, name, slug, created_at) VALUES
     (gen_random_uuid(), 'view-consultations', 'view-consultations', NOW()),
     (gen_random_uuid(), 'view-contracts', 'view-contracts', NOW()),
     (gen_random_uuid(), 'view-contrats', 'view-contrats', NOW()),
+    (gen_random_uuid(), 'view-dashboard', 'view-dashboard', NOW()),
+    (gen_random_uuid(), 'view-dashboard-finance', 'view-dashboard-finance', NOW()),
     (gen_random_uuid(), 'view-doctors', 'view-doctors', NOW()),
     (gen_random_uuid(), 'view-documentation-categories', 'view-documentation-categories', NOW()),
     (gen_random_uuid(), 'view-employees', 'view-employees', NOW()),

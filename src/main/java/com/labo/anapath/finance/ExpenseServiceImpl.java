@@ -1,5 +1,7 @@
 package com.labo.anapath.finance;
 
+import com.labo.anapath.common.storage.FichierStockeRepository;
+import com.labo.anapath.common.storage.FichierStocke;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.BusinessException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
@@ -33,6 +35,7 @@ public class ExpenseServiceImpl implements ExpenseService {
     private final MovementRepository movementRepository;
     private final SupplierRepository supplierRepository;
     private final com.labo.anapath.testorder.FileStorageService fileStorageService;
+    private final FichierStockeRepository fichiers;
 
     @Override
     @Transactional(readOnly = true)
@@ -114,6 +117,7 @@ public class ExpenseServiceImpl implements ExpenseService {
         Expense expense = findExpense(id);
         try {
             expense.setReceipt(fileStorageService.store(file, "preuves"));
+            fichiers.rattacher(expense.getReceipt(), FichierStocke.EXPENSE, expense.getId(), expense.getBranchId());
         } catch (java.io.IOException e) {
             throw new BusinessException(
                     "Erreur lors du stockage du fichier: " + file.getOriginalFilename());

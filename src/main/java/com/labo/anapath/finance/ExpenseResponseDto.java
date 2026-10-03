@@ -1,5 +1,7 @@
 package com.labo.anapath.finance;
 
+import com.labo.anapath.common.storage.FichierStocke;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -21,4 +23,10 @@ public record ExpenseResponseDto(
         List<ExpenceDetailResponseDto> details,
         UUID branchId,
         LocalDateTime createdAt
-) {}
+) {
+    /** L'identifiant du fichier pour {@code GET /files/{id}}, déduit du chemin. */
+    @JsonProperty
+    public UUID fileId() {
+        return FichierStocke.idPour(receipt);
+    }
+}

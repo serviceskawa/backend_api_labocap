@@ -120,8 +120,8 @@ class TestOrderAssignmentServiceImplTest {
         dto.setTestOrderId(ORDER_ID);
         dto.setDate(LocalDate.now());
 
-        when(assignmentRepository.findById(ASSIGNMENT_ID)).thenReturn(Optional.of(assignment));
-        when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+        when(assignmentRepository.findByIdAndBranchId(eq(ASSIGNMENT_ID), any())).thenReturn(Optional.of(assignment));
+        when(testOrderRepository.findByIdAndBranchId(eq(ORDER_ID), any())).thenReturn(Optional.of(order));
         when(detailRepository.findByTestOrderId(ORDER_ID)).thenReturn(Optional.empty());
         when(detailRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(macroRepository.findByTestOrderId(any())).thenReturn(Optional.empty());
@@ -154,8 +154,8 @@ class TestOrderAssignmentServiceImplTest {
         AssignmentDetailRequestDto dto = new AssignmentDetailRequestDto();
         dto.setTestOrderId(ORDER_ID);
 
-        when(assignmentRepository.findById(ASSIGNMENT_ID)).thenReturn(Optional.of(assignment));
-        when(testOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+        when(assignmentRepository.findByIdAndBranchId(eq(ASSIGNMENT_ID), any())).thenReturn(Optional.of(assignment));
+        when(testOrderRepository.findByIdAndBranchId(eq(ORDER_ID), any())).thenReturn(Optional.of(order));
         when(detailRepository.findByTestOrderId(ORDER_ID)).thenReturn(Optional.of(existingDetail));
         when(macroRepository.findByTestOrderId(any())).thenReturn(Optional.of(existingMacro));
         when(macroRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));

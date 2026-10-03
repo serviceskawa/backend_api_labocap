@@ -266,6 +266,7 @@ class BiologyReportServiceImplTest {
                 // Périmètre de validation : ce test porte sur le cœur commun et
                 // non sur la règle par type d'examen. Un mock la laisse passer.
                 mock(com.labo.anapath.report.ServicePerimetreDeValidation.class),
+                mock(com.labo.anapath.testorder.PerimetreDuMedecin.class),
                 mock(com.labo.anapath.report.JournalDesRefus.class),
                 new ObjectMapper());
         private final BiologyReportServiceImpl service = new BiologyReportServiceImpl(reportRepository,
@@ -308,6 +309,8 @@ class BiologyReportServiceImplTest {
         @Test
         @DisplayName("le point d'entrée d'anatomie pathologique refuse toujours un compte-rendu de biologie")
         void validateAnatomiePathologiqueRefuse() {
+            // Le cœur commun charge le compte-rendu dans l'agence de la requête.
+            when(reportRepository.findByIdAndBranchId(org.mockito.ArgumentMatchers.eq(report.getId()), org.mockito.ArgumentMatchers.any())).thenReturn(Optional.of(report));
             assertThatThrownBy(() -> coeur.validate(report.getId(), USER, null))
                     .isInstanceOf(InvalidOperationException.class)
                     .hasMessageContaining("biologie");
@@ -317,6 +320,8 @@ class BiologyReportServiceImplTest {
         @Test
         @DisplayName("remise et signature du récupérateur, communes : fonctionnent pour la biologie")
         void remiseCommune() {
+            // Le cœur commun charge le compte-rendu dans l'agence de la requête.
+            when(reportRepository.findByIdAndBranchId(org.mockito.ArgumentMatchers.eq(report.getId()), org.mockito.ArgumentMatchers.any())).thenReturn(Optional.of(report));
             service.validate(report.getId(), USER, BRANCH, null);
 
             coeur.deliver(report.getId(), "Mme KORA", USER);

@@ -14,6 +14,9 @@ public interface TestOrderAssignmentDetailRepository
         extends JpaRepository<TestOrderAssignmentDetail, UUID>,
                 org.springframework.data.jpa.repository.JpaSpecificationExecutor<TestOrderAssignmentDetail> {
 
+    /** Dans l'agence donnée seulement : un identifiant d'ailleurs est introuvable. */
+    Optional<TestOrderAssignmentDetail> findByIdAndBranchId(UUID id, UUID branchId);
+
     /**
      * Les affectations vivantes d'une demande, la plus récente en tête.
      *
