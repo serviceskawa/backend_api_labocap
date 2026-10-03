@@ -47,4 +47,9 @@ public interface LogReportRepository extends JpaRepository<LogReport, UUID> {
      * @return page d'entrées de journal
      */
     Page<LogReport> findByBranchId(UUID branchId, Pageable pageable);
+
+    /** Purge de rétention (lot 6) : seule écriture autre qu'un ajout. */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM LogReport l WHERE l.createdAt < :avant")
+    int purgerAvant(@org.springframework.data.repository.query.Param("avant") java.time.LocalDateTime avant);
 }
