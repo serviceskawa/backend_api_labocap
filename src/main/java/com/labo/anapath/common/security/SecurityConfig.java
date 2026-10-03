@@ -18,6 +18,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.expression.WebExpressionAuthorizationManager;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
@@ -125,6 +126,16 @@ public class SecurityConfig {
                         // ici empêcherait la liaison de s'ouvrir du tout.
                         .requestMatchers("/ws/appels").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
+                        // Métriques (/actuator/metrics, /actuator/prometheus) : lues
+                        // par un Prometheus du réseau Docker, qui n'a pas de JWT.
+                        // Réservées aux adresses privées et à la boucle locale ;
+                        // nginx, lui, ne relaie pas /actuator/ hors health. L'adresse
+                        // vue ici vient de X-Forwarded-For (forward-headers-strategy),
+                        // nginx doit donc la poser depuis $remote_addr, jamais depuis
+                        // ce que le client envoie — voir docs/supervision.md.
+                        .requestMatchers("/actuator/**").access(new WebExpressionAuthorizationManager(
+                                "hasIpAddress('127.0.0.0/8') or hasIpAddress('::1') or hasIpAddress('10.0.0.0/8')"
+                                + " or hasIpAddress('172.16.0.0/12') or hasIpAddress('192.168.0.0/16')"))
                         .requestMatchers("/v3/api-docs/**").permitAll()
                         .requestMatchers("/swagger-ui/**").permitAll()
                         .requestMatchers("/swagger-ui.html").permitAll()

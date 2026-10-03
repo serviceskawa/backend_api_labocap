@@ -3,6 +3,17 @@ package com.labo.anapath.common.email;
 public interface EmailService {
 
     /**
+     * Envoie une alerte de supervision (rafale de connexions ratées, erreurs
+     * serveur, disque presque plein) en texte brut, à plusieurs destinataires
+     * d'un coup : un seul courriel par alerte, pas un par adresse.
+     *
+     * @param to    adresses des destinataires (administrateurs, prestataire)
+     * @param sujet objet du courriel
+     * @param corps texte du message
+     */
+    void sendAlerteSupervision(java.util.List<String> to, String sujet, String corps);
+
+    /**
      * Envoie le code OTP 2FA par email de manière asynchrone.
      *
      * @param to        adresse email du destinataire

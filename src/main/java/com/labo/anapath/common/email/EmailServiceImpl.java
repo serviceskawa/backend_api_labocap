@@ -29,6 +29,23 @@ public class EmailServiceImpl implements EmailService {
 
     @Async
     @Override
+    public void sendAlerteSupervision(java.util.List<String> to, String sujet, String corps) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(to.toArray(String[]::new));
+            helper.setSubject(sujet);
+            helper.setText(corps, false);
+            mailSender.send(message);
+            log.info("Alerte de supervision envoyée à {} destinataire(s) : {}", to.size(), sujet);
+        } catch (Exception e) {
+            log.error("Échec d'envoi de l'alerte de supervision « {} » : {}", sujet, e.getMessage());
+        }
+    }
+
+    @Async
+    @Override
     public void sendOtp(String to, String firstname, String otp) {
         // En profil dev, on affiche l'OTP en clair dans la console pour permettre la
         // connexion même quand le SMTP n'est pas configuré. JAMAIS actif en prod.

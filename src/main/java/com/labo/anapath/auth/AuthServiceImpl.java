@@ -70,6 +70,7 @@ public class AuthServiceImpl implements AuthService {
     private final TwoFaService twoFaService;
     private final com.labo.anapath.common.email.EmailService emailService;
     private final BranchRepository branchRepository;
+    private final com.labo.anapath.common.supervision.CompteurDAlertes compteurDAlertes;
 
     /**
      * Affiche le code OTP 2FA en clair dans les logs applicatifs.
@@ -139,9 +140,11 @@ public class AuthServiceImpl implements AuthService {
                     tempToken, JwtTokenProvider.TEMP_TOKEN_VALIDITY_MS / 1000, canal);
         } catch (DisabledException ex) {
             log.warn("Échec de connexion (compte désactivé) pour: {}", maskEmail(request.getEmail()));
+            compteurDAlertes.echecDeConnexion();
             throw new UnauthorizedException("Identifiants invalides.");
         } catch (BadCredentialsException ex) {
             log.warn("Échec de connexion (mauvais identifiants) pour: {}", maskEmail(request.getEmail()));
+            compteurDAlertes.echecDeConnexion();
             throw new UnauthorizedException("Identifiants invalides.");
         }
     }
@@ -468,6 +471,7 @@ public class AuthServiceImpl implements AuthService {
 
             // Vérifier le code (comparaison bcrypt)
             if (!passwordEncoder.matches(request.getCode().trim(), twoFa.getCode())) {
+                compteurDAlertes.echecDeConnexion();
                 throw new InvalidCodeException("Code invalide.");
             }
 

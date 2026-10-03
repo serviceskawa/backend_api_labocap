@@ -105,6 +105,12 @@ app:
     # session pour finir une phrase. Un poste du comptoir reste à portée de qui
     # passe dans le couloir, d'où la fenêtre deux fois plus courte au-dessus.
     refresh-expiration-medecin-ms: ${JWT_REFRESH_MEDECIN:3600000}
+  supervision:
+    # Adresse du prestataire, destinataire des alertes techniques (rafales de
+    # connexions ratées, erreurs 5xx, disque presque plein). Vide : les alertes
+    # de sécurité partent quand même aux administrateurs (réglage admin_mails),
+    # les alertes techniques sont seulement journalisées.
+    alert-email: ${ALERT_EMAIL:}
   storage:
     path: ${STORAGE_PATH:/tmp/labo/storage}
     encryption:
@@ -249,10 +255,24 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,metrics,prometheus
   endpoint:
     health:
       show-details: never
+    # Métriques et export Prometheus éteints par défaut : un point de terminaison
+    # désactivé n'existe pas (404), quelle que soit la liste d'exposition. On ne
+    # l'allume que sur le serveur qui a un Prometheus en face, et nginx ne
+    # relaie jamais /actuator/ hors /actuator/health — voir docs/supervision.md.
+    metrics:
+      enabled: ${MANAGEMENT_METRICS_EXPOSED:false}
+    prometheus:
+      enabled: ${MANAGEMENT_METRICS_EXPOSED:false}
+  metrics:
+    distribution:
+      # Histogramme des temps de réponse par route : sans lui, Prometheus ne
+      # peut pas calculer un p95 (histogram_quantile), seulement une moyenne.
+      percentiles-histogram:
+        http.server.requests: true
   health:
     mail:
       # L'indicateur mail ouvre une connexion SMTP réelle à chaque sonde : sans
