@@ -27,7 +27,32 @@ jobs:
     steps:
       - name: Déploiement (git pull + docker compose rebuild)
         uses: appleboy/ssh-action@v1.2.0
+        # Les variables du .env serveur peuvent venir d'ici (même mécanique que
+        # africauto-dashboard) : le script ci-dessous n'écrit une clé QUE si
+        # .env ne l'a pas déjà et que la valeur est non vide. Une valeur posée
+        # à la main sur le serveur n'est jamais écrasée. Les adresses sont des
+        # VARIABLES de dépôt (lisibles dans l'interface), le reste des secrets.
+        env:
+          APP_FRONT_URL: ${{ vars.APP_FRONT_URL }}
+          APP_CORS_ALLOWED_ORIGINS: ${{ vars.APP_CORS_ALLOWED_ORIGINS }}
+          PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
+          LOG_MAX_HISTORY: ${{ vars.LOG_MAX_HISTORY }}
+          MAIL_HOST: ${{ secrets.MAIL_HOST }}
+          MAIL_PORT: ${{ secrets.MAIL_PORT }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          SECRETS_KEY: ${{ secrets.SECRETS_KEY }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+          BACKUP_AGE_RECIPIENT: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+          BACKUP_ALERT_EMAIL: ${{ secrets.BACKUP_ALERT_EMAIL }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_S3_REGION: ${{ secrets.BACKUP_S3_REGION }}
+          BACKUP_S3_ACCESS_KEY: ${{ secrets.BACKUP_S3_ACCESS_KEY }}
+          BACKUP_S3_SECRET_KEY: ${{ secrets.BACKUP_S3_SECRET_KEY }}
+          BACKUP_S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
         with:
+          envs: APP_FRONT_URL,APP_CORS_ALLOWED_ORIGINS,PUBLIC_BASE_URL,LOG_MAX_HISTORY,MAIL_HOST,MAIL_PORT,MAIL_FROM,MAIL_USERNAME,MAIL_PASSWORD,SECRETS_KEY,ALERT_EMAIL,BACKUP_AGE_RECIPIENT,BACKUP_ALERT_EMAIL,BACKUP_S3_BUCKET,BACKUP_S3_REGION,BACKUP_S3_ACCESS_KEY,BACKUP_S3_SECRET_KEY,BACKUP_S3_ENDPOINT
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
@@ -42,6 +67,30 @@ jobs:
             echo "→ Récupération du code (main)"
             git fetch --prune origin main
             git reset --hard origin/main
+
+            echo "→ Complément du .env depuis GitHub (sans écraser l'existant)"
+            [ -f .env ] || { echo "::error::.env absent dans $(pwd)"; exit 1; }
+            [ -z "$(tail -c1 .env)" ] || echo >> .env
+            ajouter_si_absent() { # clé : écrite seulement si .env ne l'a pas et que GitHub la fournit
+              local k="$1" v="${!1:-}"
+              grep -qE "^$k=" .env && return 0
+              if [ -z "$v" ]; then echo "::warning::$k : ni dans le .env du serveur, ni dans GitHub"; return 0; fi
+              printf '%s=%s\n' "$k" "$v" >> .env
+              echo "$k écrite dans .env depuis GitHub"
+            }
+            for k in APP_FRONT_URL APP_CORS_ALLOWED_ORIGINS PUBLIC_BASE_URL LOG_MAX_HISTORY \
+                     MAIL_HOST MAIL_PORT MAIL_FROM MAIL_USERNAME MAIL_PASSWORD \
+                     SECRETS_KEY ALERT_EMAIL BACKUP_AGE_RECIPIENT BACKUP_ALERT_EMAIL \
+                     BACKUP_S3_BUCKET BACKUP_S3_REGION BACKUP_S3_ACCESS_KEY BACKUP_S3_SECRET_KEY BACKUP_S3_ENDPOINT; do
+              ajouter_si_absent "$k"
+            done
+
+            # Une variable obligatoire manquante arrête compose avant tout
+            # rebuild : le dire clairement plutôt que « conteneur non sain ».
+            if ! docker compose config -q; then
+              echo "::error::Configuration compose refusée : variable obligatoire absente du .env (voir ci-dessus)."
+              exit 1
+            fi
 
             # L'image en place devient `previous` : c'est elle qu'on relance
             # si la nouvelle ne devient pas saine.
