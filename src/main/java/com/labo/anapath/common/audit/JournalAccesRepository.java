@@ -8,7 +8,7 @@ import java.util.UUID;
 
 public interface JournalAccesRepository extends JpaRepository<JournalAcces, UUID>, JpaSpecificationExecutor<JournalAcces> {
     /**
-     * Purge de rétention par la fonction SQL purger_journaux (V103, SECURITY
+     * Purge de rétention par la fonction SQL purger_journaux (V107, SECURITY
      * DEFINER) : le rôle applicatif n'a plus le droit de supprimer lui-même.
      */
     @org.springframework.data.jpa.repository.Query(value = "SELECT acces, actions FROM purger_journaux(:avant)", nativeQuery = true)
