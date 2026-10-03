@@ -1,5 +1,6 @@
 package com.labo.anapath.hr;
 
+import com.labo.anapath.testsupport.Jetons;
 import com.labo.anapath.auth.LoginRequest;
 import com.labo.anapath.auth.LoginResponse;
 import com.labo.anapath.common.dto.ApiResponse;
@@ -62,6 +63,8 @@ class EmployeeControllerIT {
 
     @LocalServerPort private int port;
 
+    @Autowired private Jetons jetons;
+
     private static final UUID SEED_BRANCH_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String ADMIN_EMAIL    = "admin_emp_it@labo.bj";
     private static final String ADMIN_PASSWORD = "adminPass123";
@@ -84,13 +87,9 @@ class EmployeeControllerIT {
     }
 
     private String loginAndGetToken() {
-        LoginRequest req = new LoginRequest();
-        req.setEmail(ADMIN_EMAIL);
-        req.setPassword(ADMIN_PASSWORD);
-        ResponseEntity<ApiResponse<LoginResponse>> resp = restTemplate.exchange(
-                "http://localhost:" + port + "/api/v1/auth/login",
-                HttpMethod.POST, new HttpEntity<>(req), new ParameterizedTypeReference<>() {});
-        return resp.getBody().data().accessToken();
+        // Jeton émis directement : la connexion HTTP exige un code à usage
+        // unique et n'est pas ce que ce test éprouve (voir Jetons).
+        return jetons.pour(ADMIN_EMAIL);
     }
 
     private HttpHeaders authHeaders(String token) {

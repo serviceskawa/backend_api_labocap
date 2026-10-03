@@ -1,5 +1,6 @@
 package com.labo.anapath.finance;
 
+import com.labo.anapath.testsupport.Jetons;
 import com.labo.anapath.auth.LoginRequest;
 import com.labo.anapath.auth.LoginResponse;
 import com.labo.anapath.common.dto.ApiResponse;
@@ -64,6 +65,8 @@ class BankControllerIT {
 
     @LocalServerPort private int port;
 
+    @Autowired private Jetons jetons;
+
     private static final UUID SEED_BRANCH_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String ADMIN_EMAIL    = "admin_bank_it@labo.bj";
     private static final String ADMIN_PASSWORD = "adminPass123";
@@ -107,13 +110,9 @@ class BankControllerIT {
     }
 
     private String loginAndGetToken() {
-        LoginRequest req = new LoginRequest();
-        req.setEmail(ADMIN_EMAIL);
-        req.setPassword(ADMIN_PASSWORD);
-        ResponseEntity<ApiResponse<LoginResponse>> resp = restTemplate.exchange(
-                "http://localhost:" + port + "/api/v1/auth/login",
-                HttpMethod.POST, new HttpEntity<>(req), new ParameterizedTypeReference<>() {});
-        return resp.getBody().data().accessToken();
+        // Jeton émis directement : la connexion HTTP exige un code à usage
+        // unique et n'est pas ce que ce test éprouve (voir Jetons).
+        return jetons.pour(ADMIN_EMAIL);
     }
 
     private HttpHeaders authHeaders(String token) {
@@ -158,7 +157,7 @@ class BankControllerIT {
         ResponseEntity<ApiResponse<Map<String, Object>>> response = restTemplate.exchange(
                 "http://localhost:" + port + "/api/v1/bank-deposits",
                 HttpMethod.POST,
-                new HttpEntity<>(body, authHeaders(token)),
+                depotMultipart(body, token),
                 new ParameterizedTypeReference<>() {});
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -185,9 +184,23 @@ class BankControllerIT {
         ResponseEntity<ApiResponse<Map<String, Object>>> response = restTemplate.exchange(
                 "http://localhost:" + port + "/api/v1/bank-deposits",
                 HttpMethod.POST,
-                new HttpEntity<>(body, authHeaders(token)),
+                depotMultipart(body, token),
                 new ParameterizedTypeReference<>() {});
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+    }
+
+    /**
+     * Le point d'entrée lit une partie « data » (le dépôt) et une partie « file »
+     * facultative (le bordereau) : un corps JSON nu n'est plus accepté.
+     */
+    private HttpEntity<org.springframework.util.MultiValueMap<String, Object>> depotMultipart(Map<String, Object> depot, String token) {
+        HttpHeaders enTeteJson = new HttpHeaders();
+        enTeteJson.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+        org.springframework.util.MultiValueMap<String, Object> parties = new org.springframework.util.LinkedMultiValueMap<>();
+        parties.add("data", new HttpEntity<>(depot, enTeteJson));
+        HttpHeaders headers = authHeaders(token);
+        headers.setContentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA);
+        return new HttpEntity<>(parties, headers);
     }
 }

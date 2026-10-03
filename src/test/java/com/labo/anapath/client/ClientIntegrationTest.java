@@ -1,5 +1,6 @@
 package com.labo.anapath.client;
 
+import com.labo.anapath.testsupport.Jetons;
 import com.labo.anapath.auth.LoginRequest;
 import com.labo.anapath.auth.LoginResponse;
 import com.labo.anapath.common.dto.ApiResponse;
@@ -75,6 +76,8 @@ class ClientIntegrationTest {
     @LocalServerPort
     private int port;
 
+    @Autowired private Jetons jetons;
+
     private static final UUID SEED_BRANCH_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String ADMIN_EMAIL = "admin_client_test@labo.bj";
     private static final String ADMIN_PASSWORD = "adminPass123";
@@ -102,18 +105,9 @@ class ClientIntegrationTest {
     }
 
     private String loginAndGetToken() {
-        LoginRequest request = new LoginRequest();
-        request.setEmail(ADMIN_EMAIL);
-        request.setPassword(ADMIN_PASSWORD);
-
-        ResponseEntity<ApiResponse<LoginResponse>> response = restTemplate.exchange(
-                "http://localhost:" + port + "/api/v1/auth/login",
-                HttpMethod.POST,
-                new HttpEntity<>(request),
-                new ParameterizedTypeReference<>() {});
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        return response.getBody().data().accessToken();
+        // Jeton émis directement : la connexion HTTP exige un code à usage
+        // unique et n'est pas ce que ce test éprouve (voir Jetons).
+        return jetons.pour(ADMIN_EMAIL);
     }
 
     @Test
@@ -127,7 +121,7 @@ class ClientIntegrationTest {
         String uniqueSuffix = UUID.randomUUID().toString().substring(0, 8);
         ClientRequestDto dto = new ClientRequestDto();
         dto.setName("Clinique Test " + uniqueSuffix);
-        dto.setContact("+229 12345678");
+        dto.setContact("22912345678");
 
         ResponseEntity<ApiResponse<ClientResponseDto>> response = restTemplate.exchange(
                 baseUrl(),
@@ -160,6 +154,7 @@ class ClientIntegrationTest {
 
             ClientRequestDto dto = new ClientRequestDto();
             dto.setName("clinique doublon test"); // casse différente
+            dto.setContact("22912345678");
 
             ResponseEntity<String> response = restTemplate.exchange(
                     baseUrl(),
@@ -181,7 +176,7 @@ class ClientIntegrationTest {
         // Seed a client with IFU
         Client seed = new Client();
         seed.setName("Client IFU Test " + UUID.randomUUID().toString().substring(0, 8));
-        seed.setIfu("IFU-DOUBLON-001");
+        seed.setIfu("1234567890123");
         seed.setBranchId(SEED_BRANCH_ID);
         Client saved = clientRepository.save(seed);
 
@@ -191,7 +186,8 @@ class ClientIntegrationTest {
 
             ClientRequestDto dto = new ClientRequestDto();
             dto.setName("Autre Client " + UUID.randomUUID().toString().substring(0, 8));
-            dto.setIfu("IFU-DOUBLON-001"); // même IFU
+            dto.setIfu("1234567890123"); // même IFU
+            dto.setContact("22912345678");
 
             ResponseEntity<String> response = restTemplate.exchange(
                     baseUrl(),

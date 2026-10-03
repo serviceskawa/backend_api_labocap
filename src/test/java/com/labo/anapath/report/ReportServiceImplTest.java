@@ -7,6 +7,7 @@ import com.labo.anapath.testorder.TestOrder;
 import com.labo.anapath.testorder.TestOrderRepository;
 import com.labo.anapath.user.User;
 import com.labo.anapath.user.UserRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,7 +15,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
@@ -44,9 +48,29 @@ class ReportServiceImplTest {
     @Mock private ReportMapper reportMapper;
     @Mock private com.labo.anapath.common.email.EmailService emailService;
     @Mock private com.labo.anapath.common.email.NotificationSettings notificationSettings;
+    /** Publie ReportValidatedEvent à chaque passage DRAFT → VALIDATED. */
+    @Mock private ApplicationEventPublisher eventPublisher;
+    /** Appareil de la session : null (web) sur un mock, donc aucune preuve exigée. */
+    @Mock private com.labo.anapath.mobile.ProvenanceRequete provenanceRequete;
+    /** Périmètre de validation : un mock ne refuse rien (exigerLePerimetre est un no-op). */
+    @Mock private ServicePerimetreDeValidation perimetreDeValidation;
 
     @InjectMocks
     private ReportServiceImpl service;
+
+    /**
+     * Faire passer un compte-rendu à VALIDATED exige le droit « validate-reports »,
+     * lu dans le contexte de sécurité (voir ReportServiceImpl#exigerLeDroitDeValider).
+     */
+    private void connecteAvecLeDroitDeValider() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("pathologiste", null, "validate-reports"));
+    }
+
+    @AfterEach
+    void nettoieLeContexteDeSecurite() {
+        SecurityContextHolder.clearContext();
+    }
 
     private final UUID BRANCH_ID = UUID.randomUUID();
     private final UUID ORDER_ID = UUID.randomUUID();
@@ -110,6 +134,7 @@ class ReportServiceImplTest {
         when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(existing));
         when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(reportMapper.toResponseDto(any())).thenReturn(null);
+        connecteAvecLeDroitDeValider();
 
         service.createOrUpdate(dto, BRANCH_ID);
 
@@ -141,6 +166,7 @@ class ReportServiceImplTest {
         when(testOrderRepository.save(any())).thenReturn(order);
         when(reportRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(reportMapper.toResponseDto(any())).thenReturn(null);
+        connecteAvecLeDroitDeValider();
 
         service.createOrUpdate(dto, BRANCH_ID);
 

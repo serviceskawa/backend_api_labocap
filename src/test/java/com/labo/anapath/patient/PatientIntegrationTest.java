@@ -1,5 +1,6 @@
 package com.labo.anapath.patient;
 
+import com.labo.anapath.testsupport.Jetons;
 import com.labo.anapath.auth.LoginRequest;
 import com.labo.anapath.auth.LoginResponse;
 import com.labo.anapath.common.dto.ApiResponse;
@@ -70,6 +71,8 @@ class PatientIntegrationTest {
     @LocalServerPort
     private int port;
 
+    @Autowired private Jetons jetons;
+
     private static final UUID SEED_BRANCH_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String ADMIN_EMAIL = "admin_patient_test@labo.bj";
     private static final String ADMIN_PASSWORD = "adminPass123";
@@ -97,18 +100,9 @@ class PatientIntegrationTest {
     }
 
     private String loginAndGetToken() {
-        LoginRequest request = new LoginRequest();
-        request.setEmail(ADMIN_EMAIL);
-        request.setPassword(ADMIN_PASSWORD);
-
-        ResponseEntity<ApiResponse<LoginResponse>> response = restTemplate.exchange(
-                "http://localhost:" + port + "/api/v1/auth/login",
-                HttpMethod.POST,
-                new HttpEntity<>(request),
-                new ParameterizedTypeReference<>() {});
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        return response.getBody().data().accessToken();
+        // Jeton émis directement : la connexion HTTP exige un code à usage
+        // unique et n'est pas ce que ce test éprouve (voir Jetons).
+        return jetons.pour(ADMIN_EMAIL);
     }
 
     @Test
@@ -140,12 +134,13 @@ class PatientIntegrationTest {
 
     @Test
     @DisplayName("POST /patients - doublon de téléphone → 409 Conflict")
-    void createPatient_duplicatePhone_returns409() {
+    void createPatient_duplicateCode_returns409() {
         String token = loginAndGetToken();
 
         Patient seed = new Patient();
         seed.setFirstname("Bob");
         seed.setLastname("Martin");
+        seed.setCode("P-DOUBLON-001");
         seed.setTelephone1("0600000098");
         seed.setGenre("M");
         seed.setBranchId(SEED_BRANCH_ID);
@@ -156,7 +151,7 @@ class PatientIntegrationTest {
             headers.setBearerAuth(token);
 
             PatientRequestDto dto = new PatientRequestDto();
-            dto.setCode("P-AUTRE-001");
+            dto.setCode("P-DOUBLON-001"); // même code
             dto.setFirstname("Autre");
             dto.setLastname("Patient");
             dto.setTelephone1("0600000098");

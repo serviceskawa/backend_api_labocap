@@ -5,7 +5,13 @@ import com.labo.anapath.auth.LoginResponse;
 import com.labo.anapath.common.dto.ApiResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.labo.anapath.testsupport.Jetons;
+import com.labo.anapath.user.User;
+import com.labo.anapath.user.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -58,6 +64,32 @@ class FileControllerIT {
 
     @Autowired private TestRestTemplate restTemplate;
     @LocalServerPort private int port;
+    @Autowired private UserRepository userRepository;
+    @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private Jetons jetons;
+
+    private static final String EMAIL = "fichiers_it@labo.bj";
+
+    // Les fichiers ne sont plus publics : il faut une session ouverte.
+    @BeforeEach
+    void seedUser() {
+        if (userRepository.findByEmail(EMAIL).isEmpty()) {
+            User user = new User();
+            user.setBranchId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+            user.setFirstname("Fichiers");
+            user.setLastname("Test");
+            user.setEmail(EMAIL);
+            user.setPassword(passwordEncoder.encode("fichiersPass123"));
+            user.setActive(true);
+            userRepository.save(user);
+        }
+    }
+
+    private HttpEntity<Void> connecte() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(jetons.pour(EMAIL));
+        return new HttpEntity<>(headers);
+    }
 
     @Test
     @DisplayName("GET /files/{relativePath} fichier existant → 200 avec Content-Type")
@@ -70,7 +102,7 @@ class FileControllerIT {
 
         ResponseEntity<byte[]> response = restTemplate.exchange(
                 "http://localhost:" + port + "/api/v1/files/documents/" + uuid + ".pdf",
-                HttpMethod.GET, HttpEntity.EMPTY, byte[].class);
+                HttpMethod.GET, connecte(), byte[].class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getHeaders().getContentType()).isNotNull();
@@ -81,14 +113,14 @@ class FileControllerIT {
     void getFile_notFound_returns404() {
         ResponseEntity<String> response = restTemplate.exchange(
                 "http://localhost:" + port + "/api/v1/files/documents/" + UUID.randomUUID() + ".pdf",
-                HttpMethod.GET, HttpEntity.EMPTY, String.class);
+                HttpMethod.GET, connecte(), String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     @Test
-    @DisplayName("GET /files/{relativePath} sans token JWT → 200 (endpoint public)")
-    void getFile_noToken_isPublic() throws IOException {
+    @DisplayName("GET /files/{relativePath} sans jeton → 401 (les fichiers ne sont pas publics)")
+    void getFile_noToken_returns401() throws IOException {
         Path docDir = tempStorageDir.resolve("documents");
         Files.createDirectories(docDir);
         String uuid = UUID.randomUUID().toString();
@@ -98,6 +130,6 @@ class FileControllerIT {
                 "http://localhost:" + port + "/api/v1/files/documents/" + uuid + ".png",
                 HttpMethod.GET, HttpEntity.EMPTY, byte[].class);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 }

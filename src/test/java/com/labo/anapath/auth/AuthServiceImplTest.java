@@ -120,8 +120,12 @@ class AuthServiceImplTest {
     }
 
     @Test
-    @DisplayName("login - should return LoginResponse on valid credentials (no 2FA)")
+    @DisplayName("login - mot de passe valide, sans application d'authentification → code envoyé par courriel, aucun jeton d'accès")
     void login_success() {
+        // Le code à usage unique est exigé à CHAQUE connexion, pour tout le monde :
+        // login() ne rend qu'un jeton temporaire, que challenge() échange contre
+        // les jetons définitifs. Sans application d'authentification, le code
+        // part par courriel.
         User user = buildUser(); // twoFactorEnabled = false by default
         UserPrincipal principal = buildPrincipal(user);
 
@@ -129,12 +133,8 @@ class AuthServiceImplTest {
         when(auth.getPrincipal()).thenReturn(principal);
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenReturn(auth);
         when(userRepository.findById(any(UUID.class))).thenReturn(Optional.of(user));
-        when(jwtTokenProvider.generateToken(principal)).thenReturn("access-token");
-        when(jwtTokenProvider.generateRefreshToken(any(UUID.class))).thenReturn("refresh-token");
-        when(jwtProperties.getExpirationMs()).thenReturn(86_400_000L);
-        when(userMapper.toResponseDto(user)).thenReturn(
-                new UserResponseDto(USER_ID, "Admin", "Test", "admin@test.com", null, null, null, true,
-                        BRANCH_ID, LocalDateTime.now(), null, null, null, List.of(), false));
+        when(jwtTokenProvider.generateTempToken(any(UUID.class))).thenReturn("temp-jwt-token");
+        when(passwordEncoder.encode(anyString())).thenReturn("hashed-otp");
 
         LoginRequest request = new LoginRequest();
         request.setEmail("admin@test.com");
@@ -143,11 +143,15 @@ class AuthServiceImplTest {
         LoginResponse response = authService.login(request);
 
         assertThat(response).isNotNull();
-        assertThat(response.accessToken()).isEqualTo("access-token");
-        assertThat(response.refreshToken()).isEqualTo("refresh-token");
-        assertThat(response.expiresIn()).isEqualTo(86_400L);
-        assertThat(response.user().email()).isEqualTo("admin@test.com");
-        assertThat(response.requires2fa()).isNull();
+        assertThat(response.requires2fa()).isTrue();
+        assertThat(response.tempToken()).isNotBlank();
+        assertThat(response.otpCanal()).isEqualTo("EMAIL");
+        assertThat(response.accessToken()).isNull();
+        assertThat(response.refreshToken()).isNull();
+        assertThat(response.user()).isNull();
+        verify(twoFaRepository).save(any(TwoFa.class));
+        verify(emailService).sendOtp(eq("admin@test.com"), eq("Admin"), anyString());
+        verify(jwtTokenProvider, never()).generateToken(any());
     }
 
     @Test

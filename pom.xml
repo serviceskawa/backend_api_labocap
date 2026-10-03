@@ -24,7 +24,9 @@
         <lombok.version>1.18.32</lombok.version>
         <jjwt.version>0.12.5</jjwt.version>
         <springdoc.version>2.5.0</springdoc.version>
-        <testcontainers.version>1.19.8</testcontainers.version>
+        <!-- 1.19 parle l'API Docker 1.32, refusée par Docker 29 (minimum 1.44) : sans ce
+             saut, aucun test Testcontainers ne démarre sur un démon récent. -->
+        <testcontainers.version>1.21.4</testcontainers.version>
     </properties>
 
     <dependencies>
@@ -218,6 +220,14 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <!-- Le client HTTP par défaut de TestRestTemplate (HttpURLConnection)
+                 ne sait pas émettre PATCH ; avec celui-ci sur le classpath,
+                 Spring Boot l'utilise de lui-même. -->
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>junit-jupiter</artifactId>
             <version>${testcontainers.version}</version>
@@ -269,6 +279,49 @@
                             <version>0.2.0</version>
                         </path>
                     </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- Les quatre variables d'application.yml sans valeur par défaut :
+                         sans elles aucun contexte Spring ne démarre et les 45 classes
+                         d'intégration tombent d'un bloc. Valeurs de test, aucun lien
+                         avec la production. -->
+                    <environmentVariables>
+                        <!-- db/migration ne se rejoue pas sur une base vide (V10 suppose des
+                             tables venues du dump Laravel) et la baseline de db/local se
+                             périme à chaque entité ajoutée (il lui manquait `antibiotics`
+                             au 2026-10-02, et `roles.is_protected` à son seed). Les tests
+                             Testcontainers laissent donc Hibernate créer le schéma depuis
+                             les entités ; seule l'extension unaccent, que les requêtes
+                             appellent, vient de db/local. Les données, chaque test les crée. -->
+                        <SPRING_FLYWAY_ENABLED>false</SPRING_FLYWAY_ENABLED>
+                        <SPRING_JPA_HIBERNATE_DDL_AUTO>create</SPRING_JPA_HIBERNATE_DDL_AUTO>
+                        <SPRING_SQL_INIT_MODE>always</SPRING_SQL_INIT_MODE>
+                        <SPRING_SQL_INIT_SCHEMA_LOCATIONS>classpath:schema-test.sql</SPRING_SQL_INIT_SCHEMA_LOCATIONS>
+                        <SPRING_SQL_INIT_DATA_LOCATIONS>classpath:seed-test.sql</SPRING_SQL_INIT_DATA_LOCATIONS>
+                        <SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION>true</SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION>
+                        <JWT_SECRET>cle-de-test-uniquement-0123456789abcdef0123456789abcdef0123456789</JWT_SECRET>
+                        <MAIL_HOST>localhost</MAIL_HOST>
+                        <MAIL_PORT>2525</MAIL_PORT>
+                        <MAIL_FROM>test@labo.local</MAIL_FROM>
+                    </environmentVariables>
+                    <systemPropertyVariables>
+                        <!-- Chaque classe d'intégration a son propre PostgreSQL, donc son
+                             propre contexte : les garder en cache (32 par défaut) ne sert à
+                             rien et fait déborder la mémoire au 40e. -->
+                        <spring.test.context.cache.maxSize>1</spring.test.context.cache.maxSize>
+                    </systemPropertyVariables>
+                    <!-- Surefire ne lance par défaut que *Test.java : les 29 classes
+                         *IT.java (Testcontainers) ne tournaient jamais avec
+                         `mvn verify`, seulement depuis l'IDE. -->
+                    <includes>
+                        <include>**/*Test.java</include>
+                        <include>**/*Tests.java</include>
+                        <include>**/*IT.java</include>
+                    </includes>
                 </configuration>
             </plugin>
         </plugins>

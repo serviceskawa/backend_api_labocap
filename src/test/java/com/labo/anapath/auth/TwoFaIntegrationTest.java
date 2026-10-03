@@ -7,6 +7,7 @@ import com.warrenstrange.googleauth.GoogleAuthenticator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.labo.anapath.testsupport.Jetons;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -58,6 +59,9 @@ class TwoFaIntegrationTest {
     @LocalServerPort
     private int port;
 
+    @Autowired
+    private Jetons jetons;
+
     private static final String TEST_EMAIL = "2fa_test@labo.bj";
     private static final String TEST_PASSWORD = "password2fa";
 
@@ -80,18 +84,19 @@ class TwoFaIntegrationTest {
     }
 
     private String loginAndGetToken() {
-        LoginRequest request = new LoginRequest();
-        request.setEmail(TEST_EMAIL);
-        request.setPassword(TEST_PASSWORD);
+        // Jeton émis directement : le parcours de connexion est éprouvé plus bas.
+        return jetons.pour(TEST_EMAIL);
+    }
 
-        ResponseEntity<ApiResponse<LoginResponse>> response = restTemplate.exchange(
-                baseUrl() + "/login",
-                HttpMethod.POST,
-                new HttpEntity<>(request),
-                new ParameterizedTypeReference<>() {});
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        return response.getBody().data().accessToken();
+    /** Extrait la valeur d'un cookie depuis l'en-tête {@code Set-Cookie} d'une réponse. */
+    private String extractSetCookie(ResponseEntity<?> response, String cookieName) {
+        java.util.List<String> setCookies = response.getHeaders().get(HttpHeaders.SET_COOKIE);
+        if (setCookies == null) return null;
+        return setCookies.stream()
+                .filter(h -> h.startsWith(cookieName + "="))
+                .map(h -> h.split(";")[0].substring(cookieName.length() + 1))
+                .findFirst()
+                .orElse(null);
     }
 
     @Test
@@ -135,11 +140,13 @@ class TwoFaIntegrationTest {
         String secret = setupResp.getBody().data().secret();
 
         // 2. Verify — activate 2FA with live TOTP code
+        // Six chiffres exactement, comme l'exige le serveur : un code inférieur à
+        // 100000 doit garder ses zéros de tête.
         GoogleAuthenticator gAuth = new GoogleAuthenticator();
         int totpCode = gAuth.getTotpPassword(secret);
 
         TwoFaCodeRequest verifyRequest = new TwoFaCodeRequest();
-        verifyRequest.setCode(String.valueOf(totpCode));
+        verifyRequest.setCode(String.format("%06d", totpCode));
 
         ResponseEntity<ApiResponse<Void>> verifyResp = restTemplate.exchange(
                 baseUrl() + "/2fa/verify",
@@ -170,7 +177,7 @@ class TwoFaIntegrationTest {
 
         TwoFactorVerifyRequest challengeRequest = new TwoFactorVerifyRequest();
         challengeRequest.setTempToken(loginData.tempToken());
-        challengeRequest.setCode(String.valueOf(challengeCode));
+        challengeRequest.setCode(String.format("%06d", challengeCode));
 
         // AC-7: send User-Agent so lastLoginDevice can be computed
         HttpHeaders challengeHeaders = new HttpHeaders();
@@ -183,10 +190,11 @@ class TwoFaIntegrationTest {
                 new ParameterizedTypeReference<>() {});
 
         assertThat(challengeResp.getStatusCode()).isEqualTo(HttpStatus.OK);
-        LoginResponse fullJwt = challengeResp.getBody().data();
-        assertThat(fullJwt.accessToken()).isNotBlank();
-        assertThat(fullJwt.refreshToken()).isNotBlank();
-        assertThat(fullJwt.requires2fa()).isNull();
+        // Les jetons définitifs voyagent dans les cookies, jamais dans le JSON
+        String jetonComplet = extractSetCookie(challengeResp, "access_token");
+        assertThat(jetonComplet).isNotBlank();
+        assertThat(extractSetCookie(challengeResp, "refresh_token")).isNotBlank();
+        assertThat(challengeResp.getBody().data().requires2fa()).isNull();
 
         // AC-7: lastLoginDevice doit être persisté après un challenge réussi
         User userAfterChallenge = userRepository.findByEmail(TEST_EMAIL).orElseThrow();
@@ -195,10 +203,10 @@ class TwoFaIntegrationTest {
         // 5. Cleanup — disable 2FA to avoid polluting other tests
         int disableCode = gAuth.getTotpPassword(secret);
         TwoFaCodeRequest disableRequest = new TwoFaCodeRequest();
-        disableRequest.setCode(String.valueOf(disableCode));
+        disableRequest.setCode(String.format("%06d", disableCode));
 
         HttpHeaders fullHeaders = new HttpHeaders();
-        fullHeaders.setBearerAuth(fullJwt.accessToken());
+        fullHeaders.setBearerAuth(jetonComplet);
 
         ResponseEntity<ApiResponse<Void>> disableResp = restTemplate.exchange(
                 baseUrl() + "/2fa/disable",

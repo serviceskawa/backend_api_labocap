@@ -1,39 +1,60 @@
 name: Deploy Spring Boot Application
 
+# Même mécanique que fluidpay et labsys_front : le serveur tire main et
+# reconstruit l'image par docker compose (le Dockerfile compile le jar sans
+# les tests — ils viennent de tourner dans le job `tests`).
 on:
   push:
     branches:
       - main
+  # Redéployer main à la main (secret changé, image à reconstruire…).
+  workflow_dispatch:
+
+# Deux merges rapprochés lanceraient deux `compose up --build` sur le même
+# serveur : on les met en file sans annuler celui qui tourne (africauto).
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
 
 jobs:
+  tests:
+    uses: ./.github/workflows/ci.yml
+
   deploy:
+    needs: tests
     runs-on: ubuntu-latest
+    environment: production
     steps:
-      # Déploiement Docker : le serveur récupère les sources et reconstruit
-      # l'image via docker-compose (le Dockerfile compile lui-même le jar).
       - name: Déploiement (git pull + docker compose rebuild)
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           command_timeout: 20m        # le rebuild Maven dans Docker peut durer plusieurs minutes
+          # Sans cela, une commande qui échoue laisse le script continuer et le
+          # job passe au vert : on croirait avoir déployé (labsys_front).
+          script_stop: true
           script: |
-            set -e
+            set -euo pipefail
             cd ${{ secrets.SERVER_PROJECT_PATH }}
 
             echo "→ Récupération du code (main)"
             git fetch --prune origin main
             git reset --hard origin/main
 
-            echo "→ Reconstruction de l'image API + redémarrage"
-            docker compose up -d --build api
+            # L'image en place devient `previous` : c'est elle qu'on relance
+            # si la nouvelle ne devient pas saine.
+            docker image tag labo-anapath-api:1.0.0 labo-anapath-api:previous 2>/dev/null || true
 
-            echo "→ Vérification que le conteneur tourne"
-            sleep 20
-            if [ "$(docker inspect -f '{{.State.Status}}' labo-api)" != "running" ]; then
-              echo "Conteneur non démarré — logs :"
+            echo "→ Reconstruction de l'image API + redémarrage"
+            # --wait attend le healthcheck du compose (/actuator/health) et
+            # échoue si le conteneur ne devient pas sain.
+            if ! docker compose up -d --build --wait api; then
+              echo "Conteneur non sain — logs, puis retour à l'image précédente :"
               docker compose logs --tail=80 api
+              docker image tag labo-anapath-api:previous labo-anapath-api:1.0.0
+              docker compose up -d --no-build --force-recreate api
               exit 1
             fi
-            echo "Déploiement OK (labo-api démarré)"
+            echo "Déploiement OK (labo-api sain)"

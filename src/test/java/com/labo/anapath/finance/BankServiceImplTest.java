@@ -59,7 +59,13 @@ class BankServiceImplTest {
 
         when(bankRepository.findById(BANK_ID)).thenReturn(Optional.of(bank));
         when(cashboxRepository.findFirstByBranchIdAndType(BRANCH_ID, "vente")).thenReturn(Optional.of(cashbox));
-        when(bankDepositRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(bankDepositRepository.save(any())).thenAnswer(inv -> {
+            // JPA attribue l'identifiant à la persistance ; la référence de
+            // l'opération de caisse (« DEP-… ») en dérive.
+            BankDeposit d = inv.getArgument(0);
+            d.setId(UUID.randomUUID());
+            return d;
+        });
         when(cashboxOperationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(cashboxRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
