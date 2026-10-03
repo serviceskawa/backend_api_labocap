@@ -215,7 +215,7 @@ public class EmailServiceImpl implements EmailService {
     @Override
     public void sendPostSignatureChangeAlert(String to, String reportCode, String testOrderCode,
                                              String signatoryName, String modifiedByName,
-                                             String changedFields, String labName) {
+                                             String changedFields, String reason, String labName) {
         try {
             Context context = new Context();
             context.setVariable("reportCode", reportCode);
@@ -223,6 +223,7 @@ public class EmailServiceImpl implements EmailService {
             context.setVariable("signatoryName", signatoryName);
             context.setVariable("modifiedByName", modifiedByName);
             context.setVariable("changedFields", changedFields);
+            context.setVariable("reason", reason);
             context.setVariable("labName", labName);
 
             String htmlContent = templateEngine.process("email/post-signature-change", context);
