@@ -153,12 +153,8 @@ END $$;
 -- droits de son propriétaire (SECURITY DEFINER), que le rôle applicatif n'a plus.
 CREATE OR REPLACE FUNCTION purger_journaux(avant TIMESTAMP)
 RETURNS TABLE(acces BIGINT, actions BIGINT)
-LANGUAGE plpgsql SECURITY DEFINER AS $fn$
-DECLARE a BIGINT; b BIGINT;
-BEGIN
-    DELETE FROM journal_acces WHERE at < avant;
-    GET DIAGNOSTICS a = ROW_COUNT;
-    DELETE FROM log_reports WHERE created_at < avant;
-    GET DIAGNOSTICS b = ROW_COUNT;
-    RETURN QUERY SELECT a, b;
-END $fn$;
+LANGUAGE sql SECURITY DEFINER AS $fn$
+    WITH a AS (DELETE FROM journal_acces WHERE at < avant RETURNING 1),
+         b AS (DELETE FROM log_reports WHERE created_at < avant RETURNING 1)
+    SELECT (SELECT count(*) FROM a), (SELECT count(*) FROM b)
+$fn$;
