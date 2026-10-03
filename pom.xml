@@ -275,12 +275,13 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <!-- Le client HTTP par défaut de TestRestTemplate (HttpURLConnection)
-                 ne sait pas émettre PATCH ; avec celui-ci sur le classpath,
-                 Spring Boot l'utilise de lui-même. -->
+            <!-- firebase-admin 9.11 en a besoin à l'exécution (transport asynchrone
+                 des notifications). Le déclarer en portée test, comme c'était le
+                 cas pour que TestRestTemplate sache émettre PATCH, l'écartait du
+                 jar livré : l'API refusait de démarrer en production
+                 (NoClassDefFoundError AsyncClientConnectionManager, 03/10). -->
             <groupId>org.apache.httpcomponents.client5</groupId>
             <artifactId>httpclient5</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
