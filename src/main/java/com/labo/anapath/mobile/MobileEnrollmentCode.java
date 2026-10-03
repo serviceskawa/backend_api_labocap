@@ -99,8 +99,10 @@ public class MobileEnrollmentCode {
      * accès — pour un code que rien n'obligeait à être à usage unique, la
      * révocation existant déjà.</p>
      */
+    /** Vivant : ni révoqué, ni expiré, ni déjà employé (lot 11 : un seul usage). */
     public boolean estUtilisable() {
         return revokedAt == null
+                && usedCount == 0
                 && (expiresAt == null || expiresAt.isAfter(LocalDateTime.now()));
     }
 

@@ -52,7 +52,18 @@ server:
   # Derrière le reverse proxy nginx (api.caap.bj) : reconstruire le schéma et
   # l'IP d'origine depuis X-Forwarded-* — indispensable pour les cookies Secure
   # et les redirections en https.
-  forward-headers-strategy: framework
+  #
+  # `native` (RemoteIpValve de Tomcat) et non `framework` : le filtre de Spring
+  # croit X-Forwarded-For de n'importe qui, donc un client pouvait se donner
+  # l'adresse de son choix et contourner la limitation d'essais. Tomcat ne le
+  # croit que si la connexion vient d'un proxy interne (127/8, 10/8, 172.16/12,
+  # 192.168/16 : nginx sur l'hôte, vu du conteneur par le pont Docker), et
+  # prend l'adresse la plus à droite qui n'est pas un proxy — celle que nginx
+  # a ajoutée, pas celle que le client a écrite.
+  forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      host-header: X-Forwarded-Host
 
 app:
   # Modules optionnels, activés déploiement par déploiement (un laboratoire = un
@@ -273,7 +284,8 @@ logging:
       max-file-size: ${LOG_MAX_FILE_SIZE:10MB}
       # Un mois d'historique : de quoi remonter à un incident signalé tard,
       # sans garder indéfiniment des journaux qui nomment des patients.
-      max-history: ${LOG_MAX_HISTORY:30}
+      # Un an (lot 6) : un incident se comprend parfois des mois après.
+      max-history: ${LOG_MAX_HISTORY:365}
       total-size-cap: ${LOG_TOTAL_SIZE_CAP:1GB}
       clean-history-on-start: false
 

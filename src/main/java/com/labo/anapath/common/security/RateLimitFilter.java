@@ -7,39 +7,60 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Filtre de limitation de débit (rate limiting) sur les routes ouvertes sans jeton.
  * <p>
- * Deux routes s'atteignent sans être authentifié, et chacune récompense qui la
- * martèle : {@code POST /api/v1/auth/login} rend un mot de passe, et
- * {@code GET /api/v1/public/invoices/{token}} rend une facture. Elles sont donc
- * plafonnées par IP — 5 tentatives par minute pour la première, 30 pour la
- * seconde, un client légitime n'ouvrant son lien qu'une poignée de fois.
+ * Chaque route qui s'atteint sans être authentifié récompense qui la martèle :
+ * la connexion rend un mot de passe, le challenge un code à six chiffres, la
+ * réinitialisation un jeton, le lien public une facture. Elles sont donc
+ * plafonnées par adresse : 5 essais par minute et 20 par heure pour les
+ * routes d'authentification, 30 par minute pour les factures, un client
+ * légitime n'ouvrant son lien qu'une poignée de fois.
+ * </p>
+ * <p>
+ * L'adresse est {@code getRemoteAddr()} tel que Tomcat l'a rétablie derrière
+ * nginx ({@code server.forward-headers-strategy: native}) : {@code X-Forwarded-For}
+ * n'est cru que s'il vient d'un proxy interne. Lu ici directement, n'importe
+ * quel client pouvait l'écrire et changer d'adresse à chaque essai.
  * </p>
  * <p>
  * Répond HTTP 429 en cas de dépassement.
  * </p>
  */
+@Slf4j
 @Component
 public class RateLimitFilter extends OncePerRequestFilter {
+
+    /** Routes d'authentification, en POST, limitées par adresse. */
+    static final Set<String> CHEMINS_AUTH = Set.of(
+            "/api/v1/auth/login",
+            "/api/v1/auth/2fa/challenge",
+            "/api/v1/auth/forgot-password",
+            "/api/v1/auth/reset-password",
+            "/api/v1/auth/resend-2fa",
+            "/api/v1/mobile/login");
 
     /** Préfixe des liens publics de téléchargement de facture. */
     private static final String CHEMIN_FACTURE_PUBLIQUE = "/api/v1/public/invoices/";
 
+    // ponytail: en mémoire, par instance ; un cache partagé si l'API tourne un jour en plusieurs copies.
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
     private final Map<String, Bucket> bucketsFacture = new ConcurrentHashMap<>();
 
     private Bucket newBucket() {
         return Bucket.builder()
                 .addLimit(Bandwidth.classic(5, Refill.intervally(5, Duration.ofMinutes(1))))
+                .addLimit(Bandwidth.classic(20, Refill.intervally(20, Duration.ofHours(1))))
                 .build();
     }
 
@@ -53,20 +74,24 @@ public class RateLimitFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        if ("/api/v1/auth/login".equals(request.getRequestURI()) && "POST".equals(request.getMethod())) {
-            String ip = getClientIp(request);
-            Bucket bucket = buckets.computeIfAbsent(ip, k -> newBucket());
+        String chemin = request.getRequestURI();
+        if (CHEMINS_AUTH.contains(chemin) && "POST".equals(request.getMethod())) {
+            String ip = request.getRemoteAddr();
+            // Un seau par route et par adresse : une connexion normale enchaîne
+            // login, challenge, parfois un renvoi de code, sans se bloquer elle-même.
+            Bucket bucket = buckets.computeIfAbsent(chemin + "|" + ip, k -> newBucket());
             if (!bucket.tryConsume(1)) {
+                log.warn("Limite d'essais dépassée sur {} depuis {}", chemin, ip);
                 response.setStatus(429);
                 response.setContentType("application/json");
-                response.getWriter().write("{\"success\":false,\"message\":\"Trop de tentatives. Réessayez dans 1 minute.\"}");
+                response.getWriter().write("{\"success\":false,\"message\":\"Trop de tentatives. Réessayez dans quelques minutes.\"}");
                 return;
             }
-        } else if (request.getRequestURI().startsWith(CHEMIN_FACTURE_PUBLIQUE)
-                && "GET".equals(request.getMethod())) {
-            String ip = getClientIp(request);
+        } else if (chemin.startsWith(CHEMIN_FACTURE_PUBLIQUE) && "GET".equals(request.getMethod())) {
+            String ip = request.getRemoteAddr();
             Bucket bucket = bucketsFacture.computeIfAbsent(ip, k -> newBucketFacture());
             if (!bucket.tryConsume(1)) {
+                log.warn("Limite d'essais dépassée sur {} depuis {}", CHEMIN_FACTURE_PUBLIQUE, ip);
                 // Le lien s'ouvre dans un navigateur : un JSON d'erreur y serait illisible.
                 response.setStatus(429);
                 response.setContentType("text/html;charset=UTF-8");
@@ -76,13 +101,5 @@ public class RateLimitFilter extends OncePerRequestFilter {
             }
         }
         filterChain.doFilter(request, response);
-    }
-
-    private String getClientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 }

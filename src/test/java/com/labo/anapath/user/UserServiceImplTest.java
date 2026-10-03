@@ -43,6 +43,9 @@ class UserServiceImplTest {
     private PasswordEncoder passwordEncoder;
 
     @Mock
+    private com.labo.anapath.common.security.PolitiqueDeMotDePasse politiqueDeMotDePasse;
+
+    @Mock
     private RoleRepository roleRepository;
 
     @InjectMocks
