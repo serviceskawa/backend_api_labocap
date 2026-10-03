@@ -67,7 +67,7 @@ class TestOrderServiceImplTest {
     @Mock private com.labo.anapath.setting.SettingRepository settingRepository;
     @Mock private com.labo.anapath.setting.SettingAppRepository settingAppRepository;
     @Mock private FileStorageService fileStorageService;
-    @Mock private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    @Mock private tools.jackson.databind.ObjectMapper objectMapper;
     // Ajouté au service pour rendre le nom de la personne affectée dans la liste.
     @Mock private TestOrderAssignmentDetailRepository assignmentDetailRepository;
 

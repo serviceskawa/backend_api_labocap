@@ -59,7 +59,7 @@ public class ReportServiceImpl implements ReportService {
     private final ServicePerimetreDeValidation perimetreDeValidation;
     private final JournalDesRefus journalDesRefus;
     /** Pour relire les étiquettes, rangées en tableau JSON sur la ligne d'affectation. */
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final tools.jackson.databind.ObjectMapper objectMapper;
 
     @Override
     @Transactional(readOnly = true)

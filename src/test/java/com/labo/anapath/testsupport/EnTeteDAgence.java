@@ -3,7 +3,7 @@ package com.labo.anapath.testsupport;
 import com.labo.anapath.common.branch.BranchContextFilter;
 import com.labo.anapath.common.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.web.client.RestTemplateCustomizer;
+import org.springframework.boot.restclient.RestTemplateCustomizer;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
@@ -29,7 +29,7 @@ public class EnTeteDAgence implements RestTemplateCustomizer {
         restTemplate.getInterceptors().add((request, body, execution) -> {
             String autorisation = request.getHeaders().getFirst("Authorization");
             if (autorisation != null && autorisation.startsWith("Bearer ")
-                    && !request.getHeaders().containsKey(BranchContextFilter.BRANCH_HEADER)) {
+                    && !request.getHeaders().containsHeader(BranchContextFilter.BRANCH_HEADER)) {
                 try {
                     UUID agence = jwt.extractBranchId(autorisation.substring(7));
                     if (agence != null) {

@@ -36,7 +36,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
     private final UserRepository userRepository;
     private final BranchRepository branchRepository;
     private final TestPathologyMacroRepository macroRepository;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final tools.jackson.databind.ObjectMapper objectMapper;
     private final SampleLabelRepository labelRepository;
     private final com.labo.anapath.report.ReportRepository reportRepository;
 

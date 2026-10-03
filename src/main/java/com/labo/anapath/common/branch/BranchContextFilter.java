@@ -1,6 +1,6 @@
 package com.labo.anapath.common.branch;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.labo.anapath.branch.BranchRepository;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.security.UserPrincipal;
