@@ -9,6 +9,11 @@ on:
       - main
   # Redéployer main à la main (secret changé, image à reconstruire…).
   workflow_dispatch:
+    inputs:
+      sans_tests:
+        description: "Sauter la suite de tests (main n'a pas changé, seule la configuration serveur a bougé)"
+        type: boolean
+        default: false
 
 # Deux merges rapprochés lanceraient deux `compose up --build` sur le même
 # serveur : on les met en file sans annuler celui qui tourne (africauto).
@@ -18,10 +23,14 @@ concurrency:
 
 jobs:
   tests:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.sans_tests }}
     uses: ./.github/workflows/ci.yml
 
   deploy:
     needs: tests
+    # Un merge sur main exige les tests ; un redéploiement manuel peut les
+    # sauter si main n'a pas changé (needs.tests.result vaut alors « skipped »).
+    if: ${{ always() && (needs.tests.result == 'success' || (github.event_name == 'workflow_dispatch' && needs.tests.result == 'skipped')) }}
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -62,6 +71,9 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
+            # Les erreurs du serveur (shell, compose) doivent apparaître dans le journal.
+            exec 2>&1
+            echo "→ Shell : $0, utilisateur : $(id -un)"
             cd ${{ secrets.SERVER_PROJECT_PATH }}
 
             echo "→ Récupération du code (main)"
@@ -71,9 +83,12 @@ jobs:
             echo "→ Complément du .env depuis GitHub (sans écraser l'existant)"
             [ -f .env ] || { echo "::error::.env absent dans $(pwd)"; exit 1; }
             [ -z "$(tail -c1 .env)" ] || echo >> .env
+            ls -l .env
             ajouter_si_absent() { # clé : écrite seulement si .env ne l'a pas et que GitHub la fournit
-              local k="$1" v="${!1:-}"
-              grep -qE "^$k=" .env && return 0
+              k="$1"
+              # Pas de ${!k} : le shell de connexion n'est pas forcément bash.
+              eval "v=\${$k:-}"
+              if grep -qE "^$k=" .env; then return 0; fi
               if [ -z "$v" ]; then echo "::warning::$k : ni dans le .env du serveur, ni dans GitHub"; return 0; fi
               printf '%s=%s\n' "$k" "$v" >> .env
               echo "$k écrite dans .env depuis GitHub"
