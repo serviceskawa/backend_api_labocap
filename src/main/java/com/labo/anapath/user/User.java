@@ -86,6 +86,7 @@ public class User extends AuditableEntity {
     private Long twoFactorLastStep;
 
     @Column(name = "two_factor_secret", length = 255)
+    @jakarta.persistence.Convert(converter = com.labo.anapath.common.security.SecretChiffreConverter.class)
     private String twoFactorSecret;
 
     /**

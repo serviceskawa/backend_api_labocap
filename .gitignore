@@ -78,3 +78,6 @@ Thumbs.db
 hs_err_pid*
 replay_pid*
 .gstack/
+
+# Fichiers de données (clichés, documents) : jamais dans le dépôt (lot 11).
+/storage/

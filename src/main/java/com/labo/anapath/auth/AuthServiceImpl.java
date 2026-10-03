@@ -67,6 +67,7 @@ public class AuthServiceImpl implements AuthService {
     private final GoogleAuthenticator googleAuthenticator;
     private final PasswordEncoder passwordEncoder;
     private final TwoFaRepository twoFaRepository;
+    private final com.labo.anapath.common.security.PolitiqueDeMotDePasse politiqueDeMotDePasse;
     private final TwoFaService twoFaService;
     private final com.labo.anapath.common.email.EmailService emailService;
     private final BranchRepository branchRepository;
@@ -314,6 +315,7 @@ public class AuthServiceImpl implements AuthService {
                         && u.getResetTokenExpiresAt().isAfter(LocalDateTime.now()))
                 .orElseThrow(() -> new UnauthorizedException("Token de réinitialisation invalide ou expiré"));
 
+        politiqueDeMotDePasse.verifier(request.getPassword(), user.getEmail(), user.getFirstname(), user.getLastname());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setResetToken(null);
         user.setResetTokenExpiresAt(null);
