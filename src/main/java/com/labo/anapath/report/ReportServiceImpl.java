@@ -995,7 +995,7 @@ public class ReportServiceImpl implements ReportService {
         report.setCallDate(LocalDateTime.now());
         report.setRetrieverName(dto.getSignatorName());
         report.setRetrieverRelation(dto.getRelation());
-        report.setRetrieverSignature(dto.getSignature());
+        report.setRetrieverSignature(com.labo.anapath.common.security.SignatureNettoyee.nettoyer(dto.getSignature()));
         // Cohérence de statut, comme dans deliver() et markDelivered().
         //
         // Cette méthode posait `isDelivered` sans toucher au statut : le compte-rendu

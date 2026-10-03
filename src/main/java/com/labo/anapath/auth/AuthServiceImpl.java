@@ -67,6 +67,7 @@ public class AuthServiceImpl implements AuthService {
     private final GoogleAuthenticator googleAuthenticator;
     private final PasswordEncoder passwordEncoder;
     private final TwoFaRepository twoFaRepository;
+    private final com.labo.anapath.common.security.PolitiqueDeMotDePasse politiqueDeMotDePasse;
     private final org.springframework.transaction.PlatformTransactionManager transactionManager;
     private final TwoFaService twoFaService;
     private final com.labo.anapath.common.email.EmailService emailService;
@@ -320,6 +321,7 @@ public class AuthServiceImpl implements AuthService {
                         && u.getResetTokenExpiresAt().isAfter(LocalDateTime.now()))
                 .orElseThrow(() -> new UnauthorizedException("Token de réinitialisation invalide ou expiré"));
 
+        politiqueDeMotDePasse.verifier(request.getPassword(), user.getEmail(), user.getFirstname(), user.getLastname());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setResetToken(null);
         user.setResetTokenExpiresAt(null);
@@ -337,9 +339,20 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void resend2FA(Resend2FARequest request) {
-        userRepository.findByEmail(request.getEmail()).ifPresent(user -> {
+        java.util.Optional<User> cible;
+        if (request.getEmail() != null && !request.getEmail().isBlank()) {
+            cible = userRepository.findByEmail(request.getEmail());
+        } else if (StringUtils.hasText(request.getTempToken())
+                && jwtTokenProvider.validateToken(request.getTempToken())
+                && "2fa-challenge".equals(jwtTokenProvider.extractType(request.getTempToken()))) {
+            cible = userRepository.findById(jwtTokenProvider.extractUserId(request.getTempToken()));
+        } else {
+            cible = java.util.Optional.empty();
+        }
+        // Silence dans tous les cas : dire « adresse inconnue » révélerait les comptes.
+        cible.ifPresent(user -> {
             sendAndStoreOtp(user);
-            log.info("OTP renvoyé par email à: {}", maskEmail(request.getEmail()));
+            log.info("OTP renvoyé par email à: {}", maskEmail(user.getEmail()));
         });
     }
 

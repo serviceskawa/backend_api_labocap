@@ -21,7 +21,7 @@ public class ResetPasswordRequest {
 
     /** Nouveau mot de passe. */
     @NotBlank(message = "Le mot de passe est obligatoire")
-    @Size(min = 8, message = "Le mot de passe doit contenir au moins 8 caractères")
+    @Size(min = 12, message = "Le mot de passe doit contenir au moins 12 caractères")
     private String password;
 
     /** Confirmation du nouveau mot de passe, doit être identique à {@code password}. */

@@ -351,7 +351,13 @@ public class AuthController {
      */
     @PostMapping("/resend-2fa")
     public ResponseEntity<ApiResponse<Void>> resend2FA(
-            @Valid @RequestBody Resend2FARequest request) {
+            @Valid @RequestBody(required = false) Resend2FARequest request,
+            HttpServletRequest httpRequest) {
+        if (request == null) request = new Resend2FARequest();
+        // Sans adresse, la connexion en cours se reconnaît au cookie posé au login.
+        if (request.getEmail() == null || request.getEmail().isBlank()) {
+            request.setTempToken(extractCookieValue(httpRequest, PENDING_2FA_COOKIE));
+        }
         authService.resend2FA(request);
         return ResponseEntity.ok(ApiResponse.success("Code OTP envoyé par email", null));
     }

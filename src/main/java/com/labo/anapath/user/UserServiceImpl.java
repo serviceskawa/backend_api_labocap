@@ -48,6 +48,7 @@ public class UserServiceImpl implements UserService {
     private final PermissionRepository permissionRepository;
     private final PermissionMapper permissionMapper;
     private final BranchRepository branchRepository;
+    private final com.labo.anapath.common.security.PolitiqueDeMotDePasse politiqueDeMotDePasse;
 
     /**
      * {@inheritDoc}
@@ -86,6 +87,7 @@ public class UserServiceImpl implements UserService {
         if (dto.getPassword() == null || dto.getPassword().isBlank()) {
             throw new BusinessException("Le mot de passe est obligatoire pour la création d'un utilisateur.");
         }
+        politiqueDeMotDePasse.verifier(dto.getPassword(), dto.getEmail(), dto.getFirstname(), dto.getLastname());
         User user = userMapper.toEntity(dto);
         // Statut actif par défaut si non précisé
         user.setActive(dto.getIsActive() != null ? dto.getIsActive() : true);
@@ -200,6 +202,7 @@ public class UserServiceImpl implements UserService {
         if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
             throw new BusinessException("Le mot de passe actuel est incorrect.");
         }
+        politiqueDeMotDePasse.verifier(request.getNewPassword(), user.getEmail(), user.getFirstname(), user.getLastname());
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
         log.info("Mot de passe mis à jour pour l'utilisateur: {}", id);
@@ -220,7 +223,7 @@ public class UserServiceImpl implements UserService {
         // Signature absente du corps = signature inchangée (l'écran ne la renvoie
         // que lorsqu'un nouveau fichier a été choisi).
         if (request.getSignature() != null) {
-            user.setSignature(request.getSignature());
+            user.setSignature(com.labo.anapath.common.security.SignatureNettoyee.nettoyer(request.getSignature()));
         }
 
         User updated = userRepository.save(user);
