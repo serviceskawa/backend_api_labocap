@@ -1,5 +1,6 @@
 package com.labo.anapath.messaging;
 
+import com.labo.anapath.testsupport.Jetons;
 import com.labo.anapath.auth.LoginRequest;
 import com.labo.anapath.auth.LoginResponse;
 import com.labo.anapath.common.dto.ApiResponse;
@@ -59,6 +60,8 @@ class ChatControllerIT {
 
     @LocalServerPort private int port;
 
+    @Autowired private Jetons jetons;
+
     private static final UUID SEED_BRANCH_ID   = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String SENDER_EMAIL    = "sender_chat_it@labo.bj";
     private static final String RECEIVER_EMAIL  = "receiver_chat_it@labo.bj";
@@ -99,13 +102,9 @@ class ChatControllerIT {
     }
 
     private String loginAndGetToken(String email) {
-        LoginRequest req = new LoginRequest();
-        req.setEmail(email);
-        req.setPassword(PASSWORD);
-        ResponseEntity<ApiResponse<LoginResponse>> resp = restTemplate.exchange(
-                "http://localhost:" + port + "/api/v1/auth/login",
-                HttpMethod.POST, new HttpEntity<>(req), new ParameterizedTypeReference<>() {});
-        return resp.getBody().data().accessToken();
+        // Jeton émis directement : la connexion HTTP exige un code à usage
+        // unique et n'est pas ce que ce test éprouve (voir Jetons).
+        return jetons.pour(email);
     }
 
     private HttpHeaders authHeaders(String token) {

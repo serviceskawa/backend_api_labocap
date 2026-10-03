@@ -120,15 +120,16 @@ class AppointmentServiceImplTest {
     }
 
     @Test
-    @DisplayName("getCalendar - priority 'normal' → className 'bg-primary'")
-    void getClassNameFromPriority_normal_returnsBgPrimary() {
+    @DisplayName("getCalendar - priority 'normal' → className 'bg-info' (randColor() Laravel)")
+    void getClassNameFromPriority_normal_returnsBgInfo() {
         Appointment a = buildAppointmentWithDoctor();
         a.setPriority("normal");
         when(appointmentRepository.findByBranchId(BRANCH_ID)).thenReturn(List.of(a));
 
         List<AppointmentCalendarDto> result = service.getCalendar(BRANCH_ID);
 
-        assertThat(result.get(0).className()).isEqualTo("bg-primary");
+        // Réplique randColor() de Laravel : normal -> bg-info, urgent -> bg-warning.
+        assertThat(result.get(0).className()).isEqualTo("bg-info");
     }
 
     @Test

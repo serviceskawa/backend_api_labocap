@@ -541,8 +541,11 @@ class TestOrderServiceImplTest {
         when(objectMapper.writeValueAsString(any())).thenReturn("[\"file1.png\",\"file2.png\"]");
         when(testOrderRepository.save(any())).thenReturn(order);
 
-        MockMultipartFile f1 = new MockMultipartFile("files_name", "img1.png", "image/png", new byte[]{1});
-        MockMultipartFile f2 = new MockMultipartFile("files_name", "img2.png", "image/png", new byte[]{2});
+        // Le service lit la signature des octets (89 50 4E 47 0D 0A 1A 0A), pas
+        // l'extension ni le Content-Type : un faux contenu est refusé.
+        byte[] png = {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
+        MockMultipartFile f1 = new MockMultipartFile("files_name", "img1.png", "image/png", png);
+        MockMultipartFile f2 = new MockMultipartFile("files_name", "img2.png", "image/png", png);
 
         List<String> result = testOrderService.uploadImages(ORDER_ID, BRANCH_ID, List.<MultipartFile>of(f1, f2));
 

@@ -117,12 +117,16 @@ class PdfReportServiceImplTest {
     }
 
     @Test
-    @DisplayName("generatePdf - rendu PDF échoue → InvalidOperationException")
+    @DisplayName("generatePdf - échec dans le bloc de rendu → InvalidOperationException, rien n'est journalisé")
     void generatePdf_renderFails_throwsInvalidOperation() throws Exception {
         Report report = buildMinimalReport();
         when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
         when(settingAppRepository.findByKey(anyString())).thenReturn(Optional.empty());
+        // Un gabarit vide ne fait plus échouer le rendu (PdfHtmlUtil.toXhtml le
+        // remplace par un document vide) : on fait échouer l'étape suivante du
+        // même bloc, la journalisation, pour vérifier l'enveloppe de l'erreur.
         when(templateEngine.process(eq("pdf/rapport"), any(Context.class))).thenReturn(null);
+        when(userRepository.findById(USER_ID)).thenThrow(new RuntimeException("base indisponible"));
 
         assertThatThrownBy(() -> service.generatePdf(REPORT_ID, USER_ID))
                 .isInstanceOf(InvalidOperationException.class)

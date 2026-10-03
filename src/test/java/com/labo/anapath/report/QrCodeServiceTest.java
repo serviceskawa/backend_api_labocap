@@ -31,11 +31,12 @@ class QrCodeServiceTest {
     }
 
     @Test
-    @DisplayName("generateBase64 - contenu vide → génère un QR code vide")
-    void generateBase64_emptyContent_returnsResult() throws WriterException, IOException {
-        String result = service.generateBase64("", 100);
-
-        assertThat(result).startsWith("data:image/png;base64,");
+    @DisplayName("generateBase64 - contenu vide → refusé par ZXing (IllegalArgumentException)")
+    void generateBase64_emptyContent_throws() {
+        // ZXing refuse un contenu vide. L'appelant (PdfReportServiceImpl) n'appelle le
+        // service qu'avec un code de demande et absorbe l'exception : pas de garde ici.
+        assertThatThrownBy(() -> service.generateBase64("", 100))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

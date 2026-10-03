@@ -1,5 +1,6 @@
 package com.labo.anapath.role;
 
+import com.labo.anapath.testsupport.Jetons;
 import com.labo.anapath.auth.LoginRequest;
 import com.labo.anapath.auth.LoginResponse;
 import com.labo.anapath.common.dto.ApiResponse;
@@ -67,6 +68,8 @@ class RoleIntegrationTest {
     @LocalServerPort
     private int port;
 
+    @Autowired private Jetons jetons;
+
     private static final UUID SEED_BRANCH_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String ADMIN_EMAIL = "admin_role_test@labo.bj";
     private static final String ADMIN_PASSWORD = "adminPass123";
@@ -94,18 +97,9 @@ class RoleIntegrationTest {
     }
 
     private String loginAndGetToken(String email, String password) {
-        LoginRequest request = new LoginRequest();
-        request.setEmail(email);
-        request.setPassword(password);
-
-        ResponseEntity<ApiResponse<LoginResponse>> response = restTemplate.exchange(
-                "http://localhost:" + port + "/api/v1/auth/login",
-                HttpMethod.POST,
-                new HttpEntity<>(request),
-                new ParameterizedTypeReference<>() {});
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        return response.getBody().data().accessToken();
+        // Jeton émis directement : la connexion HTTP exige un code à usage
+        // unique et n'est pas ce que ce test éprouve (voir Jetons).
+        return jetons.pour(email);
     }
 
     @Test
@@ -298,7 +292,7 @@ class RoleIntegrationTest {
         ResponseEntity<String> response = restTemplate.exchange(
                 "http://localhost:" + port + "/api/v1/patients",
                 HttpMethod.POST,
-                new HttpEntity<>("{}", headers),
+                new HttpEntity<>("{\"code\":\"P-RBAC-001\",\"firstname\":\"Rbac\",\"lastname\":\"Test\"}", headers),
                 String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);

@@ -1,5 +1,6 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.testsupport.Jetons;
 import com.labo.anapath.auth.LoginRequest;
 import com.labo.anapath.auth.LoginResponse;
 import com.labo.anapath.common.dto.ApiResponse;
@@ -77,6 +78,8 @@ class TestOrderIntegrationTest {
     @LocalServerPort
     private int port;
 
+    @Autowired private Jetons jetons;
+
     private static final UUID SEED_BRANCH_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String ADMIN_EMAIL = "admin_testorder_test@labo.bj";
     private static final String ADMIN_PASSWORD = "adminPass123";
@@ -122,18 +125,9 @@ class TestOrderIntegrationTest {
     }
 
     private String loginAndGetToken() {
-        LoginRequest request = new LoginRequest();
-        request.setEmail(ADMIN_EMAIL);
-        request.setPassword(ADMIN_PASSWORD);
-
-        ResponseEntity<ApiResponse<LoginResponse>> response = restTemplate.exchange(
-                "http://localhost:" + port + "/api/v1/auth/login",
-                HttpMethod.POST,
-                new HttpEntity<>(request),
-                new ParameterizedTypeReference<>() {});
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        return response.getBody().data().accessToken();
+        // Jeton émis directement : la connexion HTTP exige un code à usage
+        // unique et n'est pas ce que ce test éprouve (voir Jetons).
+        return jetons.pour(ADMIN_EMAIL);
     }
 
     @Test
@@ -361,8 +355,9 @@ class TestOrderIntegrationTest {
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-        ByteArrayResource fakeImage = new ByteArrayResource(new byte[]{(byte) 0xFF, (byte) 0xD8}) {
-            @Override public String getFilename() { return "test.jpg"; }
+        // Signature PNG : le serveur lit les octets, pas l'extension.
+        ByteArrayResource fakeImage = new ByteArrayResource(new byte[]{(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}) {
+            @Override public String getFilename() { return "test.png"; }
         };
         body.add("files_name", fakeImage);
 
@@ -408,7 +403,7 @@ class TestOrderIntegrationTest {
     }
 
     @Test
-    @DisplayName("DELETE /test-orders/{id}/images/0 - supprime index 0 → 200")
+    @DisplayName("DELETE /test-orders/{id}/images/0 - retire l'index 0 (suppression douce) → 200")
     void deleteImage_returns200() {
         String token = loginAndGetToken();
 
@@ -430,8 +425,11 @@ class TestOrderIntegrationTest {
                 new ParameterizedTypeReference<>() {});
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        testOrderRepository.findById(saved.getId()).ifPresent(o ->
-                assertThat(o.getFilesName()).isEqualTo("[]"));
+        // Suppression douce : l'entrée reste à sa place, la date de retrait est posée.
+        testOrderRepository.findById(saved.getId()).ifPresent(o -> {
+            assertThat(o.getFilesName()).contains("fichier_inexistant.png");
+            assertThat(o.getFilesDeletedAt()).isNotBlank().doesNotContain("[null]");
+        });
 
         testOrderRepository.findById(saved.getId()).ifPresent(testOrderRepository::delete);
     }

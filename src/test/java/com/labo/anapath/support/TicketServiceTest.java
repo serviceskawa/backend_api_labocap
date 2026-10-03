@@ -60,7 +60,7 @@ class TicketServiceTest {
     }
 
     @Test
-    @DisplayName("create - génère un ticket_code au format TKT-YYYYMM-XXXXXX")
+    @DisplayName("create - génère un ticket_code au format Laravel TI-AA0001 (année sur 2 chiffres + compteur)")
     void create_generatesUniqueCode() {
         User user = new User();
         when(ticketMapper.toEntity(any(TicketRequestDto.class))).thenReturn(new Ticket());
@@ -68,7 +68,8 @@ class TicketServiceTest {
         Ticket saved = buildTicket();
         when(ticketRepository.save(any())).thenAnswer(inv -> {
             Ticket t = inv.getArgument(0);
-            assertThat(t.getTicketCode()).matches("TKT-\\d{6}-[A-F0-9]{6}");
+            // Aucun ticket cette année (findMaxSequenceForYear non stubbé) → compteur à 0001.
+            assertThat(t.getTicketCode()).matches("TI-\\d{2}0001");
             return saved;
         });
         when(ticketMapper.toResponseDto(saved)).thenReturn(dummyDto("TKT-202601-ABC123"));
