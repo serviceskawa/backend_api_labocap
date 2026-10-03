@@ -333,9 +333,20 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void resend2FA(Resend2FARequest request) {
-        userRepository.findByEmail(request.getEmail()).ifPresent(user -> {
+        java.util.Optional<User> cible;
+        if (request.getEmail() != null && !request.getEmail().isBlank()) {
+            cible = userRepository.findByEmail(request.getEmail());
+        } else if (StringUtils.hasText(request.getTempToken())
+                && jwtTokenProvider.validateToken(request.getTempToken())
+                && "2fa-challenge".equals(jwtTokenProvider.extractType(request.getTempToken()))) {
+            cible = userRepository.findById(jwtTokenProvider.extractUserId(request.getTempToken()));
+        } else {
+            cible = java.util.Optional.empty();
+        }
+        // Silence dans tous les cas : dire « adresse inconnue » révélerait les comptes.
+        cible.ifPresent(user -> {
             sendAndStoreOtp(user);
-            log.info("OTP renvoyé par email à: {}", maskEmail(request.getEmail()));
+            log.info("OTP renvoyé par email à: {}", maskEmail(user.getEmail()));
         });
     }
 
