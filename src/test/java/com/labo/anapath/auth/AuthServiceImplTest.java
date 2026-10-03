@@ -97,6 +97,10 @@ class AuthServiceImplTest {
     @Mock
     private TwoFaService twoFaService;
 
+    /** Compteur des connexions ratées : nul, les deux {@code catch} du login tomberaient en NPE. */
+    @Mock
+    private com.labo.anapath.common.supervision.CompteurDAlertes compteurDAlertes;
+
     @InjectMocks
     private AuthServiceImpl authService;
 

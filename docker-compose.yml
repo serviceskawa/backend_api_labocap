@@ -77,6 +77,12 @@ services:
       BACKUP_ALERT_EMAIL: ${BACKUP_ALERT_EMAIL:-}
       # Biologie clinique : "true" pour un laboratoire qui la pratique.
       MODULE_BIOLOGY: ${MODULE_BIOLOGY:-false}
+      # Supervision (docs/supervision.md). ALERT_EMAIL : le prestataire, qui
+      # reçoit les alertes techniques. MANAGEMENT_METRICS_EXPOSED : "true"
+      # seulement avec docker-compose.supervision.yml en face ; les métriques
+      # ne sortent jamais par nginx.
+      ALERT_EMAIL: ${ALERT_EMAIL:-}
+      MANAGEMENT_METRICS_EXPOSED: ${MANAGEMENT_METRICS_EXPOSED:-false}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant dans .env}
       # Les trois durées de session. Elles valaient ici 24 h et 7 jours, ce qui
       # écrasait sans le dire la politique écrite dans application.yml — la
