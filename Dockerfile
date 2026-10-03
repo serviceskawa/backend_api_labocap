@@ -46,7 +46,8 @@ ENV STORAGE_PATH=/var/lib/labo/storage
 # conteneur tourne en non-root. Il vivait auparavant dans /app, hors de tout
 # volume : chaque redéploiement l'emportait.
 ENV APP_BACKUP_DIR=/var/lib/labo/backups
-RUN mkdir -p "$STORAGE_PATH" "$APP_BACKUP_DIR" && chown -R appuser:appgroup /var/lib/labo
+# Le journal applicatif aussi (LOG_FILE sous /var/lib/labo/logs, volume `logs`).
+RUN mkdir -p "$STORAGE_PATH" "$APP_BACKUP_DIR" /var/lib/labo/logs && chown -R appuser:appgroup /var/lib/labo
 
 USER appuser
 
