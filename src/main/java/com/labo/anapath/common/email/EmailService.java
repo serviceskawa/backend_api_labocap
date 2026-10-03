@@ -86,11 +86,12 @@ public interface EmailService {
      * @param signatoryName  médecin dont la signature est engagée
      * @param modifiedByName auteur de la modification
      * @param changedFields  champs touchés, déjà mis en forme
+     * @param reason         motif saisi par l'auteur, {@code null} s'il n'en a pas donné
      * @param labName        nom du laboratoire (en-tête / signature)
      */
     void sendPostSignatureChangeAlert(String to, String reportCode, String testOrderCode,
                                       String signatoryName, String modifiedByName,
-                                      String changedFields, String labName);
+                                      String changedFields, String reason, String labName);
 
     /**
      * Envoie l'alerte "compte-rendu non fait" pour une demande d'examen en retard.
