@@ -86,6 +86,7 @@ public class User extends AuditableEntity {
     private Long twoFactorLastStep;
 
     @Column(name = "two_factor_secret", length = 255)
+    @jakarta.persistence.Convert(converter = com.labo.anapath.common.security.SecretChiffreConverter.class)
     private String twoFactorSecret;
 
     /**
@@ -137,6 +138,22 @@ public class User extends AuditableEntity {
     /** Date d'expiration du token de réinitialisation (1 heure après génération). */
     @Column(name = "reset_token_expires_at")
     private LocalDateTime resetTokenExpiresAt;
+
+    /** Codes de connexion faux depuis {@link #otpFailuresSince}, remis à zéro au succès. */
+    @Column(name = "otp_failed_attempts", nullable = false)
+    private short otpFailedAttempts = 0;
+
+    /** Début de la fenêtre d'une heure dans laquelle on compte les codes faux. */
+    @Column(name = "otp_failures_since")
+    private LocalDateTime otpFailuresSince;
+
+    /**
+     * Verrouillage du compte après trop de codes faux. Tant que la date n'est
+     * pas passée, la connexion échoue avec la même erreur que des identifiants
+     * faux : un attaquant n'apprend rien de l'existence du verrou.
+     */
+    @Column(name = "locked_until")
+    private LocalDateTime lockedUntil;
 
     /**
      * Rôles attribués à l'utilisateur.

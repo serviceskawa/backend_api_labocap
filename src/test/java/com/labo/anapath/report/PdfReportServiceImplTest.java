@@ -67,7 +67,7 @@ class PdfReportServiceImplTest {
     @Test
     @DisplayName("generatePdf - rapport introuvable → ResourceNotFoundException")
     void generatePdf_reportNotFound() {
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.empty());
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.generatePdf(REPORT_ID, USER_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -83,7 +83,7 @@ class PdfReportServiceImplTest {
         order.setCode("EX26-0001");
         report.setTestOrder(order);
 
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(report));
         when(qrCodeService.generateBase64(anyString(), anyInt())).thenReturn("data:image/png;base64,abc");
         when(settingAppRepository.findByKey("entete")).thenReturn(Optional.empty());
         when(settingAppRepository.findByKey("report_footer")).thenReturn(Optional.empty());
@@ -105,7 +105,7 @@ class PdfReportServiceImplTest {
         order.setCode("EX26-0001");
         report.setTestOrder(order);
 
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(report));
         when(qrCodeService.generateBase64(anyString(), anyInt())).thenThrow(new RuntimeException("ZXing error"));
         when(settingAppRepository.findByKey(anyString())).thenReturn(Optional.empty());
         when(templateEngine.process(eq("pdf/rapport"), any(Context.class)))
@@ -117,12 +117,16 @@ class PdfReportServiceImplTest {
     }
 
     @Test
-    @DisplayName("generatePdf - rendu PDF échoue → InvalidOperationException")
+    @DisplayName("generatePdf - échec dans le bloc de rendu → InvalidOperationException, rien n'est journalisé")
     void generatePdf_renderFails_throwsInvalidOperation() throws Exception {
         Report report = buildMinimalReport();
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(report));
         when(settingAppRepository.findByKey(anyString())).thenReturn(Optional.empty());
+        // Un gabarit vide ne fait plus échouer le rendu (PdfHtmlUtil.toXhtml le
+        // remplace par un document vide) : on fait échouer l'étape suivante du
+        // même bloc, la journalisation, pour vérifier l'enveloppe de l'erreur.
         when(templateEngine.process(eq("pdf/rapport"), any(Context.class))).thenReturn(null);
+        when(userRepository.findById(USER_ID)).thenThrow(new RuntimeException("base indisponible"));
 
         assertThatThrownBy(() -> service.generatePdf(REPORT_ID, USER_ID))
                 .isInstanceOf(InvalidOperationException.class)
@@ -135,7 +139,7 @@ class PdfReportServiceImplTest {
     @DisplayName("generatePdf - settings entête/footer présents → inclus dans le contexte Thymeleaf")
     void generatePdf_settingsPresent_usedInContext() throws Exception {
         Report report = buildMinimalReport();
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(report));
         when(settingAppRepository.findByKey("entete"))
                 .thenReturn(Optional.of(buildSetting("entete", "<h1>LABO ANAPATH</h1>")));
         when(settingAppRepository.findByKey("report_footer"))
@@ -159,7 +163,7 @@ class PdfReportServiceImplTest {
         signatory1.setLastname("DUPONT");
         report.setSignatory1(signatory1);
 
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(report));
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(report));
         when(settingAppRepository.findByKey(anyString())).thenReturn(Optional.empty());
         when(templateEngine.process(eq("pdf/rapport"), any(Context.class)))
                 .thenReturn("<html><body>Jean DUPONT</body></html>");

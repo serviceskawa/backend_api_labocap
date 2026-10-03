@@ -87,11 +87,8 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Override
     @Transactional(readOnly = true)
     public InvoiceResponseDto findById(UUID id, UUID branchId) {
-        Invoice invoice = invoiceRepository.findById(id)
+        Invoice invoice = invoiceRepository.findByIdAndBranchId(id, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Facture", id));
-        if (!invoice.getBranchId().equals(branchId)) {
-            throw new ResourceNotFoundException("Facture", id);
-        }
         InvoiceResponseDto dto = financeMapper.toInvoiceResponseDto(invoice);
         dto = financeMapper.withRefund(dto, findRefundFor(invoice));
         return financeMapper.withQrcode(dto, buildQrcode(invoice));
@@ -209,6 +206,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
 
         // Refresh pour récupérer la facture avec ses détails fraîchement insérés
+        // Global : rechargement de ce qu'on vient d'écrire dans l'agence.
         saved = invoiceRepository.findById(saved.getId()).orElse(saved);
         return financeMapper.toInvoiceResponseDto(saved);
     }
@@ -216,11 +214,8 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Override
     @Transactional
     public InvoiceResponseDto update(UUID id, InvoiceRequestDto dto, UUID branchId) {
-        Invoice invoice = invoiceRepository.findById(id)
+        Invoice invoice = invoiceRepository.findByIdAndBranchId(id, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Facture", id));
-        if (!invoice.getBranchId().equals(branchId)) {
-            throw new ResourceNotFoundException("Facture", id);
-        }
         invoice.setDueDate(dto.getDueDate());
         return financeMapper.toInvoiceResponseDto(invoiceRepository.save(invoice));
     }
@@ -228,22 +223,16 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Override
     @Transactional
     public void delete(UUID id, UUID branchId) {
-        Invoice invoice = invoiceRepository.findById(id)
+        Invoice invoice = invoiceRepository.findByIdAndBranchId(id, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Facture", id));
-        if (!invoice.getBranchId().equals(branchId)) {
-            throw new ResourceNotFoundException("Facture", id);
-        }
         invoiceRepository.delete(invoice);
     }
 
     @Override
     @Transactional
     public InvoiceResponseDto markAsPaid(UUID invoiceId, InvoiceStatusUpdateDto dto, UUID branchId) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
+        Invoice invoice = invoiceRepository.findByIdAndBranchId(invoiceId, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Facture", invoiceId));
-        if (!invoice.getBranchId().equals(branchId)) {
-            throw new ResourceNotFoundException("Facture", invoiceId);
-        }
 
         if (Boolean.TRUE.equals(invoice.getPaid())) {
             throw new InvalidOperationException("INVOICE_ALREADY_PAID");
@@ -540,12 +529,8 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Override
     @Transactional
     public InvoiceResponseDto createCreditNote(UUID invoiceId, UUID branchId) {
-        Invoice vente = invoiceRepository.findById(invoiceId)
+        Invoice vente = invoiceRepository.findByIdAndBranchId(invoiceId, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Facture", invoiceId));
-
-        if (!branchId.equals(vente.getBranchId())) {
-            throw new ResourceNotFoundException("Facture", invoiceId);
-        }
         // Un avoir contrepasse une vente. En contrepasser un autre n'a pas de
         // sens comptable et produirait une chaîne de références sans fin.
         if (vente.getStatusInvoice() == 1) {
@@ -608,12 +593,8 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Override
     @Transactional
     public InvoiceResponseDto refreshClientInfo(UUID invoiceId, UUID branchId, UUID userId) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
+        Invoice invoice = invoiceRepository.findByIdAndBranchId(invoiceId, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Facture", invoiceId));
-
-        if (!branchId.equals(invoice.getBranchId())) {
-            throw new ResourceNotFoundException("Facture", invoiceId);
-        }
         if (invoice.getPatient() == null) {
             throw new InvalidOperationException(
                     "Cette facture n'est rattachée à aucun patient : rien à actualiser.");
@@ -649,11 +630,8 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Override
     @Transactional(readOnly = true)
     public List<InvoiceClientInfoHistoryDto> getClientInfoHistory(UUID invoiceId, UUID branchId) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
+        Invoice invoice = invoiceRepository.findByIdAndBranchId(invoiceId, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Facture", invoiceId));
-        if (!branchId.equals(invoice.getBranchId())) {
-            throw new ResourceNotFoundException("Facture", invoiceId);
-        }
         return invoiceClientInfoHistoryRepository.findByInvoiceIdOrderByCreatedAtDesc(invoiceId)
                 .stream()
                 .map(h -> new InvoiceClientInfoHistoryDto(
@@ -708,13 +686,8 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Transactional
     public InvoiceResponseDto changerLibelleDeLigne(UUID invoiceId, UUID detailId,
                                                     LibelleDeLigneDto dto, UUID branchId) {
-        Invoice facture = invoiceRepository.findById(invoiceId)
+        Invoice facture = invoiceRepository.findByIdAndBranchId(invoiceId, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Facture", invoiceId));
-        // Même isolation que « findById » : une facture d'une autre branche est
-        // introuvable, pas interdite — le second message révélerait son existence.
-        if (!facture.getBranchId().equals(branchId)) {
-            throw new ResourceNotFoundException("Facture", invoiceId);
-        }
 
         // Une facture déjà déclarée ne change plus de libellés.
         //

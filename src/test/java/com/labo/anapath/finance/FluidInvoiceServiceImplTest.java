@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -105,7 +106,7 @@ class FluidInvoiceServiceImplTest {
         // Le cas qui produisait un MISSING_REFERENCE : la garde ne testait que
         // null, et une chaîne vide partait telle quelle chez l'éditeur.
         Invoice avoir = avoirRattacheA(originale("", "345678yghjkhRTY678907654", null));
-        when(invoiceRepository.findById(AVOIR_ID)).thenReturn(Optional.of(avoir));
+        when(invoiceRepository.findByIdAndBranchId(eq(AVOIR_ID), any())).thenReturn(Optional.of(avoir));
         editeurRepondOk();
 
         service.normaliser(AVOIR_ID, BRANCHE, null);
@@ -117,7 +118,7 @@ class FluidInvoiceServiceImplTest {
     @DisplayName("code_mecef renseigné → il prime sur le code saisi à la main")
     void codeMecefRenseigne_prime() {
         Invoice avoir = avoirRattacheA(originale("TEST-PXP6-CJB6", "saisi-a-la-main", null));
-        when(invoiceRepository.findById(AVOIR_ID)).thenReturn(Optional.of(avoir));
+        when(invoiceRepository.findByIdAndBranchId(eq(AVOIR_ID), any())).thenReturn(Optional.of(avoir));
         editeurRepondOk();
 
         service.normaliser(AVOIR_ID, BRANCHE, null);
@@ -129,7 +130,7 @@ class FluidInvoiceServiceImplTest {
     @DisplayName("aucun code, mais l'originale est connue de l'éditeur → son identifiant")
     void sansCode_utiliseLIdentifiantFluidInvoice() {
         Invoice avoir = avoirRattacheA(originale("", "", "1f41c97a-23a2-4977"));
-        when(invoiceRepository.findById(AVOIR_ID)).thenReturn(Optional.of(avoir));
+        when(invoiceRepository.findByIdAndBranchId(eq(AVOIR_ID), any())).thenReturn(Optional.of(avoir));
         editeurRepondOk();
 
         service.normaliser(AVOIR_ID, BRANCHE, null);
@@ -144,7 +145,7 @@ class FluidInvoiceServiceImplTest {
         // Vaut mieux ce message que le MISSING_REFERENCE de l'éditeur, que le
         // caissier ne peut pas relier à la facture de vente.
         Invoice avoir = avoirRattacheA(originale("", "", ""));
-        when(invoiceRepository.findById(AVOIR_ID)).thenReturn(Optional.of(avoir));
+        when(invoiceRepository.findByIdAndBranchId(eq(AVOIR_ID), any())).thenReturn(Optional.of(avoir));
 
         assertThatThrownBy(() -> service.normaliser(AVOIR_ID, BRANCHE, null))
                 .isInstanceOf(InvalidOperationException.class)
@@ -168,7 +169,7 @@ class FluidInvoiceServiceImplTest {
 
         Invoice avoir = avoirRattacheA(originale("MECEF-123", null, null));
         avoir.setDetails(List.of(ligne));
-        when(invoiceRepository.findById(AVOIR_ID)).thenReturn(Optional.of(avoir));
+        when(invoiceRepository.findByIdAndBranchId(eq(AVOIR_ID), any())).thenReturn(Optional.of(avoir));
         editeurRepondOk();
 
         service.normaliser(AVOIR_ID, BRANCHE, null);
@@ -186,7 +187,7 @@ class FluidInvoiceServiceImplTest {
 
         Invoice avoir = avoirRattacheA(originale("MECEF-123", null, null));
         avoir.setDetails(List.of(ligne));
-        when(invoiceRepository.findById(AVOIR_ID)).thenReturn(Optional.of(avoir));
+        when(invoiceRepository.findByIdAndBranchId(eq(AVOIR_ID), any())).thenReturn(Optional.of(avoir));
 
         assertThatThrownBy(() -> service.normaliser(AVOIR_ID, BRANCHE, null))
                 .isInstanceOf(InvalidOperationException.class)
@@ -198,7 +199,7 @@ class FluidInvoiceServiceImplTest {
     @DisplayName("avoir non rattaché à une vente → refus explicite")
     void avoirSansOriginale_refus() {
         Invoice avoir = avoirRattacheA(null);
-        when(invoiceRepository.findById(AVOIR_ID)).thenReturn(Optional.of(avoir));
+        when(invoiceRepository.findByIdAndBranchId(eq(AVOIR_ID), any())).thenReturn(Optional.of(avoir));
 
         assertThatThrownBy(() -> service.normaliser(AVOIR_ID, BRANCHE, null))
                 .isInstanceOf(InvalidOperationException.class)

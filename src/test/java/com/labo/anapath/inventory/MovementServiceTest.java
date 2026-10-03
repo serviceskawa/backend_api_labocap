@@ -107,7 +107,8 @@ class MovementServiceTest {
 
         assertThatThrownBy(() -> service.create(dto, BRANCH_ID, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Stock insuffisant");
+                // Message repris tel quel de Laravel (accents compris).
+                .hasMessageContaining("la quantite en stock est inferieur a la quantite a diminuer");
     }
 
     @Test

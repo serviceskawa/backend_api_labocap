@@ -14,7 +14,6 @@ import com.labo.anapath.user.User;
 import com.labo.anapath.user.UserMapper;
 import com.labo.anapath.user.UserRepository;
 import com.labo.anapath.user.UserResponseDto;
-import com.warrenstrange.googleauth.GoogleAuthenticator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -64,12 +63,14 @@ public class AuthServiceImpl implements AuthService {
     private final TokenBlacklistService tokenBlacklistService;
     private final UserRepository userRepository;
     private final UserMapper userMapper;
-    private final GoogleAuthenticator googleAuthenticator;
     private final PasswordEncoder passwordEncoder;
     private final TwoFaRepository twoFaRepository;
+    private final com.labo.anapath.common.security.PolitiqueDeMotDePasse politiqueDeMotDePasse;
+    private final org.springframework.transaction.PlatformTransactionManager transactionManager;
     private final TwoFaService twoFaService;
     private final com.labo.anapath.common.email.EmailService emailService;
     private final BranchRepository branchRepository;
+    private final com.labo.anapath.common.supervision.CompteurDAlertes compteurDAlertes;
 
     /**
      * Affiche le code OTP 2FA en clair dans les logs applicatifs.
@@ -101,6 +102,11 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public LoginResponse login(LoginRequest request) {
+        if (userRepository.findByEmail(request.getEmail()).filter(this::estVerrouille).isPresent()) {
+            log.warn("Échec de connexion (compte verrouillé) pour: {} depuis {}",
+                    maskEmail(request.getEmail()), adresseClient());
+            throw new UnauthorizedException("Identifiants invalides.");
+        }
         try {
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
@@ -139,9 +145,11 @@ public class AuthServiceImpl implements AuthService {
                     tempToken, JwtTokenProvider.TEMP_TOKEN_VALIDITY_MS / 1000, canal);
         } catch (DisabledException ex) {
             log.warn("Échec de connexion (compte désactivé) pour: {}", maskEmail(request.getEmail()));
+            compteurDAlertes.echecDeConnexion();
             throw new UnauthorizedException("Identifiants invalides.");
         } catch (BadCredentialsException ex) {
             log.warn("Échec de connexion (mauvais identifiants) pour: {}", maskEmail(request.getEmail()));
+            compteurDAlertes.echecDeConnexion();
             throw new UnauthorizedException("Identifiants invalides.");
         }
     }
@@ -314,6 +322,7 @@ public class AuthServiceImpl implements AuthService {
                         && u.getResetTokenExpiresAt().isAfter(LocalDateTime.now()))
                 .orElseThrow(() -> new UnauthorizedException("Token de réinitialisation invalide ou expiré"));
 
+        politiqueDeMotDePasse.verifier(request.getPassword(), user.getEmail(), user.getFirstname(), user.getLastname());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setResetToken(null);
         user.setResetTokenExpiresAt(null);
@@ -331,9 +340,20 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public void resend2FA(Resend2FARequest request) {
-        userRepository.findByEmail(request.getEmail()).ifPresent(user -> {
+        java.util.Optional<User> cible;
+        if (request.getEmail() != null && !request.getEmail().isBlank()) {
+            cible = userRepository.findByEmail(request.getEmail());
+        } else if (StringUtils.hasText(request.getTempToken())
+                && jwtTokenProvider.validateToken(request.getTempToken())
+                && "2fa-challenge".equals(jwtTokenProvider.extractType(request.getTempToken()))) {
+            cible = userRepository.findById(jwtTokenProvider.extractUserId(request.getTempToken()));
+        } else {
+            cible = java.util.Optional.empty();
+        }
+        // Silence dans tous les cas : dire « adresse inconnue » révélerait les comptes.
+        cible.ifPresent(user -> {
             sendAndStoreOtp(user);
-            log.info("OTP renvoyé par email à: {}", maskEmail(request.getEmail()));
+            log.info("OTP renvoyé par email à: {}", maskEmail(user.getEmail()));
         });
     }
 
@@ -356,6 +376,75 @@ public class AuthServiceImpl implements AuthService {
 
         // Envoyer l'email (async)
         emailService.sendOtp(user.getEmail(), user.getFirstname(), otp);
+    }
+
+    /** Codes faux consécutifs avant d'invalider le code en cours. */
+    static final int ECHECS_AVANT_NOUVEAU_CODE = 5;
+    /** Codes faux dans la fenêtre d'une heure avant de verrouiller le compte. */
+    static final int ECHECS_AVANT_VERROU = 10;
+    static final int MINUTES_DE_VERROU = 15;
+
+    private boolean estVerrouille(User user) {
+        return user.getLockedUntil() != null && user.getLockedUntil().isAfter(LocalDateTime.now());
+    }
+
+    /**
+     * Compte un code faux pour ce compte et rend l'exception à lever.
+     *
+     * <p>Au 5ᵉ échec, le code en cours est invalidé : il faut en redemander un,
+     * ce qui coupe toute énumération. Au 10ᵉ échec en une heure, le compte est
+     * verrouillé un quart d'heure. Le compteur est sauvé ici même, car l'exception
+     * levée ensuite annule la transaction.</p>
+     */
+    private InvalidCodeException codeFaux(User user, String message) {
+        LocalDateTime maintenant = LocalDateTime.now();
+        if (user.getOtpFailuresSince() == null || user.getOtpFailuresSince().plusHours(1).isBefore(maintenant)) {
+            user.setOtpFailuresSince(maintenant);
+            user.setOtpFailedAttempts((short) 0);
+        }
+        user.setOtpFailedAttempts((short) (user.getOtpFailedAttempts() + 1));
+        compteurDAlertes.echecDeConnexion();
+        int echecs = user.getOtpFailedAttempts();
+        boolean invaliderLeCode = echecs % ECHECS_AVANT_NOUVEAU_CODE == 0;
+        if (echecs >= ECHECS_AVANT_VERROU) {
+            user.setLockedUntil(maintenant.plusMinutes(MINUTES_DE_VERROU));
+            compteurDAlertes.verrouillage();
+            invaliderLeCode = true;
+            log.warn("Compte verrouillé {} min après {} codes faux : {} depuis {}",
+                    MINUTES_DE_VERROU, echecs, maskEmail(user.getEmail()), adresseClient());
+            message = "Code invalide.";
+        } else if (invaliderLeCode) {
+            log.warn("Code invalidé après {} codes faux : {} depuis {}",
+                    echecs, maskEmail(user.getEmail()), adresseClient());
+            message = "Code invalide. Veuillez en demander un nouveau.";
+        }
+        sauverHorsTransaction(user, invaliderLeCode);
+        return new InvalidCodeException(message);
+    }
+
+    /**
+     * Le compteur, et l'invalidation du code, doivent survivre à l'exception
+     * qui va annuler la transaction appelante : transaction à part.
+     */
+    private void sauverHorsTransaction(User user, boolean invaliderLeCode) {
+        var t = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        t.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        t.executeWithoutResult(status -> {
+            userRepository.saveAndFlush(user);
+            if (invaliderLeCode) {
+                twoFaRepository.deleteByUserId(user.getId());
+            }
+        });
+    }
+
+    /** Adresse du client, telle que Tomcat l'a rétablie derrière nginx (voir server.forward-headers-strategy). */
+    private String adresseClient() {
+        try {
+            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            return attrs == null ? "?" : attrs.getRequest().getRemoteAddr();
+        } catch (Exception e) {
+            return "?";
+        }
     }
 
     private String maskEmail(String email) {
@@ -454,11 +543,17 @@ public class AuthServiceImpl implements AuthService {
         //
         // L'application est essayée en premier : c'est la voie normale d'un
         // utilisateur équipé, et le plus souvent aucun code n'a été envoyé.
+        // Un compte verrouillé répond comme à un code faux : rien n'indique
+        // de l'extérieur que le verrou existe.
+        if (estVerrouille(user)) {
+            throw new InvalidCodeException("Code invalide.");
+        }
+
         boolean parApplication = twoFaService.verifierCodeApplication(userId, request.getCode());
 
         if (!parApplication) {
             TwoFa twoFa = twoFaRepository.findByUserId(userId)
-                    .orElseThrow(() -> new InvalidCodeException("Code invalide ou expiré."));
+                    .orElseThrow(() -> codeFaux(user, "Code invalide ou expiré."));
 
             // Vérifier l'expiration (10 minutes)
             if (twoFa.getCreatedAt().plusMinutes(10).isBefore(LocalDateTime.now())) {
@@ -468,12 +563,14 @@ public class AuthServiceImpl implements AuthService {
 
             // Vérifier le code (comparaison bcrypt)
             if (!passwordEncoder.matches(request.getCode().trim(), twoFa.getCode())) {
-                throw new InvalidCodeException("Code invalide.");
+                throw codeFaux(user, "Code invalide.");
             }
 
             // Supprimer le code utilisé
             twoFaRepository.deleteByUserId(userId);
         }
+        user.setOtpFailedAttempts((short) 0);
+        user.setOtpFailuresSince(null);
 
         // Blacklister le tempToken
         String tempJti = jwtTokenProvider.extractJti(tempToken);

@@ -150,14 +150,14 @@ class BiologyPdfServiceImplTest {
     }
 
     private static String texte(byte[] pdf) throws Exception {
-        try (PDDocument doc = PDDocument.load(pdf)) {
+        try (PDDocument doc = org.apache.pdfbox.Loader.loadPDF(pdf)) {
             // Espaces multiples ramenés à un : le moteur en pose autour des éléments en ligne.
             return new PDFTextStripper().getText(doc).replaceAll("[ \\t]+", " ");
         }
     }
 
     private static int pages(byte[] pdf) throws Exception {
-        try (PDDocument doc = PDDocument.load(pdf)) {
+        try (PDDocument doc = org.apache.pdfbox.Loader.loadPDF(pdf)) {
             return doc.getNumberOfPages();
         }
     }
@@ -208,6 +208,8 @@ class BiologyPdfServiceImplTest {
     void aiguillage() {
         BiologyPdfService biologie = mock(BiologyPdfService.class);
         when(biologie.generatePdf(report.getId(), USER, null)).thenReturn(new byte[] {1, 2, 3});
+        // Le cœur d'anatomie pathologique charge le compte-rendu dans l'agence de la requête.
+        when(reportRepository.findByIdAndBranchId(org.mockito.ArgumentMatchers.eq(report.getId()), org.mockito.ArgumentMatchers.any())).thenReturn(Optional.of(report));
         PdfReportServiceImpl pathologie = new PdfReportServiceImpl(reportRepository, logRepo, settingRepo,
                 userRepository, new QrCodeService(), moteur, biologie);
 

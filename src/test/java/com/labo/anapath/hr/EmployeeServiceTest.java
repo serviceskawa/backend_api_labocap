@@ -33,6 +33,7 @@ class EmployeeServiceTest {
     @Mock private EmployeeRepository employeeRepository;
     @Mock private UserRepository userRepository;
     @Mock private EmployeeMapper employeeMapper;
+    @Mock private com.labo.anapath.common.storage.FichierStockeRepository fichiers;
 
     @InjectMocks private EmployeeServiceImpl service;
 
@@ -77,7 +78,7 @@ class EmployeeServiceTest {
     @DisplayName("findById - ID existant → retourne DTO")
     void findById_existingId_returnsDto() {
         Employee emp = buildEmployee();
-        when(employeeRepository.findById(EMP_ID)).thenReturn(Optional.of(emp));
+        when(employeeRepository.findByIdAndBranchId(eq(EMP_ID), any())).thenReturn(Optional.of(emp));
         when(employeeMapper.toResponseDto(emp)).thenReturn(buildResponse(emp));
 
         EmployeeResponseDto result = service.findById(EMP_ID);
@@ -88,7 +89,7 @@ class EmployeeServiceTest {
     @Test
     @DisplayName("findById - ID inconnu → ResourceNotFoundException")
     void findById_unknownId_throwsResourceNotFoundException() {
-        when(employeeRepository.findById(EMP_ID)).thenReturn(Optional.empty());
+        when(employeeRepository.findByIdAndBranchId(eq(EMP_ID), any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.findById(EMP_ID))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -145,7 +146,7 @@ class EmployeeServiceTest {
         dto.setFirstName("Jean-Updated");
         dto.setLastName("Dupont");
 
-        when(employeeRepository.findById(EMP_ID)).thenReturn(Optional.of(emp));
+        when(employeeRepository.findByIdAndBranchId(eq(EMP_ID), any())).thenReturn(Optional.of(emp));
         when(employeeRepository.save(emp)).thenReturn(emp);
         when(employeeMapper.toResponseDto(emp)).thenReturn(buildResponse(emp));
 
@@ -160,7 +161,7 @@ class EmployeeServiceTest {
     @DisplayName("delete - ID existant → soft delete via repository")
     void delete_existingId_callsRepository() {
         Employee emp = buildEmployee();
-        when(employeeRepository.findById(EMP_ID)).thenReturn(Optional.of(emp));
+        when(employeeRepository.findByIdAndBranchId(eq(EMP_ID), any())).thenReturn(Optional.of(emp));
 
         service.delete(EMP_ID);
 

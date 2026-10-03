@@ -64,7 +64,7 @@ class ServiceAppelsTest {
 
     @BeforeEach
     void poser() {
-        registre = new RegistreDesAppels(new com.fasterxml.jackson.databind.ObjectMapper());
+        registre = new RegistreDesAppels(new tools.jackson.databind.ObjectMapper());
         service = new ServiceAppels(registre, discussions, demandes, utilisateurs,
                 journal, notifications, appareils, discussionService);
         // Appeler ne suppose plus d'être affecté au dossier, mais d'exercer au

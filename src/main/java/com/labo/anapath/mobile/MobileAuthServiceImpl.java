@@ -50,6 +50,8 @@ public class MobileAuthServiceImpl implements MobileAuthService {
 
     /** Durée du gel. Assez long pour ruiner une attaque, assez court pour ne pas punir une méprise. */
     private static final int MINUTES_VERROU = 15;
+    /** Validité d'un code d'enrôlement (lot 11). */
+    static final int MINUTES_VALIDITE_CODE = 15;
 
     /** Droit d'employer l'application, attribué utilisateur par utilisateur. */
     private static final String PERMISSION_MOBILE = "use-mobile-app";
@@ -236,11 +238,13 @@ public class MobileAuthServiceImpl implements MobileAuthService {
         revoquerLesCodesVivants(user.getId(), auteurId);
 
         String code = genererCode();
-        // Sans échéance : la validité tient désormais à la révocation. Un délai
-        // de quelques heures obligeait à régénérer pour un agent qui installait
-        // son téléphone le lendemain.
+        // Quinze minutes et un seul usage (lot 11) : un QR photographié ou un
+        // courriel transféré ne doit pas enrôler un second téléphone plus tard.
+        // L'administrateur régénère un code pour chaque appareil, et chaque
+        // appareil se révoque séparément.
         MobileEnrollmentCode ligne = new MobileEnrollmentCode(
-                user.getId(), passwordEncoder.encode(code), null, auteurId);
+                user.getId(), passwordEncoder.encode(code),
+                LocalDateTime.now().plusMinutes(MINUTES_VALIDITE_CODE), auteurId);
         // Scellé à côté de l'empreinte : celle-ci valide l'enrôlement, celui-là
         // permet de remontrer le QR. Nul si aucune clé n'est configurée — on
         // retombe alors sur le comportement d'avant, code affiché une fois.
@@ -275,9 +279,8 @@ public class MobileAuthServiceImpl implements MobileAuthService {
         MobileDevice appareil = deviceRepository.save(new MobileDevice(
                 user.getId(), user.getBranchId(), requete.label().trim(), requete.publicKey()));
 
-        // Le code n'est plus consommé : il note l'usage et reste vivant. Un
-        // second téléphone, ou une réinstallation après échec, s'enrôle avec le
-        // même QR.
+        // Consommé : estUtilisable() le refuse désormais. Un second téléphone
+        // demande un nouveau code.
         code.noterUnUsage(appareil.getId());
         codeRepository.save(code);
 

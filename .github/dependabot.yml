@@ -1,0 +1,17 @@
+# Une PR par semaine et par écosystème, le lundi matin (lot 4).
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /
+    schedule: { interval: weekly, day: monday, time: "07:00", timezone: Africa/Porto-Novo }
+    target-branch: develop
+    groups:
+      spring: { patterns: ["org.springframework*"] }
+  - package-ecosystem: docker
+    directory: /
+    schedule: { interval: weekly, day: monday, time: "07:00", timezone: Africa/Porto-Novo }
+    target-branch: develop
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: monday, time: "07:00", timezone: Africa/Porto-Novo }
+    target-branch: develop

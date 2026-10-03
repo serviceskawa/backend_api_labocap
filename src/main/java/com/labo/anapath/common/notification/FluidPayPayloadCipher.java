@@ -1,7 +1,7 @@
 package com.labo.anapath.common.notification;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.labo.anapath.common.exception.ExternalApiException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -93,7 +93,7 @@ public class FluidPayPayloadCipher {
             System.arraycopy(chiffre, 0, sortie, iv.length, chiffre.length);
             return Base64.getEncoder().encodeToString(sortie);
 
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new ExternalApiException("Charge utile FluidPay non sérialisable.", e);
         } catch (Exception e) {
             throw new ExternalApiException("Chiffrement de la charge utile FluidPay impossible : "

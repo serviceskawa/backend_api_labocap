@@ -42,4 +42,12 @@ public class ReportRequestDto {
     private String status;
 
     private List<UUID> tagIds = new ArrayList<>();
+
+    /**
+     * Pourquoi on retouche un compte-rendu déjà sorti. Exigé (20 caractères
+     * au moins) pour modifier un compte-rendu livré, journalisé et joint à
+     * l'alerte envoyée aux administrateurs ; facultatif sinon.
+     */
+    @Size(max = 2000)
+    private String reason;
 }

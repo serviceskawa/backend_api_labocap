@@ -1,5 +1,7 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.common.storage.FichierStockeRepository;
+import com.labo.anapath.common.storage.FichierStocke;
 import com.labo.anapath.biology.BiologyResultsGuard;
 import com.labo.anapath.biology.results.BiologyResultsLifecycle;
 import com.labo.anapath.common.Discipline;
@@ -74,6 +76,8 @@ import java.util.stream.Collectors;
 public class TestOrderServiceImpl implements TestOrderService {
 
     private final TestOrderRepository testOrderRepository;
+    private final FichierStockeRepository fichiers;
+    private final PerimetreDuMedecin perimetreDuMedecin;
     private final PatientRepository patientRepository;
     private final DoctorRepository doctorRepository;
     private final HospitalRepository hospitalRepository;
@@ -93,7 +97,7 @@ public class TestOrderServiceImpl implements TestOrderService {
     /** Sert à rendre, dans la liste, le nom de la personne affectée au bon. */
     private final TestOrderAssignmentDetailRepository assignmentDetailRepository;
     private final FileStorageService fileStorageService;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final tools.jackson.databind.ObjectMapper objectMapper;
     /** Interrupteur du module Biologie : un bon de biologie ne se crée que s'il est actif. */
     private final ModulesProperties modules;
     /** Consulté avant de retirer une analyse d'un bon de biologie (jamais en anatomie pathologique). */
@@ -107,6 +111,7 @@ public class TestOrderServiceImpl implements TestOrderService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<TestOrderResponseDto> findAll(int page, int size, TestOrderFilterDto filter, UUID branchId) {
+        filter.setMedecinId(perimetreDuMedecin.medecinBorne());
         PageRequest pageRequest = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<TestOrder> orderPage = testOrderRepository
                 .findAll(TestOrderSpecification.filter(branchId, filter), pageRequest);
@@ -151,6 +156,7 @@ public class TestOrderServiceImpl implements TestOrderService {
 
         PageRequest pageRequest = PageRequest.of(page, size, Sort.by("createdAt").descending());
 
+        filter.setMedecinId(perimetreDuMedecin.medecinBorne());
         Specification<TestOrder> spec = TestOrderSpecification.filter(branchId, filter)
                 .and(TestOrderSpecification.typeOrderIdIn(immunoTypeIds));
 
@@ -208,6 +214,8 @@ public class TestOrderServiceImpl implements TestOrderService {
     public TestOrderResponseDto findById(UUID id, UUID branchId) {
         TestOrder order = testOrderRepository.findByIdAndBranchId(id, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", id));
+        // Hors périmètre du médecin : introuvable, comme hors agence.
+        perimetreDuMedecin.exiger(order);
         TestOrderResponseDto dto = testOrderMapper.toResponseDto(order);
         Report report = reportRepository.findByTestOrderId(order.getId()).orElse(null);
         Invoice invoice = invoiceRepository.findByTestOrderId(order.getId()).orElse(null);
@@ -1154,7 +1162,9 @@ public class TestOrderServiceImpl implements TestOrderService {
         while (dates.size() < existing.size()) dates.add("");
         for (org.springframework.web.multipart.MultipartFile file : files) {
             try {
-                existing.add(fileStorageService.store(file));
+                String chemin = fileStorageService.store(file);
+                fichiers.rattacher(chemin, FichierStocke.TEST_ORDER, order.getId(), branchId);
+                existing.add(chemin);
                 dates.add(java.time.LocalDateTime.now().toString());
             } catch (java.io.IOException e) {
                 throw new com.labo.anapath.common.exception.BusinessException("Erreur lors du stockage du fichier: " + file.getOriginalFilename());
@@ -1163,7 +1173,7 @@ public class TestOrderServiceImpl implements TestOrderService {
         try {
             order.setFilesName(objectMapper.writeValueAsString(existing));
             order.setFilesAddedAt(objectMapper.writeValueAsString(dates));
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             throw new com.labo.anapath.common.exception.BusinessException("Erreur de sérialisation JSON");
         }
         testOrderRepository.save(order);
@@ -1177,6 +1187,7 @@ public class TestOrderServiceImpl implements TestOrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", id));
         try {
             order.setArchive(fileStorageService.store(file));
+            fichiers.rattacher(order.getArchive(), FichierStocke.TEST_ORDER, order.getId(), branchId);
         } catch (java.io.IOException e) {
             throw new com.labo.anapath.common.exception.BusinessException(
                     "Erreur lors du stockage de la pièce jointe: " + file.getOriginalFilename());
@@ -1270,7 +1281,7 @@ public class TestOrderServiceImpl implements TestOrderService {
         retraits.set(index, java.time.LocalDateTime.now().toString());
         try {
             order.setFilesDeletedAt(objectMapper.writeValueAsString(retraits));
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             throw new com.labo.anapath.common.exception.BusinessException("Erreur de sérialisation JSON");
         }
         testOrderRepository.save(order);
@@ -1282,7 +1293,7 @@ public class TestOrderServiceImpl implements TestOrderService {
         if (json == null || json.isBlank()) return new java.util.ArrayList<>();
         try {
             return objectMapper.readValue(json, java.util.List.class);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             return new java.util.ArrayList<>();
         }
     }
@@ -1455,11 +1466,13 @@ public class TestOrderServiceImpl implements TestOrderService {
         // le même ensemble, même si le comptoir enregistre entre-temps.
         java.time.LocalDateTime borne = jusqua != null ? jusqua : java.time.LocalDateTime.now();
 
-        Page<EntreeDIndexDto> tranche = testOrderRepository.indexPourLeMobile(
-                branchId,
-                borne.minusMonths(profondeur),
-                borne,
-                org.springframework.data.domain.PageRequest.of(rang, parTranche));
+        UUID medecin = perimetreDuMedecin.medecinBorne();
+        var pageable = org.springframework.data.domain.PageRequest.of(rang, parTranche);
+        Page<EntreeDIndexDto> tranche = medecin == null
+                ? testOrderRepository.indexPourLeMobile(
+                        branchId, borne.minusMonths(profondeur), borne, pageable)
+                : testOrderRepository.indexPourLeMobileDuMedecin(
+                        branchId, borne.minusMonths(profondeur), borne, medecin, pageable);
 
         return new PageDIndexDto(
                 tranche.getContent(),

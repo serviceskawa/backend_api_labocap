@@ -62,12 +62,8 @@ public class FluidInvoiceServiceImpl implements FluidInvoiceService {
     public InvoiceResponseDto normaliser(UUID invoiceId, UUID branchId,
                                          String modeDePaiement,
                                          IdentiteDeFacturation destinataire) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
+        Invoice invoice = invoiceRepository.findByIdAndBranchId(invoiceId, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Facture", invoiceId));
-
-        if (!branchId.equals(invoice.getBranchId())) {
-            throw new ResourceNotFoundException("Facture", invoiceId);
-        }
         // Une facture normalisée l'est définitivement : la renvoyer produirait un
         // second document fiscal pour une seule vente.
         if (invoice.getNormalizedUrl() != null) {
@@ -110,7 +106,7 @@ public class FluidInvoiceServiceImpl implements FluidInvoiceService {
             // contrat à facture unique. Recopier cette logique ici la ferait
             // diverger au premier changement.
             invoiceService.markAsPaid(invoiceId, reglement, branchId);
-            invoice = invoiceRepository.findById(invoiceId).orElseThrow();
+            invoice = invoiceRepository.findByIdAndBranchId(invoiceId, branchId).orElseThrow();
         }
 
         boolean estAvoir = invoice.getStatusInvoice() == STATUT_AVOIR;
@@ -138,12 +134,8 @@ public class FluidInvoiceServiceImpl implements FluidInvoiceService {
     @Override
     @Transactional(readOnly = true)
     public byte[] telechargerDocument(UUID invoiceId, UUID branchId) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
+        Invoice invoice = invoiceRepository.findByIdAndBranchId(invoiceId, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Facture", invoiceId));
-
-        if (!branchId.equals(invoice.getBranchId())) {
-            throw new ResourceNotFoundException("Facture", invoiceId);
-        }
         if (invoice.getFluidinvoiceId() == null) {
             throw new InvalidOperationException(
                     "Cette facture n'a pas été normalisée par FluidInvoice.");

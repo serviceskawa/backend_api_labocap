@@ -1,5 +1,7 @@
 package com.labo.anapath.doc;
 
+import com.labo.anapath.common.storage.FichierStockeRepository;
+import com.labo.anapath.common.storage.FichierStocke;
 import com.labo.anapath.common.NomComplet;
 
 import com.labo.anapath.common.dto.PageResponse;
@@ -31,6 +33,7 @@ public class DocServiceImpl implements DocService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final FileStorageService fileStorageService;
+    private final FichierStockeRepository fichiers;
     private final EmailService emailService;
     private final NotificationSettings notificationSettings;
     private final DocMapper docMapper;
@@ -62,6 +65,7 @@ public class DocServiceImpl implements DocService {
         if (file != null && !file.isEmpty()) {
             doc.setAttachment(fileStorageService.store(file, "documents"));
             doc.setFileSize(file.getSize());
+            fichiers.rattacher(doc.getAttachment(), FichierStocke.DOC, doc.getId(), doc.getBranchId());
         }
         return docMapper.toResponseDto(docRepository.save(doc));
     }
@@ -92,6 +96,7 @@ public class DocServiceImpl implements DocService {
                     .orElseThrow(() -> new ResourceNotFoundException("Catégorie", documentationCategoryId)));
         }
         doc = docRepository.save(doc);
+        fichiers.rattacher(path, FichierStocke.DOC, doc.getId(), branchId);
 
         DocVersion version = new DocVersion();
         version.setBranchId(branchId);
@@ -125,7 +130,9 @@ public class DocServiceImpl implements DocService {
         version.setVersion(nextVersion);
         version.setUser(userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", userId)));
-        return docVersionMapper.toResponseDto(docVersionRepository.save(version));
+        version = docVersionRepository.save(version);
+        fichiers.rattacher(path, FichierStocke.DOC_VERSION, version.getId(), branchId);
+        return docVersionMapper.toResponseDto(version);
     }
 
     @Override

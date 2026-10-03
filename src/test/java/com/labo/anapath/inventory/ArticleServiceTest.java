@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
@@ -22,7 +23,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -78,8 +78,8 @@ class ArticleServiceTest {
     }
 
     @Test
-    @DisplayName("create - sans initialQuantity → quantité 0, aucun mouvement créé")
-    void create_withoutInitialQuantity_shouldSetQuantityToZeroAndNoMovement() {
+    @DisplayName("create - sans initialQuantity → quantité 0, mouvement « Stock initial » à 0 tracé")
+    void create_withoutInitialQuantity_shouldSetQuantityToZeroAndTraceInitialMovement() {
         Article saved = buildArticle();
         when(articleRepository.save(any())).thenReturn(saved);
         when(inventoryMapper.toArticleEntity(any())).thenReturn(new Article());
@@ -90,7 +90,11 @@ class ArticleServiceTest {
 
         service.create(dto, BRANCH_ID, null);
 
-        verify(movementRepository, never()).save(any());
+        // Laravel trace le stock initial systématiquement, y compris à quantité 0.
+        ArgumentCaptor<Movement> captor = ArgumentCaptor.forClass(Movement.class);
+        verify(movementRepository).save(captor.capture());
+        assertThat(captor.getValue().getType()).isEqualTo(MovementType.IN);
+        assertThat(captor.getValue().getQuantity()).isEqualByComparingTo(BigDecimal.ZERO);
     }
 
     @Test

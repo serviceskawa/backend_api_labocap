@@ -62,6 +62,7 @@ public class CashboxOperationServiceImpl implements CashboxOperationService {
     private CashboxOperationResponseDto toDto(CashboxOperation o) {
         // Colonnes de la vue Laravel « Caisse de vente » : Facture (code) et Utilisateur.
         String invoiceCode = o.getInvoiceId() == null ? null :
+                // Global : le seul code d'une facture déjà liée à une opération de l'agence.
                 invoiceRepository.findById(o.getInvoiceId()).map(Invoice::getCode).orElse(null);
         String userName = resolveUserName(o.getCreatedBy());
         return new CashboxOperationResponseDto(

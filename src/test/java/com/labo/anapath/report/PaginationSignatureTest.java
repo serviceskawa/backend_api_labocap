@@ -176,7 +176,7 @@ class PaginationSignatureTest {
 
     private List<Trace> traces(byte[] pdf) throws Exception {
         List<Trace> lues = new ArrayList<>();
-        try (PDDocument doc = PDDocument.load(pdf)) {
+        try (PDDocument doc = org.apache.pdfbox.Loader.loadPDF(pdf)) {
             PDFTextStripper lecteur = new PDFTextStripper() {
                 @Override
                 protected void writeString(String texte, List<TextPosition> positions) {
@@ -287,7 +287,7 @@ class PaginationSignatureTest {
      */
     private List<double[]> imagesTracees(byte[] pdf) throws Exception {
         List<double[]> tailles = new ArrayList<>();
-        try (PDDocument doc = PDDocument.load(pdf)) {
+        try (PDDocument doc = org.apache.pdfbox.Loader.loadPDF(pdf)) {
             var moteur = new org.apache.pdfbox.contentstream.PDFStreamEngine() {
                 @Override
                 protected void processOperator(org.apache.pdfbox.contentstream.operator.Operator operateur,
@@ -303,10 +303,10 @@ class PaginationSignatureTest {
             // Sans ces opérateurs, le moteur ne suit pas la matrice courante et
             // rend l'identité pour toute image : c'est « cm » qui porte l'échelle,
             // et « q »/« Q » qui la restaurent.
-            moteur.addOperator(new org.apache.pdfbox.contentstream.operator.state.Concatenate());
-            moteur.addOperator(new org.apache.pdfbox.contentstream.operator.state.Save());
-            moteur.addOperator(new org.apache.pdfbox.contentstream.operator.state.Restore());
-            moteur.addOperator(new org.apache.pdfbox.contentstream.operator.state.SetMatrix());
+            moteur.addOperator(new org.apache.pdfbox.contentstream.operator.state.Concatenate(moteur));
+            moteur.addOperator(new org.apache.pdfbox.contentstream.operator.state.Save(moteur));
+            moteur.addOperator(new org.apache.pdfbox.contentstream.operator.state.Restore(moteur));
+            moteur.addOperator(new org.apache.pdfbox.contentstream.operator.state.SetMatrix(moteur));
             for (var page : doc.getPages()) {
                 moteur.processPage(page);
             }
@@ -361,7 +361,7 @@ class PaginationSignatureTest {
     void sondeDesRessources() throws Exception {
         byte[] pdf = rendre(5, SIGNATURE_CARREE);
         java.nio.file.Files.write(java.nio.file.Path.of("target/essai-signature.pdf"), pdf);
-        try (PDDocument doc = PDDocument.load(pdf)) {
+        try (PDDocument doc = org.apache.pdfbox.Loader.loadPDF(pdf)) {
             int page = 0;
             for (var p : doc.getPages()) {
                 page++;

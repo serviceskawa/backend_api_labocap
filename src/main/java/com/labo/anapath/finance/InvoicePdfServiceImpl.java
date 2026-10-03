@@ -66,11 +66,8 @@ public class InvoicePdfServiceImpl implements InvoicePdfService {
     @Override
     @Transactional(readOnly = true)
     public byte[] generatePdf(UUID invoiceId, UUID branchId) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
+        Invoice invoice = invoiceRepository.findByIdAndBranchId(invoiceId, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Facture", invoiceId));
-        if (!invoice.getBranchId().equals(branchId)) {
-            throw new ResourceNotFoundException("Facture", invoiceId);
-        }
 
         // Configuration facture (normalisation MECeF) — équivaut à SettingInvoice::first() de Laravel
         SettingInvoice settingInvoice = settingInvoiceRepository

@@ -1,5 +1,8 @@
 package com.labo.anapath.testorder;
 
+import java.util.UUID;
+import com.labo.anapath.common.storage.FichierStocke;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 
 /**
@@ -12,4 +15,10 @@ import java.time.LocalDateTime;
  *                 enregistrement — leur date n'existe nulle part et on préfère
  *                 ne rien afficher plutôt que d'en inventer une
  */
-public record ImageDto(int index, String filename, String url, LocalDateTime addedAt) {}
+public record ImageDto(int index, String filename, String url, LocalDateTime addedAt) {
+    /** L'identifiant du fichier pour {@code GET /files/{id}}, déduit du chemin. */
+    @JsonProperty
+    public UUID fileId() {
+        return FichierStocke.idPour(filename);
+    }
+}

@@ -1,5 +1,7 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.common.storage.FichierStocke;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.labo.anapath.common.Discipline;
 
 import java.time.LocalDate;
@@ -97,4 +99,10 @@ public record TestOrderResponseDto(
         String assignedUserName,
         /** Discipline du bon (PATHOLOGY ou BIOLOGY), fixée à sa création. */
         Discipline discipline
-) {}
+) {
+    /** L'identifiant du fichier pour {@code GET /files/{id}}, déduit du chemin. */
+    @JsonProperty
+    public UUID archiveFileId() {
+        return FichierStocke.idPour(archive);
+    }
+}

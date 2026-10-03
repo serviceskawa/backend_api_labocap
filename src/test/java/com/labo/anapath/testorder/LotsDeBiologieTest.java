@@ -1,8 +1,7 @@
 package com.labo.anapath.testorder;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.labo.anapath.branch.BranchRepository;
 import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.dto.PageResponse;
@@ -69,7 +68,7 @@ class LotsDeBiologieTest {
     private final TestPathologyMacroRepository macroRepository = mock(TestPathologyMacroRepository.class);
     private final SampleLabelRepository labelRepository = mock(SampleLabelRepository.class);
     private final ReportRepository reportRepository = mock(ReportRepository.class);
-    private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final TestOrderAssignmentServiceImpl service = new TestOrderAssignmentServiceImpl(
             assignmentRepository, detailRepository, testOrderRepository, userRepository,
@@ -175,8 +174,8 @@ class LotsDeBiologieTest {
             // Le lot créé, on y range un bon de biologie.
             TestOrderAssignment lot = lot(biologiste);
             TestOrder bon = bon("EX26-0101", Discipline.BIOLOGY);
-            when(assignmentRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
-            when(testOrderRepository.findById(bon.getId())).thenReturn(Optional.of(bon));
+            when(assignmentRepository.findByIdAndBranchId(eq(lot.getId()), any())).thenReturn(Optional.of(lot));
+            when(testOrderRepository.findByIdAndBranchId(eq(bon.getId()), any())).thenReturn(Optional.of(bon));
             when(detailRepository.findByTestOrderId(bon.getId())).thenReturn(Optional.empty());
             AssignmentDetailRequestDto ajout = new AssignmentDetailRequestDto();
             ajout.setTestOrderId(bon.getId());
@@ -194,8 +193,8 @@ class LotsDeBiologieTest {
             TestOrderAssignment lot = lot(biologiste());
             ligne(lot, bon("EX26-0102", Discipline.BIOLOGY));
             TestOrder anapath = bon("EX26-0103", Discipline.PATHOLOGY);
-            when(assignmentRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
-            when(testOrderRepository.findById(anapath.getId())).thenReturn(Optional.of(anapath));
+            when(assignmentRepository.findByIdAndBranchId(eq(lot.getId()), any())).thenReturn(Optional.of(lot));
+            when(testOrderRepository.findByIdAndBranchId(eq(anapath.getId()), any())).thenReturn(Optional.of(anapath));
             AssignmentDetailRequestDto ajout = new AssignmentDetailRequestDto();
             ajout.setTestOrderId(anapath.getId());
 
@@ -214,8 +213,7 @@ class LotsDeBiologieTest {
         /** Toutes les clés d'un nœud JSON, à plat — « details[].note » pour les tableaux. */
         private Set<String> cles(JsonNode noeud, String prefixe, Set<String> dans) {
             if (noeud.isObject()) {
-                for (Iterator<String> it = noeud.fieldNames(); it.hasNext(); ) {
-                    String cle = it.next();
+                for (String cle : noeud.propertyNames()) {
                     String chemin = prefixe.isEmpty() ? cle : prefixe + "." + cle;
                     dans.add(chemin);
                     cles(noeud.get(cle), chemin, dans);
@@ -235,7 +233,7 @@ class LotsDeBiologieTest {
             lot.setNote("Série du matin");
             ligne(lot, bon("EX26-0104", Discipline.BIOLOGY)).setNote("Tube violet");
             ligne(lot, bon("EX26-0105", Discipline.BIOLOGY));
-            when(assignmentRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
+            when(assignmentRepository.findByIdAndBranchId(eq(lot.getId()), any())).thenReturn(Optional.of(lot));
 
             AssignmentPrintDto bordereau = service.getPrintData(lot.getId());
 
@@ -256,7 +254,7 @@ class LotsDeBiologieTest {
         void bordereauDAnatomiePathologique() {
             TestOrderAssignment lot = lot(biologiste());
             ligne(lot, bon("EX26-0106", Discipline.PATHOLOGY));
-            when(assignmentRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
+            when(assignmentRepository.findByIdAndBranchId(eq(lot.getId()), any())).thenReturn(Optional.of(lot));
 
             AssignmentPrintDto bordereau = service.getPrintData(lot.getId());
 

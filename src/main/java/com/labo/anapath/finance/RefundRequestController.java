@@ -1,5 +1,7 @@
 package com.labo.anapath.finance;
 
+import com.labo.anapath.common.storage.FichierStockeRepository;
+import com.labo.anapath.common.storage.FichierStocke;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.security.UserPrincipal;
@@ -33,6 +35,7 @@ public class RefundRequestController {
 
     private final RefundService refundService;
     private final FileStorageService fileStorageService;
+    private final FichierStockeRepository fichiers;
 
     @PostMapping
     @PreAuthorize("hasAuthority('create-refund-requests')")
@@ -60,8 +63,9 @@ public class RefundRequestController {
         if (file != null && !file.isEmpty()) {
             dto.setAttachment(fileStorageService.store(file, "remboursements"));
         }
-        return ResponseEntity.ok(ApiResponse.success("Demande mise à jour",
-                refundService.update(id, dto, principal.getId())));
+        RefundRequestResponseDto resultat = refundService.update(id, dto, principal.getId());
+        fichiers.rattacher(dto.getAttachment(), FichierStocke.REFUND_REQUEST, id, principal.getBranchId());
+        return ResponseEntity.ok(ApiResponse.success("Demande mise à jour", resultat));
     }
 
     // Laravel réserve le changement de statut à `view-process-refund-request`.

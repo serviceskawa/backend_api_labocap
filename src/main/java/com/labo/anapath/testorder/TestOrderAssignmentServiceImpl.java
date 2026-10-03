@@ -1,5 +1,6 @@
 package com.labo.anapath.testorder;
 
+import com.labo.anapath.common.branch.BranchContext;
 import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.NomComplet;
 
@@ -36,7 +37,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
     private final UserRepository userRepository;
     private final BranchRepository branchRepository;
     private final TestPathologyMacroRepository macroRepository;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final tools.jackson.databind.ObjectMapper objectMapper;
     private final SampleLabelRepository labelRepository;
     private final com.labo.anapath.report.ReportRepository reportRepository;
 
@@ -95,9 +96,9 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
     @Override
     @Transactional
     public AssignmentDetailResponseDto addDetail(UUID assignmentId, AssignmentDetailRequestDto dto) {
-        TestOrderAssignment assignment = assignmentRepository.findById(assignmentId)
+        TestOrderAssignment assignment = assignmentRepository.findByIdAndBranchId(assignmentId, BranchContext.get())
                 .orElseThrow(() -> new ResourceNotFoundException("Assignment", assignmentId));
-        TestOrder order = testOrderRepository.findById(dto.getTestOrderId())
+        TestOrder order = testOrderRepository.findByIdAndBranchId(dto.getTestOrderId(), BranchContext.get())
                 .orElseThrow(() -> new ResourceNotFoundException("Bon d'examen", dto.getTestOrderId()));
         exigerLaDisciplineDuLot(assignment, order);
 
@@ -361,8 +362,9 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
     @Override
     @Transactional(readOnly = true)
     public AssignmentPrintDto getPrintData(UUID assignmentId) {
-        TestOrderAssignment assignment = assignmentRepository.findById(assignmentId)
+        TestOrderAssignment assignment = assignmentRepository.findByIdAndBranchId(assignmentId, BranchContext.get())
                 .orElseThrow(() -> new ResourceNotFoundException("Assignment", assignmentId));
+        // Global : l'agence elle-même, pour l'en-tête d'impression.
         Branch branch = branchRepository.findById(assignment.getBranchId()).orElse(null);
         List<AssignmentDetailResponseDto> details = assignment.getDetails().stream()
                 .map(d -> new AssignmentDetailResponseDto(
@@ -405,7 +407,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
     @Override
     @Transactional
     public AssignmentResponseDto update(UUID id, AssignmentRequestDto dto) {
-        TestOrderAssignment assignment = assignmentRepository.findById(id)
+        TestOrderAssignment assignment = assignmentRepository.findByIdAndBranchId(id, BranchContext.get())
                 .orElseThrow(() -> new ResourceNotFoundException("Assignment", id));
         User user = userRepository.findById(dto.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur", dto.getUserId()));
@@ -421,13 +423,10 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
     public AssignmentDetailResponseDto modifierDetail(UUID detailId,
                                                       CorrectionDetailDto correction,
                                                       UUID branchId) {
-        TestOrderAssignmentDetail detail = detailRepository.findById(detailId)
-                .orElseThrow(() -> new ResourceNotFoundException("Détail d'assignment", detailId));
         // Le cloisonnement par branche vaut ici comme ailleurs : on corrige les
         // lots de son site, pas ceux du voisin.
-        if (detail.getBranchId() != null && !detail.getBranchId().equals(branchId)) {
-            throw new ResourceNotFoundException("Détail d'assignment", detailId);
-        }
+        TestOrderAssignmentDetail detail = detailRepository.findByIdAndBranchId(detailId, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Détail d'assignment", detailId));
 
         // Les étiquettes sont remplacées, pas fusionnées : corriger veut dire
         // « voici ce qui est vrai maintenant ». Ajouter « Immuno payé » sans
@@ -457,7 +456,7 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
     @Override
     @Transactional
     public void deleteDetail(UUID detailId) {
-        TestOrderAssignmentDetail detail = detailRepository.findById(detailId)
+        TestOrderAssignmentDetail detail = detailRepository.findByIdAndBranchId(detailId, BranchContext.get())
                 .orElseThrow(() -> new ResourceNotFoundException("Détail d'assignment", detailId));
         detailRepository.delete(detail);
     }
@@ -635,12 +634,9 @@ public class TestOrderAssignmentServiceImpl implements TestOrderAssignmentServic
     @Override
     @Transactional
     public DemandeDuMedecinDto changerStatutDuMedecin(UUID detailId, String statut, UUID branchId) {
-        TestOrderAssignmentDetail detail = detailRepository.findById(detailId)
-                .orElseThrow(() -> new ResourceNotFoundException("Détail d'assignment", detailId));
         // Le cloisonnement par branche vaut ici comme ailleurs.
-        if (detail.getBranchId() != null && !detail.getBranchId().equals(branchId)) {
-            throw new ResourceNotFoundException("Détail d'assignment", detailId);
-        }
+        TestOrderAssignmentDetail detail = detailRepository.findByIdAndBranchId(detailId, branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Détail d'assignment", detailId));
         // Une valeur inconnue serait silencieusement ramenée à « à traiter » par
         // `DocteurStatus.depuis` — tolérable en lecture, jamais en écriture :
         // l'appelant croirait avoir posé un statut qu'il n'a pas posé.

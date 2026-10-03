@@ -1,7 +1,7 @@
 package com.labo.anapath.dashboard;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.labo.anapath.appointment.AppointmentRepository;
 import com.labo.anapath.client.ClientRepository;
 import com.labo.anapath.common.Discipline;
@@ -132,9 +132,7 @@ class TableauDeBordParDisciplineTest {
     private List<String> cles(Object reponse) {
         JsonNode noeud = json.valueToTree(reponse);
         List<String> cles = new ArrayList<>();
-        for (Iterator<String> it = noeud.fieldNames(); it.hasNext(); ) {
-            cles.add(it.next());
-        }
+        cles.addAll(noeud.propertyNames());
         return cles;
     }
 

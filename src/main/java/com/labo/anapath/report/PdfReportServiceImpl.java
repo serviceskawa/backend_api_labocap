@@ -1,5 +1,6 @@
 package com.labo.anapath.report;
 
+import com.labo.anapath.common.branch.BranchContext;
 import com.labo.anapath.common.NomComplet;
 
 import com.labo.anapath.common.exception.InvalidOperationException;
@@ -39,7 +40,7 @@ public class PdfReportServiceImpl implements PdfReportService {
     @Override
     @Transactional
     public byte[] generatePdf(UUID reportId, UUID userId) {
-        Report report = reportRepository.findById(reportId)
+        Report report = reportRepository.findByIdAndBranchId(reportId, BranchContext.get())
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", reportId));
 
         // GET /reports/{id}/pdf sert les deux disciplines : un compte-rendu de

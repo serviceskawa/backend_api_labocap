@@ -52,6 +52,22 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Route inconnue (robot qui tâte /wp-admin, faute de frappe dans une URL,
+     * point de terminaison actuator éteint). Sans ce gestionnaire, elle tombait
+     * dans le cas générique et répondait 500 : un simple scan aurait déclenché
+     * l'alerte « erreurs serveur » de la supervision.
+     *
+     * @param ex exception levée par le gestionnaire de ressources statiques
+     * @return réponse 404
+     */
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Object>> handleNoResource(
+            org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error("Ressource introuvable."));
+    }
+
+    /**
      * Gère les violations de règles métier.
      *
      * @param ex exception levée
@@ -60,7 +76,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Object>> handleBusinessException(BusinessException ex) {
         log.warn("Business exception: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
@@ -105,7 +121,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidOperationException.class)
     public ResponseEntity<ApiResponse<Object>> handleInvalidOperation(InvalidOperationException ex) {
         log.warn("Invalid operation: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
                 .body(ApiResponse.error(ex.getMessage()));
     }
 

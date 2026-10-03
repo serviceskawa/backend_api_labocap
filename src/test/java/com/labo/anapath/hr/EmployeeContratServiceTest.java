@@ -15,6 +15,7 @@ import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -58,7 +59,7 @@ class EmployeeContratServiceTest {
     void create_validEmployee_savesContrat() {
         Employee emp = buildEmployee();
         EmployeeContrat saved = buildContrat(emp);
-        when(employeeRepository.findById(EMP_ID)).thenReturn(Optional.of(emp));
+        when(employeeRepository.findByIdAndBranchId(eq(EMP_ID), any())).thenReturn(Optional.of(emp));
         when(contratRepository.save(any())).thenReturn(saved);
 
         EmployeeContratRequestDto dto = new EmployeeContratRequestDto();
@@ -77,7 +78,7 @@ class EmployeeContratServiceTest {
     @Test
     @DisplayName("create - employé inconnu → ResourceNotFoundException")
     void create_unknownEmployee_throws() {
-        when(employeeRepository.findById(EMP_ID)).thenReturn(Optional.empty());
+        when(employeeRepository.findByIdAndBranchId(eq(EMP_ID), any())).thenReturn(Optional.empty());
 
         EmployeeContratRequestDto dto = new EmployeeContratRequestDto();
         dto.setStartDate(LocalDate.of(2024, 1, 1));

@@ -1,5 +1,6 @@
 package com.labo.anapath.hr;
 
+import com.labo.anapath.common.branch.BranchContext;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.email.EmailService;
 import com.labo.anapath.common.email.NotificationSettings;
@@ -44,7 +45,7 @@ public class EmployeeTimeoffServiceImpl implements EmployeeTimeoffService {
     @Override
     @Transactional
     public EmployeeTimeoffResponseDto create(EmployeeTimeoffRequestDto dto, UUID employeeId) {
-        Employee employee = employeeRepository.findById(employeeId)
+        Employee employee = employeeRepository.findByIdAndBranchId(employeeId, BranchContext.get())
                 .orElseThrow(() -> new ResourceNotFoundException("Employé", employeeId));
         EmployeeTimeoff timeoff = new EmployeeTimeoff();
         timeoff.setEmployee(employee);

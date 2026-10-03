@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -77,7 +78,7 @@ class AppointmentServiceImplTest {
 
         Appointment saved = new Appointment();
 
-        when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(buildPatient()));
+        when(patientRepository.findByIdAndBranchId(eq(PATIENT_ID), any())).thenReturn(Optional.of(buildPatient()));
         when(appointmentRepository.save(any())).thenReturn(saved);
         when(appointmentMapper.toResponseDto(saved)).thenReturn(null);
 
@@ -120,15 +121,16 @@ class AppointmentServiceImplTest {
     }
 
     @Test
-    @DisplayName("getCalendar - priority 'normal' → className 'bg-primary'")
-    void getClassNameFromPriority_normal_returnsBgPrimary() {
+    @DisplayName("getCalendar - priority 'normal' → className 'bg-info' (randColor() Laravel)")
+    void getClassNameFromPriority_normal_returnsBgInfo() {
         Appointment a = buildAppointmentWithDoctor();
         a.setPriority("normal");
         when(appointmentRepository.findByBranchId(BRANCH_ID)).thenReturn(List.of(a));
 
         List<AppointmentCalendarDto> result = service.getCalendar(BRANCH_ID);
 
-        assertThat(result.get(0).className()).isEqualTo("bg-primary");
+        // Réplique randColor() de Laravel : normal -> bg-info, urgent -> bg-warning.
+        assertThat(result.get(0).className()).isEqualTo("bg-info");
     }
 
     @Test

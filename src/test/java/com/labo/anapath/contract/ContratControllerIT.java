@@ -1,5 +1,6 @@
 package com.labo.anapath.contract;
 
+import com.labo.anapath.testsupport.Jetons;
 import com.labo.anapath.auth.LoginRequest;
 import com.labo.anapath.auth.LoginResponse;
 import com.labo.anapath.common.dto.ApiResponse;
@@ -14,7 +15,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
@@ -39,6 +41,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
+@AutoConfigureTestRestTemplate
 class ContratControllerIT {
 
     @Container
@@ -62,6 +65,8 @@ class ContratControllerIT {
     @Autowired private CategoryTestRepository categoryTestRepository;
 
     @LocalServerPort private int port;
+
+    @Autowired private Jetons jetons;
 
     private static final UUID SEED_BRANCH_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String ADMIN_EMAIL = "admin_contract_test@labo.bj";
@@ -96,13 +101,9 @@ class ContratControllerIT {
     }
 
     private String loginAndGetToken() {
-        LoginRequest req = new LoginRequest();
-        req.setEmail(ADMIN_EMAIL);
-        req.setPassword(ADMIN_PASSWORD);
-        ResponseEntity<ApiResponse<LoginResponse>> resp = restTemplate.exchange(
-                "http://localhost:" + port + "/api/v1/auth/login",
-                HttpMethod.POST, new HttpEntity<>(req), new ParameterizedTypeReference<>() {});
-        return resp.getBody().data().accessToken();
+        // Jeton émis directement : la connexion HTTP exige un code à usage
+        // unique et n'est pas ce que ce test éprouve (voir Jetons).
+        return jetons.pour(ADMIN_EMAIL);
     }
 
     private HttpHeaders jsonAuthHeaders(String token) {
@@ -173,7 +174,7 @@ class ContratControllerIT {
                 baseUrl() + "/" + contractId + "/details", HttpMethod.POST,
                 new HttpEntity<>(detailBody, jsonAuthHeaders(token)),
                 new ParameterizedTypeReference<>() {});
-        assertThat(second.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(second.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
     @Test

@@ -1,17 +1,20 @@
 package com.labo.anapath.patient;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import com.labo.anapath.branch.BranchRepository;
 import com.labo.anapath.common.audit.AuditorAwareImpl;
+import com.labo.anapath.common.branch.BranchContextFilter;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.common.security.JwtAuthenticationFilter;
 import com.labo.anapath.common.security.UserPrincipal;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
@@ -48,17 +51,49 @@ class PatientControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockBean
+    @MockitoBean
     private PatientService patientService;
 
     // @WebMvcTest ne charge pas la couche JPA, mais @EnableJpaAuditing (sur AnaPathApplication)
     // exige les beans jpaMappingContext et auditorAware → on les mocke pour permettre
     // le chargement du contexte web.
-    @MockBean
+    @MockitoBean
     private JpaMetamodelMappingContext jpaMappingContext;
 
-    @MockBean(name = "auditorAware")
+    @MockitoBean(name = "auditorAware")
     private AuditorAwareImpl auditorAware;
+
+    // La tranche web charge tous les filtres (Filter) et intercepteurs : on mocke
+    // ce qu'ils tirent hors de la couche web.
+    /** BranchContextFilter : contrôle d'accès à la branche de l'en-tête X-Branch-Id. */
+    @MockitoBean
+    private BranchRepository branchRepository;
+
+    /** JournalMobileFilter. */
+    @MockitoBean
+    private com.labo.anapath.mobile.JournalActionMobileRepository journalActionMobileRepository;
+
+    /** JournalMobileFilter : appareil de la session (null sur un mock = session web). */
+    @MockitoBean
+    private com.labo.anapath.mobile.ProvenanceRequete provenanceRequete;
+
+    /** FiltreDErreursServeur : compteur des réponses 5xx pour la supervision. */
+    @MockitoBean
+    private com.labo.anapath.common.supervision.CompteurDAlertes compteurDAlertes;
+
+    /** BiologyModuleInterceptor (ModulesWebConfig), hors des routes testées ici. */
+    @MockitoBean
+    private com.labo.anapath.common.module.ModulesProperties modulesProperties;
+
+    // L'intercepteur du journal des accès (lot 6) est un HandlerInterceptor,
+    // donc chargé par la tranche web ; son service, lui, touche la base.
+    @MockitoBean
+    private com.labo.anapath.common.audit.JournalAccesService journalAccesService;
+
+    @BeforeEach
+    void autoriseLaBranche() {
+        when(branchRepository.hasBranchAccess(any(), any())).thenReturn(true);
+    }
 
     private final UUID BRANCH_ID = UUID.randomUUID();
     private final UUID PATIENT_ID = UUID.randomUUID();
@@ -92,7 +127,8 @@ class PatientControllerTest {
         when(patientService.findAll(eq(0), eq(20), any(), eq(BRANCH_ID))).thenReturn(page);
 
         mockMvc.perform(get("/api/v1/patients")
-                        .with(user(principal)))
+                        .with(user(principal))
+                        .header(BranchContextFilter.BRANCH_HEADER, BRANCH_ID.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.content[0].firstname").value("Jean"));
@@ -113,7 +149,8 @@ class PatientControllerTest {
         when(patientService.findById(eq(PATIENT_ID), eq(BRANCH_ID))).thenReturn(dto);
 
         mockMvc.perform(get("/api/v1/patients/{id}", PATIENT_ID)
-                        .with(user(principal)))
+                        .with(user(principal))
+                        .header(BranchContextFilter.BRANCH_HEADER, BRANCH_ID.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(PATIENT_ID.toString()));
     }
@@ -126,7 +163,8 @@ class PatientControllerTest {
         when(patientService.findById(eq(PATIENT_ID), eq(BRANCH_ID))).thenThrow(new ResourceNotFoundException("Patient", PATIENT_ID));
 
         mockMvc.perform(get("/api/v1/patients/{id}", PATIENT_ID)
-                        .with(user(principal)))
+                        .with(user(principal))
+                        .header(BranchContextFilter.BRANCH_HEADER, BRANCH_ID.toString()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -152,6 +190,7 @@ class PatientControllerTest {
 
         mockMvc.perform(post("/api/v1/patients")
                         .with(user(principal))
+                        .header(BranchContextFilter.BRANCH_HEADER, BRANCH_ID.toString())
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(requestDto)))
@@ -169,6 +208,7 @@ class PatientControllerTest {
 
         mockMvc.perform(post("/api/v1/patients")
                         .with(user(principal))
+                        .header(BranchContextFilter.BRANCH_HEADER, BRANCH_ID.toString())
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(requestDto)))

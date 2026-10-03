@@ -1,5 +1,6 @@
 package com.labo.anapath.hr;
 
+import com.labo.anapath.common.branch.BranchContext;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +28,7 @@ public class EmployeePayrollServiceImpl implements EmployeePayrollService {
     @Override
     @Transactional
     public EmployeePayrollResponseDto create(EmployeePayrollRequestDto dto, UUID employeeId) {
-        Employee employee = employeeRepository.findById(employeeId)
+        Employee employee = employeeRepository.findByIdAndBranchId(employeeId, BranchContext.get())
                 .orElseThrow(() -> new ResourceNotFoundException("Employé", employeeId));
         EmployeePayroll payroll = new EmployeePayroll();
         payroll.setEmployee(employee);

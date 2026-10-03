@@ -6,9 +6,11 @@ import com.labo.anapath.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.labo.anapath.testsupport.CourrielsDeTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
@@ -30,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
+@AutoConfigureTestRestTemplate
 class AuthIntegrationTest {
 
     @Container
@@ -57,6 +60,19 @@ class AuthIntegrationTest {
 
     @LocalServerPort
     private int port;
+
+    /**
+     * Le limiteur n'accepte que cinq connexions par minute et par adresse : chaque
+     * appel se présente depuis une adresse inédite, comme autant de postes.
+     */
+    private static final java.util.concurrent.atomic.AtomicInteger POSTE = new java.util.concurrent.atomic.AtomicInteger();
+
+    private HttpHeaders depuisUnPosteInedit() {
+        int n = POSTE.incrementAndGet();
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-Forwarded-For", "10.9." + (n / 250) + "." + (n % 250 + 1));
+        return headers;
+    }
 
     private static final String TEST_EMAIL = "test@labo.bj";
     private static final String TEST_PASSWORD = "password123";
@@ -108,15 +124,31 @@ class AuthIntegrationTest {
         return headers;
     }
 
-    /** Effectue un login et retourne la réponse complète (cookies dans les headers). */
+    /**
+     * Connexion complète : mot de passe, puis code à usage unique lu à la sortie
+     * du courriel de test. La réponse rendue est celle du challenge, qui porte
+     * les cookies — comme ce que reçoit le navigateur.
+     */
     private ResponseEntity<ApiResponse<LoginResponse>> doLogin(String email, String password) {
         LoginRequest req = new LoginRequest();
         req.setEmail(email);
         req.setPassword(password);
-        return restTemplate.exchange(
+        ResponseEntity<ApiResponse<LoginResponse>> premiere = restTemplate.exchange(
                 baseUrl() + "/login",
                 HttpMethod.POST,
-                new HttpEntity<>(req),
+                new HttpEntity<>(req, depuisUnPosteInedit()),
+                new ParameterizedTypeReference<>() {});
+        if (premiere.getStatusCode() != HttpStatus.OK
+                || !Boolean.TRUE.equals(premiere.getBody().data().requires2fa())) {
+            return premiere;
+        }
+        TwoFactorVerifyRequest challenge = new TwoFactorVerifyRequest();
+        challenge.setTempToken(premiere.getBody().data().tempToken());
+        challenge.setCode(CourrielsDeTest.dernierCode());
+        return restTemplate.exchange(
+                baseUrl() + "/2fa/challenge",
+                HttpMethod.POST,
+                new HttpEntity<>(challenge),
                 new ParameterizedTypeReference<>() {});
     }
 
@@ -150,8 +182,9 @@ class AuthIntegrationTest {
         request.setEmail(TEST_EMAIL);
         request.setPassword("wrong-password");
 
-        ResponseEntity<String> response = restTemplate.postForEntity(
-                baseUrl() + "/login", request, String.class);
+        ResponseEntity<String> response = restTemplate.exchange(
+                baseUrl() + "/login", HttpMethod.POST,
+                new HttpEntity<>(request, depuisUnPosteInedit()), String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
@@ -229,8 +262,9 @@ class AuthIntegrationTest {
         request.setEmail(INACTIVE_EMAIL);
         request.setPassword(TEST_PASSWORD);
 
-        ResponseEntity<String> response = restTemplate.postForEntity(
-                baseUrl() + "/login", request, String.class);
+        ResponseEntity<String> response = restTemplate.exchange(
+                baseUrl() + "/login", HttpMethod.POST,
+                new HttpEntity<>(request, depuisUnPosteInedit()), String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }

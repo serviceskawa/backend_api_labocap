@@ -49,6 +49,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class TestOrderValidationServiceTest {
 
+    @Mock private com.labo.anapath.testorder.PerimetreDuMedecin perimetreDuMedecin;
+
     @Mock private TestOrderRepository testOrderRepository;
     @Mock private PatientRepository patientRepository;
     @Mock private DoctorRepository doctorRepository;
@@ -191,7 +193,8 @@ class TestOrderValidationServiceTest {
 
         ArgumentCaptor<TestOrder> captor = ArgumentCaptor.forClass(TestOrder.class);
         verify(testOrderRepository).saveAndFlush(captor.capture());
-        assertThat(captor.getValue().getCode()).isNotNull().startsWith("EX");
+        // Sans préfixe configuré dans setting_apps, le code est « aa-0001 » (format Laravel).
+        assertThat(captor.getValue().getCode()).isNotNull().matches("\\d{2}-\\d{4}");
         assertThat(captor.getValue().getStatus()).isEqualTo(TestOrderStatus.VALIDATED);
         assertThat(result).isNotNull();
     }

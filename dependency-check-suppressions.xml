@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Vulnérabilités signalées par dependency-check mais jugées sans effet ici.
+     Chaque entrée dit pourquoi, et pour quelle version : à relire à chaque montée. -->
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+</suppressions>

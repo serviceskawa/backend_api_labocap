@@ -1,5 +1,6 @@
 package com.labo.anapath.user;
 
+import com.labo.anapath.testsupport.Jetons;
 import com.labo.anapath.auth.LoginRequest;
 import com.labo.anapath.auth.LoginResponse;
 import com.labo.anapath.common.dto.ApiResponse;
@@ -11,7 +12,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
@@ -33,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
+@AutoConfigureTestRestTemplate
 class UserIntegrationTest {
 
     @Container
@@ -64,6 +67,8 @@ class UserIntegrationTest {
     @LocalServerPort
     private int port;
 
+    @Autowired private Jetons jetons;
+
     // Branch ID seeded in V2 migration
     private static final UUID SEED_BRANCH_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String ADMIN_EMAIL = "admin_user_test@labo.bj";
@@ -92,18 +97,9 @@ class UserIntegrationTest {
     }
 
     private String loginAndGetToken() {
-        LoginRequest request = new LoginRequest();
-        request.setEmail(ADMIN_EMAIL);
-        request.setPassword(ADMIN_PASSWORD);
-
-        ResponseEntity<ApiResponse<LoginResponse>> response = restTemplate.exchange(
-                "http://localhost:" + port + "/api/v1/auth/login",
-                HttpMethod.POST,
-                new HttpEntity<>(request),
-                new ParameterizedTypeReference<>() {});
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        return response.getBody().data().accessToken();
+        // Jeton émis directement : la connexion HTTP exige un code à usage
+        // unique et n'est pas ce que ce test éprouve (voir Jetons).
+        return jetons.pour(ADMIN_EMAIL);
     }
 
     @Test
@@ -137,7 +133,7 @@ class UserIntegrationTest {
         dto.setFirstname("Nouveau");
         dto.setLastname("Technicien");
         dto.setEmail("technicien_new@labo.bj");
-        dto.setPassword("tech1234!");
+        dto.setPassword("Vq7-tz9Lp2-Xw4");
         dto.setRoleIds(List.of(adminRole.getId()));
 
         ResponseEntity<ApiResponse<UserResponseDto>> response = restTemplate.exchange(
@@ -167,7 +163,7 @@ class UserIntegrationTest {
         dto.setFirstname("Duplicate");
         dto.setLastname("User");
         dto.setEmail(ADMIN_EMAIL); // email déjà utilisé
-        dto.setPassword("password123");
+        dto.setPassword("Vq7-tz9Lp2-Xw4");
 
         ResponseEntity<String> response = restTemplate.exchange(
                 baseUrl(),
@@ -257,7 +253,7 @@ class UserIntegrationTest {
 
         UpdatePasswordRequest request = new UpdatePasswordRequest();
         request.setCurrentPassword(ADMIN_PASSWORD);
-        request.setNewPassword("newSecure456!");
+        request.setNewPassword("Rk3-mb8Qz5-Hn6");
 
         ResponseEntity<ApiResponse<Void>> response = restTemplate.exchange(
                 baseUrl() + "/" + admin.getId() + "/password",
@@ -284,7 +280,7 @@ class UserIntegrationTest {
 
         UpdatePasswordRequest request = new UpdatePasswordRequest();
         request.setCurrentPassword("wrongPassword999");
-        request.setNewPassword("newSecure456!");
+        request.setNewPassword("Rk3-mb8Qz5-Hn6");
 
         ResponseEntity<String> response = restTemplate.exchange(
                 baseUrl() + "/" + admin.getId() + "/password",
@@ -292,7 +288,7 @@ class UserIntegrationTest {
                 new HttpEntity<>(request, headers),
                 String.class);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
     @Test

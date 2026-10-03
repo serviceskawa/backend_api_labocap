@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -219,8 +220,8 @@ class DisciplineDesFilesTest {
             TestOrder patho = bon(Discipline.PATHOLOGY, "26-0001");
             TestOrder bio = bon(Discipline.BIOLOGY, "26-0002");
             TestOrderAssignment lot = lotContenant(patho);
-            when(assignmentRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
-            when(testOrderRepository.findById(bio.getId())).thenReturn(Optional.of(bio));
+            when(assignmentRepository.findByIdAndBranchId(eq(lot.getId()), any())).thenReturn(Optional.of(lot));
+            when(testOrderRepository.findByIdAndBranchId(eq(bio.getId()), any())).thenReturn(Optional.of(bio));
 
             assertThatThrownBy(() -> service.addDetail(lot.getId(), demande(bio)))
                     .isInstanceOf(BusinessException.class)
@@ -236,8 +237,8 @@ class DisciplineDesFilesTest {
             TestOrder bio = bon(Discipline.BIOLOGY, "26-0002");
             TestOrderAssignment lot = lotContenant(patho);
             lot.getDetails().get(0).setRemplaceeLe(java.time.LocalDateTime.now());
-            when(assignmentRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
-            when(testOrderRepository.findById(bio.getId())).thenReturn(Optional.of(bio));
+            when(assignmentRepository.findByIdAndBranchId(eq(lot.getId()), any())).thenReturn(Optional.of(lot));
+            when(testOrderRepository.findByIdAndBranchId(eq(bio.getId()), any())).thenReturn(Optional.of(bio));
 
             service.addDetail(lot.getId(), demande(bio));
 
@@ -249,8 +250,8 @@ class DisciplineDesFilesTest {
         void biologieSansMacroscopie() {
             TestOrder bio = bon(Discipline.BIOLOGY, "26-0002");
             TestOrderAssignment lot = lotContenant();
-            when(assignmentRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
-            when(testOrderRepository.findById(bio.getId())).thenReturn(Optional.of(bio));
+            when(assignmentRepository.findByIdAndBranchId(eq(lot.getId()), any())).thenReturn(Optional.of(lot));
+            when(testOrderRepository.findByIdAndBranchId(eq(bio.getId()), any())).thenReturn(Optional.of(bio));
 
             service.addDetail(lot.getId(), demande(bio));
 
@@ -264,8 +265,8 @@ class DisciplineDesFilesTest {
             TestOrder patho1 = bon(Discipline.PATHOLOGY, "26-0001");
             TestOrder patho2 = bon(Discipline.PATHOLOGY, "26-0003");
             TestOrderAssignment lot = lotContenant(patho1);
-            when(assignmentRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
-            when(testOrderRepository.findById(patho2.getId())).thenReturn(Optional.of(patho2));
+            when(assignmentRepository.findByIdAndBranchId(eq(lot.getId()), any())).thenReturn(Optional.of(lot));
+            when(testOrderRepository.findByIdAndBranchId(eq(patho2.getId()), any())).thenReturn(Optional.of(patho2));
             when(macroRepository.findByTestOrderId(patho2.getId())).thenReturn(Optional.empty());
 
             service.addDetail(lot.getId(), demande(patho2));

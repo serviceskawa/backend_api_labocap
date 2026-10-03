@@ -1,0 +1,17 @@
+# Prometheus de la supervision (docker-compose.supervision.yml).
+# L'API est jointe par son nom de service sur le réseau interne de Compose :
+# rien ne passe par nginx ni par le port publié sur l'hôte.
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: labo-api
+    metrics_path: /actuator/prometheus
+    static_configs:
+      # Le port est celui de l'application DANS le conteneur (APP_PORT, 7001
+      # par défaut) : à aligner si .env le change.
+      - targets: ["api:7001"]
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

@@ -5,6 +5,7 @@ import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.common.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,6 +30,11 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/dashboard")
 @RequiredArgsConstructor
+// Sur la classe : treize routes, et la prochaine ajoutée hérite du garde sans
+// qu'on y pense. Les montants exigent un droit de plus, posé sur la méthode —
+// en redisant le premier, car une annotation de méthode remplace celle de la
+// classe au lieu de s'y ajouter.
+@PreAuthorize("hasAuthority('view-dashboard')")
 public class DashboardController {
 
     private final DashboardService dashboardService;
@@ -89,6 +95,7 @@ public class DashboardController {
     }
 
     @GetMapping("/revenue")
+    @PreAuthorize("hasAuthority('view-dashboard') and hasAuthority('view-dashboard-finance')")
     public ResponseEntity<ApiResponse<DashboardDto.RevenueData>> getRevenue(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
@@ -96,6 +103,7 @@ public class DashboardController {
     }
 
     @GetMapping("/invoice-status")
+    @PreAuthorize("hasAuthority('view-dashboard') and hasAuthority('view-dashboard-finance')")
     public ResponseEntity<ApiResponse<DashboardDto.InvoiceStatus>> getInvoiceStatus(
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(ApiResponse.success(
