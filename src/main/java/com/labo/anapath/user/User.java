@@ -138,6 +138,22 @@ public class User extends AuditableEntity {
     @Column(name = "reset_token_expires_at")
     private LocalDateTime resetTokenExpiresAt;
 
+    /** Codes de connexion faux depuis {@link #otpFailuresSince}, remis à zéro au succès. */
+    @Column(name = "otp_failed_attempts", nullable = false)
+    private short otpFailedAttempts = 0;
+
+    /** Début de la fenêtre d'une heure dans laquelle on compte les codes faux. */
+    @Column(name = "otp_failures_since")
+    private LocalDateTime otpFailuresSince;
+
+    /**
+     * Verrouillage du compte après trop de codes faux. Tant que la date n'est
+     * pas passée, la connexion échoue avec la même erreur que des identifiants
+     * faux : un attaquant n'apprend rien de l'existence du verrou.
+     */
+    @Column(name = "locked_until")
+    private LocalDateTime lockedUntil;
+
     /**
      * Rôles attribués à l'utilisateur.
      * Chargement paresseux : la liste n'est récupérée que si explicitement accédée.

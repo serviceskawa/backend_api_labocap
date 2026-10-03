@@ -81,6 +81,9 @@ class AuthServiceImplTest {
     private TwoFaRepository twoFaRepository;
 
     @Mock
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
+    @Mock
     private EmailService emailService;
 
     /**
