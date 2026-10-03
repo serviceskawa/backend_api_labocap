@@ -34,7 +34,7 @@ import com.labo.anapath.testorder.TestOrderRepository;
 import com.labo.anapath.testorder.TestOrderStatus;
 import com.labo.anapath.user.User;
 import com.labo.anapath.user.UserRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

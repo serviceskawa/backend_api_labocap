@@ -1,7 +1,7 @@
 package com.labo.anapath.testorder;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 import java.util.Objects;
@@ -46,7 +46,7 @@ public final class Etiquettes {
         if (propres.isEmpty()) return null;
         try {
             return mapper.writeValueAsString(propres);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new com.labo.anapath.common.exception.BusinessException(
                     "Erreur de sérialisation des étiquettes");
         }
@@ -58,7 +58,7 @@ public final class Etiquettes {
         if (brut == null || brut.isBlank()) return List.of();
         try {
             return mapper.readValue(brut, List.class);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             return List.of();
         }
     }

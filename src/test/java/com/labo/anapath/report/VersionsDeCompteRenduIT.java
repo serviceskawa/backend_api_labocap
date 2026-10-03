@@ -16,7 +16,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.ClassPathResource;
@@ -53,6 +54,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
+@AutoConfigureTestRestTemplate
 class VersionsDeCompteRenduIT {
 
     @Container
@@ -240,7 +242,7 @@ class VersionsDeCompteRenduIT {
         Report r = compteRendu(ReportStatus.DELIVERED, medecin);
 
         ResponseEntity<ApiResponse<ReportResponseDto>> sansMotif = put(r, MEDECIN, retouche(r, "trop court"));
-        assertThat(sansMotif.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(sansMotif.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(sansMotif.getBody().message()).contains("motif");
 
         ResponseEntity<ApiResponse<ReportResponseDto>> nonSignataire = put(r, SECRETAIRE, retouche(r, MOTIF));

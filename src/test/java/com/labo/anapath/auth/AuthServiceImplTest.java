@@ -12,7 +12,6 @@ import com.labo.anapath.user.User;
 import com.labo.anapath.user.UserMapper;
 import com.labo.anapath.user.UserRepository;
 import com.labo.anapath.user.UserResponseDto;
-import com.warrenstrange.googleauth.GoogleAuthenticator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -71,8 +70,6 @@ class AuthServiceImplTest {
     @Mock
     private UserMapper userMapper;
 
-    @Mock
-    private GoogleAuthenticator googleAuthenticator;
 
     @Mock
     private PasswordEncoder passwordEncoder;

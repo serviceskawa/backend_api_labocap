@@ -1,7 +1,7 @@
 package com.labo.anapath.common.notification;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.labo.anapath.common.exception.ExternalApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -71,7 +71,7 @@ public class FluidPaySmsClient {
             return lireSucces(reponse.getBody());
 
         } catch (RestClientResponseException e) {
-            if (e.getStatusCode() == HttpStatus.UNPROCESSABLE_ENTITY && estDoublon(e)) {
+            if (e.getStatusCode() == HttpStatus.UNPROCESSABLE_CONTENT && estDoublon(e)) {
                 log.info("SMS {} déjà envoyé (source_id={}) : FluidPay a écarté le doublon",
                         message.referenceId(), message.sourceId());
                 return FluidPaySmsResult.doublon();

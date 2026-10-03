@@ -3,9 +3,10 @@ package com.labo.anapath.common.supervision;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
+import org.springframework.boot.micrometer.metrics.test.autoconfigure.AutoConfigureMetrics;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -27,8 +28,9 @@ import static org.assertj.core.api.Assertions.assertThat;
         properties = "MANAGEMENT_METRICS_EXPOSED=true")
 // Sans elle, @SpringBootTest éteint l'export de métriques et l'endpoint
 // prometheus n'existe pas — le test verrait 404 quoi que fasse l'application.
-@AutoConfigureObservability
+@AutoConfigureMetrics
 @Testcontainers
+@AutoConfigureTestRestTemplate
 class ActuatorMetriquesExposeesIT {
 
     @Container

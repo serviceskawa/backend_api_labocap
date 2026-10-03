@@ -178,8 +178,8 @@ class TypographiePdfTest {
                 </style></head><body><p>Facture</p></body></html>
                 """);
 
-        assertThat(new String(pdf, StandardCharsets.ISO_8859_1))
-                .contains("/Helvetica")
+        assertThat(String.join(",", PolicesDuPdf.noms(pdf)))
+                .contains("Helvetica")
                 .doesNotContain("Nunito");
     }
 
@@ -202,6 +202,6 @@ class TypographiePdfTest {
             throw new IllegalStateException(e);
         }
 
-        assertThat(new String(pdf, StandardCharsets.ISO_8859_1)).contains("Nunito");
+        assertThat(String.join(",", PolicesDuPdf.noms(pdf))).contains("Nunito");
     }
 }

@@ -63,7 +63,7 @@ class MiseEnFormeDuContenuTest {
     private List<Trace> tracer(String contenu) throws Exception {
         byte[] pdf = rendre(contenu);
         List<Trace> traces = new ArrayList<>();
-        try (PDDocument doc = PDDocument.load(pdf)) {
+        try (PDDocument doc = org.apache.pdfbox.Loader.loadPDF(pdf)) {
             PDFTextStripper releveur = new PDFTextStripper() {
                 @Override
                 protected void writeString(String texte, List<TextPosition> positions) {

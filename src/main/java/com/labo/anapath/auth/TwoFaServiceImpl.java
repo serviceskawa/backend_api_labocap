@@ -8,8 +8,7 @@ import com.labo.anapath.common.exception.InvalidCodeException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.user.User;
 import com.labo.anapath.user.UserRepository;
-import com.warrenstrange.googleauth.GoogleAuthenticator;
-import com.warrenstrange.googleauth.GoogleAuthenticatorKey;
+import com.labo.anapath.common.security.Totp;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,7 +39,7 @@ import java.util.UUID;
 public class TwoFaServiceImpl implements TwoFaService {
 
     private final UserRepository userRepository;
-    private final GoogleAuthenticator googleAuthenticator;
+    private final Totp totp;
 
     /** Nom de l'application affiché comme émetteur dans Google Authenticator. */
     @Value("${spring.application.name:Labo AnaPath}")
@@ -49,7 +48,7 @@ public class TwoFaServiceImpl implements TwoFaService {
     /**
      * {@inheritDoc}
      * <p>
-     * Génère un nouveau secret TOTP via {@link GoogleAuthenticator#createCredentials()},
+     * Génère un nouveau secret TOTP via {@link Totp#nouveauSecret()},
      * le persiste en base et retourne le QR code PNG encodé en base64.
      * </p>
      */
@@ -58,8 +57,7 @@ public class TwoFaServiceImpl implements TwoFaService {
     public TwoFaSetupResponse setup(UUID userId) {
         User user = loadUser(userId);
 
-        GoogleAuthenticatorKey credentials = googleAuthenticator.createCredentials();
-        String secret = credentials.getKey();
+        String secret = totp.nouveauSecret();
 
         user.setTwoFactorSecret(secret);
         userRepository.save(user);
@@ -84,7 +82,7 @@ public class TwoFaServiceImpl implements TwoFaService {
         if (user.getTwoFactorSecret() == null) {
             throw new InvalidCodeException("2FA non initialisée. Appelez /setup d'abord.");
         }
-        if (!googleAuthenticator.authorize(user.getTwoFactorSecret(), parseCode(code))) {
+        if (!totp.verifier(user.getTwoFactorSecret(), parseCode(code))) {
             throw new InvalidCodeException("Code TOTP invalide");
         }
         user.setTwoFactorEnabled(true);
@@ -126,8 +124,7 @@ public class TwoFaServiceImpl implements TwoFaService {
         // évite d'attribuer par erreur un pas ancien à un code ambigu.
         for (int decalage = TOLERANCE_PAS; decalage >= -TOLERANCE_PAS; decalage--) {
             long pas = pasCourant + decalage;
-            if (!googleAuthenticator.authorize(
-                    user.getTwoFactorSecret(), saisi, pas * PAS_SECONDES * 1000)) {
+            if (!totp.correspondAuPas(user.getTwoFactorSecret(), saisi, pas * PAS_SECONDES * 1000)) {
                 continue;
             }
 
@@ -163,7 +160,7 @@ public class TwoFaServiceImpl implements TwoFaService {
         if (user.getTwoFactorSecret() == null || !user.isTwoFactorEnabled()) {
             throw new InvalidCodeException("La 2FA n'est pas activée sur ce compte");
         }
-        if (!googleAuthenticator.authorize(user.getTwoFactorSecret(), parseCode(code))) {
+        if (!totp.verifier(user.getTwoFactorSecret(), parseCode(code))) {
             throw new InvalidCodeException("Code TOTP invalide");
         }
         user.setTwoFactorEnabled(false);

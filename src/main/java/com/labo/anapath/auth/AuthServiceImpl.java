@@ -14,7 +14,6 @@ import com.labo.anapath.user.User;
 import com.labo.anapath.user.UserMapper;
 import com.labo.anapath.user.UserRepository;
 import com.labo.anapath.user.UserResponseDto;
-import com.warrenstrange.googleauth.GoogleAuthenticator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -64,7 +63,6 @@ public class AuthServiceImpl implements AuthService {
     private final TokenBlacklistService tokenBlacklistService;
     private final UserRepository userRepository;
     private final UserMapper userMapper;
-    private final GoogleAuthenticator googleAuthenticator;
     private final PasswordEncoder passwordEncoder;
     private final TwoFaRepository twoFaRepository;
     private final com.labo.anapath.common.security.PolitiqueDeMotDePasse politiqueDeMotDePasse;

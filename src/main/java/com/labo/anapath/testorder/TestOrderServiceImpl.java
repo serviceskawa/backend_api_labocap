@@ -97,7 +97,7 @@ public class TestOrderServiceImpl implements TestOrderService {
     /** Sert à rendre, dans la liste, le nom de la personne affectée au bon. */
     private final TestOrderAssignmentDetailRepository assignmentDetailRepository;
     private final FileStorageService fileStorageService;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final tools.jackson.databind.ObjectMapper objectMapper;
     /** Interrupteur du module Biologie : un bon de biologie ne se crée que s'il est actif. */
     private final ModulesProperties modules;
     /** Consulté avant de retirer une analyse d'un bon de biologie (jamais en anatomie pathologique). */
@@ -1173,7 +1173,7 @@ public class TestOrderServiceImpl implements TestOrderService {
         try {
             order.setFilesName(objectMapper.writeValueAsString(existing));
             order.setFilesAddedAt(objectMapper.writeValueAsString(dates));
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             throw new com.labo.anapath.common.exception.BusinessException("Erreur de sérialisation JSON");
         }
         testOrderRepository.save(order);
@@ -1281,7 +1281,7 @@ public class TestOrderServiceImpl implements TestOrderService {
         retraits.set(index, java.time.LocalDateTime.now().toString());
         try {
             order.setFilesDeletedAt(objectMapper.writeValueAsString(retraits));
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             throw new com.labo.anapath.common.exception.BusinessException("Erreur de sérialisation JSON");
         }
         testOrderRepository.save(order);
@@ -1293,7 +1293,7 @@ public class TestOrderServiceImpl implements TestOrderService {
         if (json == null || json.isBlank()) return new java.util.ArrayList<>();
         try {
             return objectMapper.readValue(json, java.util.List.class);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             return new java.util.ArrayList<>();
         }
     }

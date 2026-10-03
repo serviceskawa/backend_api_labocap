@@ -1,6 +1,6 @@
 package com.labo.anapath.biology.results;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.labo.anapath.setting.SettingApp;
 import com.labo.anapath.setting.SettingAppRepository;
 import org.junit.jupiter.api.DisplayName;

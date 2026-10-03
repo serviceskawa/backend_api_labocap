@@ -44,8 +44,8 @@ spring:
       max-request-size: 100MB
   jackson:
     time-zone: Africa/Porto-Novo
-    serialization:
-      write-dates-as-timestamps: false
+    # Jackson 3 écrit déjà les dates en ISO (write-dates-as-timestamps éteint par
+    # défaut) ; l'ancienne clé serialization.write-dates-as-timestamps n'existe plus.
 
 server:
   port: ${PORT:8080}

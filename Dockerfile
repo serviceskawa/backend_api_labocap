@@ -12,7 +12,8 @@ COPY src/ src/
 RUN mvn package -Dmaven.test.skip=true -B
 
 # ─── Stage 2 : runtime ───────────────────────────────────────────────────────
-FROM eclipse-temurin:21-jre-alpine
+# Tag précis, mis à jour par Dependabot (lot 4) : « 21-jre-alpine » changeait sous nos pieds.
+FROM eclipse-temurin:21.0.12.1_1-jre-alpine
 
 # Client PostgreSQL — la tâche de sauvegarde quotidienne appelle `pg_dump`.
 # Sans lui, elle échouait chaque soir depuis la mise en conteneur : la commande

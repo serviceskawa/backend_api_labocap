@@ -46,11 +46,7 @@ class PolicesEditeurTest {
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
-        Set<String> trouvees = new LinkedHashSet<>();
-        Matcher m = Pattern.compile("/BaseFont\\s*/([A-Za-z0-9+,#-]+)")
-                .matcher(new String(pdf, StandardCharsets.ISO_8859_1));
-        while (m.find()) trouvees.add(m.group(1));
-        return trouvees;
+        return PolicesDuPdf.noms(pdf);
     }
 
     @Test

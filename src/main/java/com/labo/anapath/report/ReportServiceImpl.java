@@ -64,7 +64,7 @@ public class ReportServiceImpl implements ReportService {
     private final com.labo.anapath.testorder.PerimetreDuMedecin perimetreDuMedecin;
     private final JournalDesRefus journalDesRefus;
     /** Pour relire les étiquettes, rangées en tableau JSON sur la ligne d'affectation. */
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final tools.jackson.databind.ObjectMapper objectMapper;
     private final ReportVersionRepository reportVersionRepository;
 
     // Les findById restants (utilisateurs, titres, modèles) visent des

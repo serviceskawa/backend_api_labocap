@@ -97,7 +97,7 @@ class BonsDeBiologieTest {
     @Mock private SettingAppRepository settingAppRepository;
     @Mock private TestOrderAssignmentDetailRepository assignmentDetailRepository;
     @Mock private FileStorageService fileStorageService;
-    @Mock private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    @Mock private tools.jackson.databind.ObjectMapper objectMapper;
     @Mock private BiologyResultsGuard biologyResultsGuard;
     @Mock private com.labo.anapath.biology.results.BiologyResultsLifecycle biologyResultsLifecycle;
     @Spy private ModulesProperties modules = new ModulesProperties();

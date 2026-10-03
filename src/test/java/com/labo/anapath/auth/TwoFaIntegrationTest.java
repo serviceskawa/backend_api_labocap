@@ -3,14 +3,15 @@ package com.labo.anapath.auth;
 import com.labo.anapath.common.dto.ApiResponse;
 import com.labo.anapath.user.User;
 import com.labo.anapath.user.UserRepository;
-import com.warrenstrange.googleauth.GoogleAuthenticator;
+import com.labo.anapath.common.security.Totp;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import com.labo.anapath.testsupport.Jetons;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
@@ -31,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
+@AutoConfigureTestRestTemplate
 class TwoFaIntegrationTest {
 
     @Container
@@ -142,8 +144,8 @@ class TwoFaIntegrationTest {
         // 2. Verify — activate 2FA with live TOTP code
         // Six chiffres exactement, comme l'exige le serveur : un code inférieur à
         // 100000 doit garder ses zéros de tête.
-        GoogleAuthenticator gAuth = new GoogleAuthenticator();
-        int totpCode = gAuth.getTotpPassword(secret);
+        Totp gAuth = new Totp();
+        int totpCode = gAuth.code(secret, System.currentTimeMillis());
 
         TwoFaCodeRequest verifyRequest = new TwoFaCodeRequest();
         verifyRequest.setCode(String.format("%06d", totpCode));
@@ -173,7 +175,7 @@ class TwoFaIntegrationTest {
         assertThat(loginData.accessToken()).isNull();
 
         // 4. Challenge — provide TOTP code + tempToken → get full JWT
-        int challengeCode = gAuth.getTotpPassword(secret);
+        int challengeCode = gAuth.code(secret, System.currentTimeMillis());
 
         TwoFactorVerifyRequest challengeRequest = new TwoFactorVerifyRequest();
         challengeRequest.setTempToken(loginData.tempToken());
@@ -201,7 +203,7 @@ class TwoFaIntegrationTest {
         assertThat(userAfterChallenge.getLastLoginDevice()).isNotBlank();
 
         // 5. Cleanup — disable 2FA to avoid polluting other tests
-        int disableCode = gAuth.getTotpPassword(secret);
+        int disableCode = gAuth.code(secret, System.currentTimeMillis());
         TwoFaCodeRequest disableRequest = new TwoFaCodeRequest();
         disableRequest.setCode(String.format("%06d", disableCode));
 

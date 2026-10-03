@@ -1,8 +1,7 @@
 package com.labo.anapath.testorder;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.labo.anapath.branch.BranchRepository;
 import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.dto.PageResponse;
@@ -69,7 +68,7 @@ class LotsDeBiologieTest {
     private final TestPathologyMacroRepository macroRepository = mock(TestPathologyMacroRepository.class);
     private final SampleLabelRepository labelRepository = mock(SampleLabelRepository.class);
     private final ReportRepository reportRepository = mock(ReportRepository.class);
-    private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final TestOrderAssignmentServiceImpl service = new TestOrderAssignmentServiceImpl(
             assignmentRepository, detailRepository, testOrderRepository, userRepository,
@@ -214,8 +213,7 @@ class LotsDeBiologieTest {
         /** Toutes les clés d'un nœud JSON, à plat — « details[].note » pour les tableaux. */
         private Set<String> cles(JsonNode noeud, String prefixe, Set<String> dans) {
             if (noeud.isObject()) {
-                for (Iterator<String> it = noeud.fieldNames(); it.hasNext(); ) {
-                    String cle = it.next();
+                for (String cle : noeud.propertyNames()) {
                     String chemin = prefixe.isEmpty() ? cle : prefixe + "." + cle;
                     dans.add(chemin);
                     cles(noeud.get(cle), chemin, dans);
