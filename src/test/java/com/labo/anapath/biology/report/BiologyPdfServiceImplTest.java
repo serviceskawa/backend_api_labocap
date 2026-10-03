@@ -150,14 +150,14 @@ class BiologyPdfServiceImplTest {
     }
 
     private static String texte(byte[] pdf) throws Exception {
-        try (PDDocument doc = PDDocument.load(pdf)) {
+        try (PDDocument doc = org.apache.pdfbox.Loader.loadPDF(pdf)) {
             // Espaces multiples ramenés à un : le moteur en pose autour des éléments en ligne.
             return new PDFTextStripper().getText(doc).replaceAll("[ \\t]+", " ");
         }
     }
 
     private static int pages(byte[] pdf) throws Exception {
-        try (PDDocument doc = PDDocument.load(pdf)) {
+        try (PDDocument doc = org.apache.pdfbox.Loader.loadPDF(pdf)) {
             return doc.getNumberOfPages();
         }
     }

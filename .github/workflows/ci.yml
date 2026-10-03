@@ -27,3 +27,35 @@ jobs:
       # service `postgres` à déclarer, contrairement aux projets Laravel.
       - name: Compiler et tester
         run: mvn -B --no-transfer-progress verify
+
+  # Dépendances connues vulnérables (lot 4). Demande la clé NVD en secret
+  # (NVD_API_KEY, gratuite sur nvd.nist.gov/developers/request-an-api-key) :
+  # sans elle, le téléchargement de la base prend des heures. Le job échoue
+  # au-delà de CVSS 7, sauf suppression justifiée dans
+  # dependency-check-suppressions.xml.
+  dependances:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Base NVD en cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: nvd-${{ github.run_id }}
+          restore-keys: nvd-
+      - name: dependency-check
+        if: ${{ env.NVD_API_KEY != '' }}
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: mvn -B --no-transfer-progress -DskipTests dependency-check:check
+      - name: Clé NVD absente
+        if: ${{ env.NVD_API_KEY == '' }}
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: echo "::warning::Secret NVD_API_KEY absent : analyse des dépendances non exécutée."

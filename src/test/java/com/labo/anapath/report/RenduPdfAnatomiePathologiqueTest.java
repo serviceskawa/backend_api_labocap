@@ -131,7 +131,7 @@ class RenduPdfAnatomiePathologiqueTest {
 
         byte[] pdf = service.generatePdf(REPORT_ID, USER_ID);
         String texte;
-        try (PDDocument doc = PDDocument.load(pdf)) {
+        try (PDDocument doc = org.apache.pdfbox.Loader.loadPDF(pdf)) {
             texte = new PDFTextStripper().getText(doc);
         }
 

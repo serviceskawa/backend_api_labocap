@@ -4,8 +4,7 @@ import com.labo.anapath.common.exception.InvalidCodeException;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.user.User;
 import com.labo.anapath.user.UserRepository;
-import com.warrenstrange.googleauth.GoogleAuthenticator;
-import com.warrenstrange.googleauth.GoogleAuthenticatorKey;
+import com.labo.anapath.common.security.Totp;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,7 +32,7 @@ class TwoFaServiceImplTest {
     private UserRepository userRepository;
 
     @Mock
-    private GoogleAuthenticator googleAuthenticator;
+    private Totp totp;
 
     @InjectMocks
     private TwoFaServiceImpl twoFaService;
@@ -62,10 +61,8 @@ class TwoFaServiceImplTest {
         User user = buildUser();
         user.setEmail("test@labo.bj");
 
-        GoogleAuthenticatorKey credentials = mock(GoogleAuthenticatorKey.class);
-        when(credentials.getKey()).thenReturn("JBSWY3DPEHPK3PXP");
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(googleAuthenticator.createCredentials()).thenReturn(credentials);
+        when(totp.nouveauSecret()).thenReturn("JBSWY3DPEHPK3PXP");
         when(userRepository.save(any(User.class))).thenReturn(user);
 
         TwoFaSetupResponse response = twoFaService.setup(USER_ID);
@@ -91,7 +88,7 @@ class TwoFaServiceImplTest {
         user.setTwoFactorSecret("BASE32SECRET");
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(googleAuthenticator.authorize(eq("BASE32SECRET"), anyInt())).thenReturn(true);
+        when(totp.verifier(eq("BASE32SECRET"), anyInt())).thenReturn(true);
         when(userRepository.save(any(User.class))).thenReturn(user);
 
         twoFaService.verifyAndEnable(USER_ID, "123456");
@@ -107,7 +104,7 @@ class TwoFaServiceImplTest {
         user.setTwoFactorSecret("BASE32SECRET");
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(googleAuthenticator.authorize(eq("BASE32SECRET"), anyInt())).thenReturn(false);
+        when(totp.verifier(eq("BASE32SECRET"), anyInt())).thenReturn(false);
 
         assertThatThrownBy(() -> twoFaService.verifyAndEnable(USER_ID, "000000"))
                 .isInstanceOf(InvalidCodeException.class)
@@ -132,7 +129,7 @@ class TwoFaServiceImplTest {
         User user = buildUserWith2fa();
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(googleAuthenticator.authorize(eq("BASE32SECRET"), anyInt())).thenReturn(true);
+        when(totp.verifier(eq("BASE32SECRET"), anyInt())).thenReturn(true);
         when(userRepository.save(any(User.class))).thenReturn(user);
 
         twoFaService.disable(USER_ID, "123456");
@@ -148,7 +145,7 @@ class TwoFaServiceImplTest {
         User user = buildUserWith2fa();
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(googleAuthenticator.authorize(eq("BASE32SECRET"), anyInt())).thenReturn(false);
+        when(totp.verifier(eq("BASE32SECRET"), anyInt())).thenReturn(false);
 
         assertThatThrownBy(() -> twoFaService.disable(USER_ID, "000000"))
                 .isInstanceOf(InvalidCodeException.class);
