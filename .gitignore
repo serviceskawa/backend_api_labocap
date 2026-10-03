@@ -81,3 +81,8 @@ replay_pid*
 
 # Fichiers de données (clichés, documents) : jamais dans le dépôt (lot 11).
 /storage/
+
+# Documents de travail (spec, rapports) : hors du dépôt.
+/SPEC-*.md
+/plan-rapport-*.md
+/rapport-L*.md
