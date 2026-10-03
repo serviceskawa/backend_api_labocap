@@ -21,7 +21,7 @@ class ModulesDeBootPresentsTest {
                 "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration",
                 "org.springframework.boot.micrometer.metrics.autoconfigure.export.prometheus.PrometheusMetricsExportAutoConfiguration",
                 "org.springframework.boot.mail.autoconfigure.MailSenderAutoConfiguration",
-                "org.springframework.boot.security.autoconfigure.web.servlet.SecurityAutoConfiguration",
+                "org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration",
                 "org.springframework.boot.restclient.autoconfigure.RestTemplateAutoConfiguration",
         }) {
             assertThat(estSurLeClasspath(classe)).as(classe).isTrue();
