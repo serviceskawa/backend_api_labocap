@@ -1,0 +1,41 @@
+name: Protect Branches
+
+# Repris de fluidpay-main, sans sa règle « seul develop merge vers main » :
+# ici tout part d'une branche feat/… ou fix/… et rejoint main par PR.
+# Ce workflow signale ; le vrai verrou est la protection de branche GitHub
+# (Settings → Branches → main : PR obligatoire, check `Tests / tests` requis).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check-direct-push:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vérifier que le push vient d'une PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" --jq '.[0].number' 2>/dev/null || echo "")
+          if [ -z "$PR" ]; then
+            echo "::error::Push direct sur main sans PR !"
+            exit 1
+          fi
+          echo "Push via PR #$PR"
+
+  check-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vérifier le nommage de la branche
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          if ! echo "$BRANCH" | grep -qE "^(feat|fix|chore|hotfix|docs|refactor)/"; then
+            echo "::error::Nom de branche '$BRANCH' invalide. Préfixes : feat/ fix/ chore/ hotfix/ docs/ refactor/"
+            exit 1
+          fi
+          echo "Branche '$BRANCH' — nommage OK"
