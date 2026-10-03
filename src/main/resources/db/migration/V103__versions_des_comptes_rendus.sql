@@ -124,8 +124,10 @@ BEGIN
         END IF;
         -- Le catalogue plutôt qu'information_schema : cette vue ne montre que
         -- les privilèges où le rôle courant est partie, et manquerait ceux que
-        -- le propriétaire a accordés à un rôle applicatif. Le propriétaire est
-        -- ajouté explicitement : ses privilèges implicites n'ont pas d'ACL.
+        -- le propriétaire a accordés à un rôle applicatif. Le propriétaire,
+        -- lui, garde ses droits : c'est sous son identité que la purge de
+        -- rétention s'exécute (purger_journaux, SECURITY DEFINER), et
+        -- l'application ne doit pas se connecter avec lui.
         FOR g IN
             SELECT DISTINCT CASE WHEN a.grantee = 0 THEN 'PUBLIC'
                                  ELSE quote_ident(pg_get_userbyid(a.grantee)) END AS qui
@@ -133,10 +135,7 @@ BEGIN
             CROSS JOIN LATERAL aclexplode(c.relacl) a
             WHERE c.oid = t::regclass
               AND a.privilege_type IN ('UPDATE', 'DELETE')
-            UNION
-            SELECT quote_ident(pg_get_userbyid(c.relowner))
-            FROM pg_class c
-            WHERE c.oid = t::regclass
+              AND a.grantee <> c.relowner
         LOOP
             EXECUTE format('REVOKE UPDATE, DELETE ON %I FROM %s', t, g.qui);
         END LOOP;
@@ -148,3 +147,18 @@ BEGIN
     END IF;
 END $$;
 -- <<< revocation
+
+-- La purge mensuelle (PurgeDesJournaux, lot 6) est la seule suppression
+-- légitime dans ces tables : elle passe par cette fonction, exécutée avec les
+-- droits de son propriétaire (SECURITY DEFINER), que le rôle applicatif n'a plus.
+CREATE OR REPLACE FUNCTION purger_journaux(avant TIMESTAMP)
+RETURNS TABLE(acces BIGINT, actions BIGINT)
+LANGUAGE plpgsql SECURITY DEFINER AS $fn$
+DECLARE a BIGINT; b BIGINT;
+BEGIN
+    DELETE FROM journal_acces WHERE at < avant;
+    GET DIAGNOSTICS a = ROW_COUNT;
+    DELETE FROM log_reports WHERE created_at < avant;
+    GET DIAGNOSTICS b = ROW_COUNT;
+    RETURN QUERY SELECT a, b;
+END $fn$;

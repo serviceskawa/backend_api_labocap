@@ -370,7 +370,8 @@ public class ReportServiceImpl implements ReportService {
         }
 
         Report saved = reportRepository.save(report);
-        logAction(saved.getId(), "CREATE", branchId);
+        // L'auteur, pas l'agence : avec branchId la ligne restait sans utilisateur.
+        logAction(saved.getId(), "CREATE", utilisateurCourant());
         signalerValidation(statutInitial, saved, utilisateurCourant());
         return reportMapper.toResponseDto(saved);
     }
@@ -528,7 +529,7 @@ public class ReportServiceImpl implements ReportService {
         }
 
         Report saved = reportRepository.save(report);
-        logAction(saved.getId(), "CREATE", branchId);
+        logAction(saved.getId(), "CREATE", utilisateurCourant());
         return reportMapper.toResponseDto(saved);
     }
 
@@ -884,6 +885,8 @@ public class ReportServiceImpl implements ReportService {
     public void delete(UUID id) {
         Report report = reportRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte-rendu", id));
+        // Suppression douce (deleted_at) : la trace survit au compte rendu.
+        logAction(id, "DELETE", utilisateurCourant());
         reportRepository.delete(report);
     }
 
@@ -1098,7 +1101,7 @@ public class ReportServiceImpl implements ReportService {
         report.setCallDate(LocalDateTime.now());
         report.setRetrieverName(dto.getSignatorName());
         report.setRetrieverRelation(dto.getRelation());
-        report.setRetrieverSignature(dto.getSignature());
+        report.setRetrieverSignature(com.labo.anapath.common.security.SignatureNettoyee.nettoyer(dto.getSignature()));
         // Cohérence de statut, comme dans deliver() et markDelivered().
         //
         // Cette méthode posait `isDelivered` sans toucher au statut : le compte-rendu
@@ -1388,7 +1391,9 @@ public class ReportServiceImpl implements ReportService {
             logReport.setReport(report);
             logReport.setAction(action);
             logReport.setDescription("Action: " + action + " on report: " + reportId);
-            userRepository.findById(userId).ifPresent(logReport::setUser);
+            if (userId != null) {
+                userRepository.findById(userId).ifPresent(logReport::setUser);
+            }
             logReportRepository.save(logReport);
         });
     }

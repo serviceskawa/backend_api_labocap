@@ -47,4 +47,5 @@ public interface LogReportRepository extends JpaRepository<LogReport, UUID> {
      * @return page d'entrées de journal
      */
     Page<LogReport> findByBranchId(UUID branchId, Pageable pageable);
+
 }
