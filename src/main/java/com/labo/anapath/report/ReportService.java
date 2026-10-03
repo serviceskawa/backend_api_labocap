@@ -150,4 +150,10 @@ public interface ReportService {
      *         sa signature — le cas de l'immense majorité des dossiers
      */
     List<ModificationApresSignatureDto> getModificationsApresSignature(UUID reportId);
+
+    /** Versions antérieures d'un compte-rendu, de la plus ancienne à la plus récente. */
+    List<VersionDeCompteRenduDto.Resume> listerVersions(UUID reportId, UUID branchId);
+
+    /** Une version antérieure, textes compris. 404 si le compte-rendu ou le numéro n'existe pas. */
+    VersionDeCompteRenduDto lireVersion(UUID reportId, int numero, UUID branchId);
 }

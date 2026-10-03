@@ -29,6 +29,23 @@ public class EmailServiceImpl implements EmailService {
 
     @Async
     @Override
+    public void sendAlerteSupervision(java.util.List<String> to, String sujet, String corps) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(to.toArray(String[]::new));
+            helper.setSubject(sujet);
+            helper.setText(corps, false);
+            mailSender.send(message);
+            log.info("Alerte de supervision envoyée à {} destinataire(s) : {}", to.size(), sujet);
+        } catch (Exception e) {
+            log.error("Échec d'envoi de l'alerte de supervision « {} » : {}", sujet, e.getMessage());
+        }
+    }
+
+    @Async
+    @Override
     public void sendOtp(String to, String firstname, String otp) {
         // En profil dev, on affiche l'OTP en clair dans la console pour permettre la
         // connexion même quand le SMTP n'est pas configuré. JAMAIS actif en prod.
@@ -215,7 +232,7 @@ public class EmailServiceImpl implements EmailService {
     @Override
     public void sendPostSignatureChangeAlert(String to, String reportCode, String testOrderCode,
                                              String signatoryName, String modifiedByName,
-                                             String changedFields, String labName) {
+                                             String changedFields, String reason, String labName) {
         try {
             Context context = new Context();
             context.setVariable("reportCode", reportCode);
@@ -223,6 +240,7 @@ public class EmailServiceImpl implements EmailService {
             context.setVariable("signatoryName", signatoryName);
             context.setVariable("modifiedByName", modifiedByName);
             context.setVariable("changedFields", changedFields);
+            context.setVariable("reason", reason);
             context.setVariable("labName", labName);
 
             String htmlContent = templateEngine.process("email/post-signature-change", context);
@@ -296,6 +314,24 @@ public class EmailServiceImpl implements EmailService {
             log.info("Email partage document envoyé à {} pour « {} »", maskEmail(to), docTitle);
         } catch (Exception e) {
             log.error("Échec d'envoi de la notification de partage à {}: {}", maskEmail(to), e.getMessage());
+        }
+    }
+
+    @Async
+    @Override
+    public void sendAlerteSauvegarde(String to, String sujet, String detail) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(to);
+            helper.setSubject("[Sauvegarde] " + sujet);
+            helper.setText(detail, false);
+
+            mailSender.send(message);
+            log.info("Alerte de sauvegarde envoyée à {} : {}", maskEmail(to), sujet);
+        } catch (Exception e) {
+            log.error("Échec d'envoi de l'alerte de sauvegarde à {}: {}", maskEmail(to), e.getMessage());
         }
     }
 

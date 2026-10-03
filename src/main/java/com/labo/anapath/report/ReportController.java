@@ -196,15 +196,23 @@ public class ReportController {
         return ResponseEntity.ok(ApiResponse.success(reportService.findDetailById(id, principal.getBranchId())));
     }
 
+    /**
+     * Crée un compte-rendu. Un {@code reportId} dans le corps est refusé :
+     * la modification passe par {@code PUT /reports/{id}}, seul chemin qui
+     * trace une retouche après signature et en garde l'état antérieur.
+     */
     @PostMapping
     @PreAuthorize("hasAuthority('create-reports')")
     public ResponseEntity<ApiResponse<ReportResponseDto>> createOrUpdate(
             @Valid @RequestBody ReportRequestDto dto,
             @AuthenticationPrincipal UserPrincipal principal) {
+        if (dto.getReportId() != null) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(ReportServiceImpl.MODIFICATION_PAR_PUT));
+        }
         ReportResponseDto result = reportService.createOrUpdate(dto, principal.getBranchId());
-        boolean isCreate = dto.getReportId() == null;
-        return ResponseEntity.status(isCreate ? HttpStatus.CREATED : HttpStatus.OK)
-                .body(ApiResponse.success(isCreate ? "Compte-rendu créé" : "Compte-rendu mis à jour", result));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Compte-rendu créé", result));
     }
 
     @PutMapping("/{id}")
@@ -381,6 +389,25 @@ public class ReportController {
      * signature relève de la lecture, pas de l'administration — un médecin doit
      * pouvoir le voir sur un compte-rendu qu'il consulte.</p>
      */
+    /** Versions antérieures d'un compte-rendu signé : numéro, date, auteur, statut. */
+    @GetMapping("/{id}/versions")
+    @PreAuthorize("hasAuthority('view-report-history')")
+    public ResponseEntity<ApiResponse<List<VersionDeCompteRenduDto.Resume>>> versions(
+            @PathVariable UUID id, @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                reportService.listerVersions(id, principal.getBranchId())));
+    }
+
+    /** Une version antérieure, textes compris. */
+    @GetMapping("/{id}/versions/{numero}")
+    @PreAuthorize("hasAuthority('view-report-history')")
+    public ResponseEntity<ApiResponse<VersionDeCompteRenduDto>> version(
+            @PathVariable UUID id, @PathVariable int numero,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(ApiResponse.success(
+                reportService.lireVersion(id, numero, principal.getBranchId())));
+    }
+
     @GetMapping("/{id}/modifications-apres-signature")
     @PreAuthorize("hasAnyAuthority('view-reports', 'edit-reports')")
     public ResponseEntity<ApiResponse<List<ModificationApresSignatureDto>>> modificationsApresSignature(

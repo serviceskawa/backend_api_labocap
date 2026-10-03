@@ -38,6 +38,10 @@
                                         <span th:text="${signatoryName}">Docteur</span><br/>
                                         <strong>Champs modifiés :</strong>
                                         <span th:text="${changedFields}">Contenu macroscopique</span>
+                                        <!-- Le motif n'existe que pour un compte rendu livré, ou si l'auteur en a donné un. -->
+                                        <th:block th:if="${reason}"><br/>
+                                        <strong>Motif :</strong>
+                                        <span th:text="${reason}">Complément demandé par le prescripteur</span></th:block>
                                     </td>
                                 </tr>
                             </table>

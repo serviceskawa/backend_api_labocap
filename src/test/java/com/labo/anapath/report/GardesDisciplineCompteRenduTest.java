@@ -96,15 +96,16 @@ class GardesDisciplineCompteRenduTest {
         }
 
         @Test
-        @DisplayName("createOrUpdate refuse un compte-rendu de biologie")
-        void createOrUpdateRefuse() {
-            biologieEnBase();
+        @DisplayName("createOrUpdate ne modifie plus : un reportId est refusé avant toute lecture")
+        void createOrUpdateRefuseUnReportId() {
             ReportRequestDto dto = new ReportRequestDto();
             dto.setReportId(REPORT_ID);
             dto.setContent("texte libre");
 
             assertThatThrownBy(() -> service.createOrUpdate(dto, BRANCH_ID))
-                    .isInstanceOf(InvalidOperationException.class);
+                    .isInstanceOf(InvalidOperationException.class)
+                    .hasMessageContaining("PUT /reports/{id}");
+            verify(reportRepository, never()).findById(any());
             verify(reportRepository, never()).save(any());
         }
 

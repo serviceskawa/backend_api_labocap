@@ -70,6 +70,20 @@ public class DepotS3 implements DepotDOctets {
         String p = prefixe == null ? "" : prefixe.trim();
         this.prefixe = p.isEmpty() || p.endsWith("/") ? p : p + "/";
 
+        this.client = construireClient(region, cle, secret, pointDEntree);
+        log.info("Stockage S3 actif : seau={} région={}{}", this.seau, region,
+                this.prefixe.isEmpty() ? "" : " préfixe=" + this.prefixe);
+    }
+
+    /**
+     * Construit un client S3 selon les règles communes à tous les seaux du
+     * projet — fichiers et sauvegardes partagent la façon de se connecter, pas
+     * le seau ni les clés.
+     *
+     * @param cle          clé d'accès ; vide, la chaîne d'AWS prend le relais
+     * @param pointDEntree point d'entrée explicite (MinIO…), vide pour AWS
+     */
+    public static S3Client construireClient(String region, String cle, String secret, String pointDEntree) {
         var constructeur = S3Client.builder().region(Region.of(region));
 
         // Sans clés explicites, la chaîne d'AWS prend le relais : rôle IAM de la
@@ -88,10 +102,7 @@ public class DepotS3 implements DepotDOctets {
             constructeur.endpointOverride(URI.create(pointDEntree.trim()))
                     .forcePathStyle(true);
         }
-
-        this.client = constructeur.build();
-        log.info("Stockage S3 actif : seau={} région={}{}", this.seau, region,
-                this.prefixe.isEmpty() ? "" : " préfixe=" + this.prefixe);
+        return constructeur.build();
     }
 
     private String objet(String cle) {

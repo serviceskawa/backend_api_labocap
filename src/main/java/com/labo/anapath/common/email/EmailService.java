@@ -3,6 +3,17 @@ package com.labo.anapath.common.email;
 public interface EmailService {
 
     /**
+     * Envoie une alerte de supervision (rafale de connexions ratées, erreurs
+     * serveur, disque presque plein) en texte brut, à plusieurs destinataires
+     * d'un coup : un seul courriel par alerte, pas un par adresse.
+     *
+     * @param to    adresses des destinataires (administrateurs, prestataire)
+     * @param sujet objet du courriel
+     * @param corps texte du message
+     */
+    void sendAlerteSupervision(java.util.List<String> to, String sujet, String corps);
+
+    /**
      * Envoie le code OTP 2FA par email de manière asynchrone.
      *
      * @param to        adresse email du destinataire
@@ -86,11 +97,12 @@ public interface EmailService {
      * @param signatoryName  médecin dont la signature est engagée
      * @param modifiedByName auteur de la modification
      * @param changedFields  champs touchés, déjà mis en forme
+     * @param reason         motif saisi par l'auteur, {@code null} s'il n'en a pas donné
      * @param labName        nom du laboratoire (en-tête / signature)
      */
     void sendPostSignatureChangeAlert(String to, String reportCode, String testOrderCode,
                                       String signatoryName, String modifiedByName,
-                                      String changedFields, String labName);
+                                      String changedFields, String reason, String labName);
 
     /**
      * Envoie l'alerte "compte-rendu non fait" pour une demande d'examen en retard.
@@ -117,4 +129,16 @@ public interface EmailService {
      */
     void sendShareDoc(String to, String recipientName, String sharerName,
                       String docTitle, String labName);
+    /**
+     * Alerte de sauvegarde — export échoué ou vide, copie externe manquante.
+     *
+     * <p>Texte brut, sans gabarit : ce message s'adresse à l'administrateur et
+     * au prestataire, et doit partir même quand le reste va mal. Moins il
+     * dépend de choses, mieux c'est.</p>
+     *
+     * @param to     adresse du destinataire
+     * @param sujet  objet du message
+     * @param detail ce qui a échoué, et où regarder
+     */
+    void sendAlerteSauvegarde(String to, String sujet, String detail);
 }

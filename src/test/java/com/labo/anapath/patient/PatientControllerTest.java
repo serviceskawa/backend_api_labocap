@@ -77,9 +77,18 @@ class PatientControllerTest {
     @MockBean
     private com.labo.anapath.mobile.ProvenanceRequete provenanceRequete;
 
+    /** FiltreDErreursServeur : compteur des réponses 5xx pour la supervision. */
+    @MockBean
+    private com.labo.anapath.common.supervision.CompteurDAlertes compteurDAlertes;
+
     /** BiologyModuleInterceptor (ModulesWebConfig), hors des routes testées ici. */
     @MockBean
     private com.labo.anapath.common.module.ModulesProperties modulesProperties;
+
+    // L'intercepteur du journal des accès (lot 6) est un HandlerInterceptor,
+    // donc chargé par la tranche web ; son service, lui, touche la base.
+    @MockBean
+    private com.labo.anapath.common.audit.JournalAccesService journalAccesService;
 
     @BeforeEach
     void autoriseLaBranche() {

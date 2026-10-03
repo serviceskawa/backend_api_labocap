@@ -26,9 +26,13 @@ public class ModulesWebConfig implements WebMvcConfigurer {
     };
 
     private final BiologyModuleInterceptor biologyModuleInterceptor;
+    private final com.labo.anapath.common.audit.JournalAccesInterceptor journalAccesInterceptor;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(biologyModuleInterceptor).addPathPatterns(BIOLOGY_PATHS);
+        // Journal des consultations (lot 6) : qui a lu quoi.
+        registry.addInterceptor(journalAccesInterceptor)
+                .addPathPatterns(com.labo.anapath.common.audit.JournalAccesInterceptor.CHEMINS);
     }
 }
