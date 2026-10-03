@@ -234,6 +234,12 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <!-- Boot 4 : @AutoConfigureMetrics (ex-@AutoConfigureObservability) a son module. -->
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-micrometer-metrics-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <!-- Boot 4 : la sécurité des tranches de test (@WebMvcTest, MockMvc) a son module. -->
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-security-test</artifactId>
