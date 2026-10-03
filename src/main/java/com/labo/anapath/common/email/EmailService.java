@@ -117,4 +117,16 @@ public interface EmailService {
      */
     void sendShareDoc(String to, String recipientName, String sharerName,
                       String docTitle, String labName);
+    /**
+     * Alerte de sauvegarde — export échoué ou vide, copie externe manquante.
+     *
+     * <p>Texte brut, sans gabarit : ce message s'adresse à l'administrateur et
+     * au prestataire, et doit partir même quand le reste va mal. Moins il
+     * dépend de choses, mieux c'est.</p>
+     *
+     * @param to     adresse du destinataire
+     * @param sujet  objet du message
+     * @param detail ce qui a échoué, et où regarder
+     */
+    void sendAlerteSauvegarde(String to, String sujet, String detail);
 }

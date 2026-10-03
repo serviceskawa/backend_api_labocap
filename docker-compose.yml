@@ -40,6 +40,11 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      # Heure du laboratoire pour tout le conteneur : les tâches planifiées
+      # portent déjà leur fuseau, mais l'horodatage des journaux et des
+      # fichiers de sauvegarde sortaient en UTC, deux heures plus tôt que ce
+      # que lit l'équipe.
+      TZ: Africa/Porto-Novo
       # Port d'écoute de l'application DANS le conteneur (server.port=${PORT}).
       # Repris tel quel par le mapping et le healthcheck plus bas : ces trois
       # emplacements doivent rester alignés, sous peine d'un conteneur déclaré
@@ -57,6 +62,19 @@ services:
       APP_BACKUP_COMMAND: pg_dump -h db -p ${DB_PORT:-5432} -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-labo_anapath}
       APP_BACKUP_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant dans .env}
       APP_BACKUP_KEEP: ${BACKUP_KEEP:-30}
+      # Chaque export est chiffré (age) contre cette clé publique, puis copié
+      # dans un seau S3 réservé aux sauvegardes — distinct de celui des
+      # fichiers, avec des clés en écriture seule. Sans clé publique, la
+      # sauvegarde est REFUSÉE en production et une alerte part : voir
+      # docs/restauration.md pour préparer la clé et le seau.
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      BACKUP_S3_REGION: ${BACKUP_S3_REGION:-eu-west-3}
+      BACKUP_S3_ACCESS_KEY: ${BACKUP_S3_ACCESS_KEY:-}
+      BACKUP_S3_SECRET_KEY: ${BACKUP_S3_SECRET_KEY:-}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      # Prévenu, avec les administrateurs (réglage admin_mails), de tout échec.
+      BACKUP_ALERT_EMAIL: ${BACKUP_ALERT_EMAIL:-}
       # Biologie clinique : "true" pour un laboratoire qui la pratique.
       MODULE_BIOLOGY: ${MODULE_BIOLOGY:-false}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant dans .env}

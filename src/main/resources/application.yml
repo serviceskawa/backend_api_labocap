@@ -116,6 +116,38 @@ app:
     # session pour finir une phrase. Un poste du comptoir reste à portée de qui
     # passe dans le couloir, d'où la fenêtre deux fois plus courte au-dessus.
     refresh-expiration-medecin-ms: ${JWT_REFRESH_MEDECIN:3600000}
+  # ── Sauvegardes ─────────────────────────────────────────────────────
+  #
+  # Chaque soir à 18h30 (heure du laboratoire), la base est exportée, chiffrée
+  # à la volée avec age, copiée dans un seau S3 réservé aux sauvegardes ; puis
+  # le volume des fichiers est synchronisé vers ce même seau. À 20h, un
+  # contrôle indépendant vérifie que l'export du jour est bien dans le seau.
+  # Tout échec part par courriel aux administrateurs (admin_mails) et au
+  # prestataire. Procédure de reprise : docs/restauration.md.
+  backup:
+    dir: ${APP_BACKUP_DIR:backups}
+    command: ${APP_BACKUP_COMMAND:pg_dump -h db -p 5432 -U postgres -d labo_anapath}
+    password: ${APP_BACKUP_PASSWORD:}
+    keep: ${APP_BACKUP_KEEP:30}
+    # Clé PUBLIQUE age (age1…). La clé privée ne doit jamais être sur le
+    # serveur : elle vit dans le coffre du laboratoire et chez le prestataire.
+    # Vide en production, la sauvegarde est refusée et une alerte part — on ne
+    # pose pas un dossier clinique en clair sur un disque qu'on ne maîtrise pas.
+    age-recipient: ${BACKUP_AGE_RECIPIENT:}
+    # Commande de chiffrement ; « {destinataire} » est remplacé par la clé
+    # publique. Un test la remplace par « cat ».
+    encrypt-command: age -r {destinataire}
+    # Prévenu avec les administrateurs à chaque échec.
+    alert-email: ${BACKUP_ALERT_EMAIL:}
+    # Seau DISTINCT de celui des fichiers, avec des clés en écriture seule
+    # (pas de s3:DeleteObject) : un serveur compromis ne peut pas effacer ses
+    # propres sauvegardes. Réglages du seau : docs/restauration.md.
+    s3:
+      bucket: ${BACKUP_S3_BUCKET:}
+      region: ${BACKUP_S3_REGION:eu-west-3}
+      access-key: ${BACKUP_S3_ACCESS_KEY:}
+      secret-key: ${BACKUP_S3_SECRET_KEY:}
+      endpoint: ${BACKUP_S3_ENDPOINT:}
   storage:
     path: ${STORAGE_PATH:/tmp/labo/storage}
     encryption:
