@@ -173,7 +173,7 @@ class RefundRequestControllerIT {
                 new HttpEntity<>(body, authHeaders(token)),
                 new ParameterizedTypeReference<>() {});
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
     @Test

@@ -60,7 +60,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Object>> handleBusinessException(BusinessException ex) {
         log.warn("Business exception: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
@@ -105,7 +105,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidOperationException.class)
     public ResponseEntity<ApiResponse<Object>> handleInvalidOperation(InvalidOperationException ex) {
         log.warn("Invalid operation: {}", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
                 .body(ApiResponse.error(ex.getMessage()));
     }
 

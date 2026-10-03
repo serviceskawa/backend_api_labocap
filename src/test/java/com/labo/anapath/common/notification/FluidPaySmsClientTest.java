@@ -120,7 +120,7 @@ class FluidPaySmsClientTest {
     @Test
     @DisplayName("422 doublon → succès marqué, aucune exception : le SMS est déjà parti")
     void doublon_nEstPasUneErreur() {
-        serveur.expect(requestTo(URL)).andRespond(withStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+        serveur.expect(requestTo(URL)).andRespond(withStatus(HttpStatus.UNPROCESSABLE_CONTENT)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body("{\"success\":false,\"message\":"
                         + "\"All messages are duplicates of existing active records\"}"));
@@ -134,7 +134,7 @@ class FluidPaySmsClientTest {
     @Test
     @DisplayName("422 de validation → exception : ce n'est pas un doublon, il faut le savoir")
     void validationRefusee_remonte() {
-        serveur.expect(requestTo(URL)).andRespond(withStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+        serveur.expect(requestTo(URL)).andRespond(withStatus(HttpStatus.UNPROCESSABLE_CONTENT)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body("{\"success\":false,\"message\":\"The recipient_phone field is invalid.\"}"));
 

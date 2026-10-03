@@ -71,7 +71,7 @@ public class FluidPaySmsClient {
             return lireSucces(reponse.getBody());
 
         } catch (RestClientResponseException e) {
-            if (e.getStatusCode() == HttpStatus.UNPROCESSABLE_ENTITY && estDoublon(e)) {
+            if (e.getStatusCode() == HttpStatus.UNPROCESSABLE_CONTENT && estDoublon(e)) {
                 log.info("SMS {} déjà envoyé (source_id={}) : FluidPay a écarté le doublon",
                         message.referenceId(), message.sourceId());
                 return FluidPaySmsResult.doublon();

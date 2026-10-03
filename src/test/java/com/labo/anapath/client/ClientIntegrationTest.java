@@ -262,7 +262,7 @@ class ClientIntegrationTest {
                     new HttpEntity<>(headers),
                     String.class);
 
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         } finally {
             contratRepository.delete(savedContrat);
             clientRepository.delete(savedClient);

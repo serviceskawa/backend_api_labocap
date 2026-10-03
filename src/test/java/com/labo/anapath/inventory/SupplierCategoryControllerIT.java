@@ -155,7 +155,7 @@ class SupplierCategoryControllerIT {
                 baseUrl() + "/" + catId, HttpMethod.DELETE,
                 new HttpEntity<>(authHeaders(token)), new ParameterizedTypeReference<>() {});
 
-        assertThat(deleteResponse.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(deleteResponse.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
     @Test

@@ -174,7 +174,7 @@ class ContratControllerIT {
                 baseUrl() + "/" + contractId + "/details", HttpMethod.POST,
                 new HttpEntity<>(detailBody, jsonAuthHeaders(token)),
                 new ParameterizedTypeReference<>() {});
-        assertThat(second.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(second.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
     @Test

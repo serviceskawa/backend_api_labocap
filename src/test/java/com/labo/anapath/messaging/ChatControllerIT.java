@@ -209,7 +209,7 @@ class ChatControllerIT {
                 new HttpEntity<>(authHeaders(senderToken)),
                 new ParameterizedTypeReference<>() {});
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
     @Test

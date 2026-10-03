@@ -187,7 +187,7 @@ class BranchIntegrationTest {
                 new HttpEntity<>(headers),
                 String.class);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
     @Test
