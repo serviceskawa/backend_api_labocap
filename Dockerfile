@@ -21,7 +21,10 @@ FROM eclipse-temurin:21-jre-alpine
 #
 # Version 16, celle du serveur : `pg_dump` refuse de sauvegarder une base dont
 # la version majeure dépasse la sienne. À faire suivre si le serveur monte.
-RUN apk add --no-cache postgresql16-client
+#
+# `age` chiffre chaque export à la volée (pg_dump | age -r <clé publique>) :
+# aucun SQL en clair ne touche le disque, et la clé privée n'est pas ici.
+RUN apk add --no-cache age postgresql16-client
 
 # Utilisateur non-root pour la sécurité
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup

@@ -299,6 +299,24 @@ public class EmailServiceImpl implements EmailService {
         }
     }
 
+    @Async
+    @Override
+    public void sendAlerteSauvegarde(String to, String sujet, String detail) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(to);
+            helper.setSubject("[Sauvegarde] " + sujet);
+            helper.setText(detail, false);
+
+            mailSender.send(message);
+            log.info("Alerte de sauvegarde envoyée à {} : {}", maskEmail(to), sujet);
+        } catch (Exception e) {
+            log.error("Échec d'envoi de l'alerte de sauvegarde à {}: {}", maskEmail(to), e.getMessage());
+        }
+    }
+
     private String maskEmail(String email) {
         if (email == null || !email.contains("@")) return "***";
         String[] parts = email.split("@", 2);
