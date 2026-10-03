@@ -241,7 +241,8 @@ logging:
       max-file-size: ${LOG_MAX_FILE_SIZE:10MB}
       # Un mois d'historique : de quoi remonter à un incident signalé tard,
       # sans garder indéfiniment des journaux qui nomment des patients.
-      max-history: ${LOG_MAX_HISTORY:30}
+      # Un an (lot 6) : un incident se comprend parfois des mois après.
+      max-history: ${LOG_MAX_HISTORY:365}
       total-size-cap: ${LOG_TOTAL_SIZE_CAP:1GB}
       clean-history-on-start: false
 
