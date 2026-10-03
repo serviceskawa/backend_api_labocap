@@ -40,6 +40,11 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      # Heure du laboratoire pour tout le conteneur : les tâches planifiées
+      # portent déjà leur fuseau, mais l'horodatage des journaux et des
+      # fichiers de sauvegarde sortaient en UTC, deux heures plus tôt que ce
+      # que lit l'équipe.
+      TZ: Africa/Porto-Novo
       # Port d'écoute de l'application DANS le conteneur (server.port=${PORT}).
       # Repris tel quel par le mapping et le healthcheck plus bas : ces trois
       # emplacements doivent rester alignés, sous peine d'un conteneur déclaré
@@ -57,6 +62,19 @@ services:
       APP_BACKUP_COMMAND: pg_dump -h db -p ${DB_PORT:-5432} -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-labo_anapath}
       APP_BACKUP_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant dans .env}
       APP_BACKUP_KEEP: ${BACKUP_KEEP:-30}
+      # Chaque export est chiffré (age) contre cette clé publique, puis copié
+      # dans un seau S3 réservé aux sauvegardes — distinct de celui des
+      # fichiers, avec des clés en écriture seule. Sans clé publique, la
+      # sauvegarde est REFUSÉE en production et une alerte part : voir
+      # docs/restauration.md pour préparer la clé et le seau.
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      BACKUP_S3_REGION: ${BACKUP_S3_REGION:-eu-west-3}
+      BACKUP_S3_ACCESS_KEY: ${BACKUP_S3_ACCESS_KEY:-}
+      BACKUP_S3_SECRET_KEY: ${BACKUP_S3_SECRET_KEY:-}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      # Prévenu, avec les administrateurs (réglage admin_mails), de tout échec.
+      BACKUP_ALERT_EMAIL: ${BACKUP_ALERT_EMAIL:-}
       # Biologie clinique : "true" pour un laboratoire qui la pratique.
       MODULE_BIOLOGY: ${MODULE_BIOLOGY:-false}
       # Supervision (docs/supervision.md). ALERT_EMAIL : le prestataire, qui
@@ -82,9 +100,16 @@ services:
       JWT_REFRESH: ${JWT_REFRESH:-1800000}
       JWT_REFRESH_MEDECIN: ${JWT_REFRESH_MEDECIN:-3600000}
       # Adresse du front : destination du lien de réinitialisation du mot de passe
-      APP_FRONT_URL: ${APP_FRONT_URL:-http://localhost:3000}
+      # Obligatoires en production (`:?` : compose refuse de démarrer si la
+      # variable manque dans .env). Un défaut « localhost » ferait partir des
+      # liens inutilisables dans les courriels et les SMS, sans aucune erreur.
+      APP_FRONT_URL: ${APP_FRONT_URL:?APP_FRONT_URL manquant dans .env (adresse du front, sans / final)}
       # Origines frontend autorisées par CORS (lues par CorsConfig.java au runtime)
-      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:3001}
+      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:?APP_CORS_ALLOWED_ORIGINS manquant dans .env (origines du front)}
+      # Adresse par laquelle un client joint l'API depuis son téléphone :
+      # préfixe du lien de téléchargement envoyé par SMS.
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?PUBLIC_BASE_URL manquant dans .env (adresse publique de l'API)}
+      INVOICE_SHARE_LINK_TTL_DAYS: ${INVOICE_SHARE_LINK_TTL_DAYS:-60}
       # Attribut Secure des cookies d'auth. TOUJOURS true en prod HTTPS ; à mettre
       # à false UNIQUEMENT sur un serveur servi en HTTP clair (sinon le navigateur
       # rejette le cookie et l'utilisateur est renvoyé sur /login).
@@ -117,6 +142,9 @@ services:
       # clé publique — pire que pas de chiffrement, puisqu'on le croirait actif.
       STORAGE_ENCRYPTION_ENABLED: ${STORAGE_ENCRYPTION_ENABLED:-false}
       STORAGE_ENCRYPTION_KEY: ${STORAGE_ENCRYPTION_KEY:-}
+      # Clé des secrets courts à remontrer (code d'enrôlement mobile). Vide,
+      # la fonction s'éteint sans bruit — voir app.secrets.key.
+      SECRETS_KEY: ${SECRETS_KEY:-}
       # ─── Stockage des fichiers sur S3 ──────────────────────────────────
       #
       # Désactivé par défaut : les fichiers restent sur le volume du serveur.
@@ -168,12 +196,30 @@ services:
       FLUIDINVOICE_OPERATOR_NAME: ${FLUIDINVOICE_OPERATOR_NAME:-CENTRE ADECHINA ANATOMIE PATHOLOGIQUE}
       # A = exonéré. La classification fiscale engage le contribuable (art. 168 CGI).
       FLUIDINVOICE_TAX_GROUP: ${FLUIDINVOICE_TAX_GROUP:-A}
-      MAIL_HOST: ${MAIL_HOST:-smtp.mailtrap.io}
-      MAIL_PORT: ${MAIL_PORT:-2525}
+      # Courriel : codes de connexion et liens de réinitialisation en dépendent.
+      # Pas de défaut : un serveur SMTP de démonstration en production
+      # enverrait les codes nulle part, sans erreur au démarrage.
+      MAIL_HOST: ${MAIL_HOST:?MAIL_HOST manquant dans .env}
+      MAIL_PORT: ${MAIL_PORT:?MAIL_PORT manquant dans .env}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
-      MAIL_FROM: ${MAIL_FROM:-noreply@labo-anapath.bj}
+      MAIL_FROM: ${MAIL_FROM:?MAIL_FROM manquant dans .env}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Labo AnaPath}
+      # ─── SMS par FluidPay ───────────────────────────────────────────────
+      # Sans clé d'API ni clé de chiffrement, repli sur OurVoice (setting_apps).
+      FLUIDPAY_SMS_ENABLED: ${FLUIDPAY_SMS_ENABLED:-true}
+      FLUIDPAY_SMS_BASE_URL: ${FLUIDPAY_SMS_BASE_URL:-https://app.fluidpay.link}
+      FLUIDPAY_SMS_API_KEY: ${FLUIDPAY_SMS_API_KEY:-}
+      FLUIDPAY_SMS_ENCRYPTION_KEY: ${FLUIDPAY_SMS_ENCRYPTION_KEY:-}
+      FLUIDPAY_SMS_PROVIDER: ${FLUIDPAY_SMS_PROVIDER:-lafricamobile}
+      FLUIDPAY_SMS_SENDER: ${FLUIDPAY_SMS_SENDER:-}
+      # ─── Journal applicatif ─────────────────────────────────────────────
+      # Sur un volume : écrit dans le conteneur, il disparaissait à chaque
+      # redéploiement, et avec lui toute trace d'un incident.
+      LOG_FILE: /var/lib/labo/logs/labo-api.log
+      LOG_MAX_FILE_SIZE: ${LOG_MAX_FILE_SIZE:-10MB}
+      LOG_MAX_HISTORY: ${LOG_MAX_HISTORY:-30}
+      LOG_TOTAL_SIZE_CAP: ${LOG_TOTAL_SIZE_CAP:-1GB}
     volumes:
       - storage:/var/lib/labo/storage
       # Les secrets en fichier — aujourd'hui le seul compte de service
@@ -183,10 +229,15 @@ services:
       # Les sauvegardes doivent survivre au redéploiement : sans volume,
       # elles vivaient dans la couche éphémère du conteneur.
       - backups:/var/lib/labo/backups
+      - logs:/var/lib/labo/logs
     ports:
       # hôte:conteneur — API_PORT règle le port publié, APP_PORT celui écouté.
       # Publié sur 127.0.0.1 uniquement : l'accès public passe par le reverse
       # proxy nginx (api.caap.bj) ; le port n'est pas exposé sur Internet.
+      # nginx doit poser `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`
+      # et `X-Forwarded-Proto $scheme` : l'API (Tomcat, forward-headers native)
+      # ne lit ces en-têtes que d'un proxy interne et en tire l'adresse du client,
+      # dont dépend la limitation d'essais. Configuration à versionner (lot 9).
       - "127.0.0.1:${API_PORT:-7001}:${APP_PORT:-7001}"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:${APP_PORT:-7001}/actuator/health | grep -q UP || exit 1"]
@@ -235,4 +286,5 @@ services:
 volumes:
   backups:
   db-data:
+  logs:
   storage:

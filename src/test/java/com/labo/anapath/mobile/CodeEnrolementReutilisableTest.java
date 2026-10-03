@@ -12,11 +12,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * La règle de vie d'un code d'enrôlement.
  *
- * <p>Elle a changé de nature : le code s'éteignait au premier appareil enrôlé,
- * il s'éteint désormais quand on le révoque. Ces quatre cas sont ce qui
- * distingue les deux comportements, et ce qu'une régression rendrait
- * silencieux — un code qui redevient à usage unique ne casse rien, il oblige
- * seulement l'agent d'à côté à redemander un accès.</p>
+ * <p>Elle a changé deux fois : le code s'éteignait au premier appareil enrôlé,
+ * puis seulement à la révocation (pour qu'un second téléphone passe avec le
+ * même QR), et depuis le lot 11 de nouveau au premier usage, avec quinze
+ * minutes de validité — un QR photographié ou un courriel transféré ne doit
+ * pas enrôler un appareil de plus. Les cas ci-dessous fixent ce qui doit
+ * rester vrai : la trace du premier usage, la révocation, l'expiration.</p>
  */
 class CodeEnrolementReutilisableTest {
 
@@ -34,15 +35,11 @@ class CodeEnrolementReutilisableTest {
     }
 
     @Test
-    @DisplayName("un code déjà employé reste utilisable")
-    void resteUtilisableApresUsage() {
+    @DisplayName("un code déjà employé ne sert plus (lot 11 : un seul usage)")
+    void neSertPlusApresUsage() {
         MobileEnrollmentCode c = code(null);
-
         c.noterUnUsage(UUID.randomUUID());
-
-        // Le cas qui motive tout : un deuxième téléphone, ou une réinstallation
-        // après un échec, doit passer avec le même QR.
-        assertThat(c.estUtilisable()).isTrue();
+        assertThat(c.estUtilisable()).isFalse();
         assertThat(c.getUsedCount()).isEqualTo(1);
         assertThat(c.getUsedAt()).isNotNull();
     }

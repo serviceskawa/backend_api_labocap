@@ -81,6 +81,12 @@ class AuthServiceImplTest {
     private TwoFaRepository twoFaRepository;
 
     @Mock
+    private com.labo.anapath.common.security.PolitiqueDeMotDePasse politiqueDeMotDePasse;
+
+    @Mock
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
+    @Mock
     private EmailService emailService;
 
     /**

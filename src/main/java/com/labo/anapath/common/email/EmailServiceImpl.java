@@ -232,7 +232,7 @@ public class EmailServiceImpl implements EmailService {
     @Override
     public void sendPostSignatureChangeAlert(String to, String reportCode, String testOrderCode,
                                              String signatoryName, String modifiedByName,
-                                             String changedFields, String labName) {
+                                             String changedFields, String reason, String labName) {
         try {
             Context context = new Context();
             context.setVariable("reportCode", reportCode);
@@ -240,6 +240,7 @@ public class EmailServiceImpl implements EmailService {
             context.setVariable("signatoryName", signatoryName);
             context.setVariable("modifiedByName", modifiedByName);
             context.setVariable("changedFields", changedFields);
+            context.setVariable("reason", reason);
             context.setVariable("labName", labName);
 
             String htmlContent = templateEngine.process("email/post-signature-change", context);
@@ -313,6 +314,24 @@ public class EmailServiceImpl implements EmailService {
             log.info("Email partage document envoyé à {} pour « {} »", maskEmail(to), docTitle);
         } catch (Exception e) {
             log.error("Échec d'envoi de la notification de partage à {}: {}", maskEmail(to), e.getMessage());
+        }
+    }
+
+    @Async
+    @Override
+    public void sendAlerteSauvegarde(String to, String sujet, String detail) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(to);
+            helper.setSubject("[Sauvegarde] " + sujet);
+            helper.setText(detail, false);
+
+            mailSender.send(message);
+            log.info("Alerte de sauvegarde envoyée à {} : {}", maskEmail(to), sujet);
+        } catch (Exception e) {
+            log.error("Échec d'envoi de l'alerte de sauvegarde à {}: {}", maskEmail(to), e.getMessage());
         }
     }
 

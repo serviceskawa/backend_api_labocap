@@ -52,7 +52,18 @@ server:
   # Derrière le reverse proxy nginx (api.caap.bj) : reconstruire le schéma et
   # l'IP d'origine depuis X-Forwarded-* — indispensable pour les cookies Secure
   # et les redirections en https.
-  forward-headers-strategy: framework
+  #
+  # `native` (RemoteIpValve de Tomcat) et non `framework` : le filtre de Spring
+  # croit X-Forwarded-For de n'importe qui, donc un client pouvait se donner
+  # l'adresse de son choix et contourner la limitation d'essais. Tomcat ne le
+  # croit que si la connexion vient d'un proxy interne (127/8, 10/8, 172.16/12,
+  # 192.168/16 : nginx sur l'hôte, vu du conteneur par le pont Docker), et
+  # prend l'adresse la plus à droite qui n'est pas un proxy — celle que nginx
+  # a ajoutée, pas celle que le client a écrite.
+  forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      host-header: X-Forwarded-Host
 
 app:
   # Modules optionnels, activés déploiement par déploiement (un laboratoire = un
@@ -105,6 +116,38 @@ app:
     # session pour finir une phrase. Un poste du comptoir reste à portée de qui
     # passe dans le couloir, d'où la fenêtre deux fois plus courte au-dessus.
     refresh-expiration-medecin-ms: ${JWT_REFRESH_MEDECIN:3600000}
+  # ── Sauvegardes ─────────────────────────────────────────────────────
+  #
+  # Chaque soir à 18h30 (heure du laboratoire), la base est exportée, chiffrée
+  # à la volée avec age, copiée dans un seau S3 réservé aux sauvegardes ; puis
+  # le volume des fichiers est synchronisé vers ce même seau. À 20h, un
+  # contrôle indépendant vérifie que l'export du jour est bien dans le seau.
+  # Tout échec part par courriel aux administrateurs (admin_mails) et au
+  # prestataire. Procédure de reprise : docs/restauration.md.
+  backup:
+    dir: ${APP_BACKUP_DIR:backups}
+    command: ${APP_BACKUP_COMMAND:pg_dump -h db -p 5432 -U postgres -d labo_anapath}
+    password: ${APP_BACKUP_PASSWORD:}
+    keep: ${APP_BACKUP_KEEP:30}
+    # Clé PUBLIQUE age (age1…). La clé privée ne doit jamais être sur le
+    # serveur : elle vit dans le coffre du laboratoire et chez le prestataire.
+    # Vide en production, la sauvegarde est refusée et une alerte part — on ne
+    # pose pas un dossier clinique en clair sur un disque qu'on ne maîtrise pas.
+    age-recipient: ${BACKUP_AGE_RECIPIENT:}
+    # Commande de chiffrement ; « {destinataire} » est remplacé par la clé
+    # publique. Un test la remplace par « cat ».
+    encrypt-command: age -r {destinataire}
+    # Prévenu avec les administrateurs à chaque échec.
+    alert-email: ${BACKUP_ALERT_EMAIL:}
+    # Seau DISTINCT de celui des fichiers, avec des clés en écriture seule
+    # (pas de s3:DeleteObject) : un serveur compromis ne peut pas effacer ses
+    # propres sauvegardes. Réglages du seau : docs/restauration.md.
+    s3:
+      bucket: ${BACKUP_S3_BUCKET:}
+      region: ${BACKUP_S3_REGION:eu-west-3}
+      access-key: ${BACKUP_S3_ACCESS_KEY:}
+      secret-key: ${BACKUP_S3_SECRET_KEY:}
+      endpoint: ${BACKUP_S3_ENDPOINT:}
   supervision:
     # Adresse du prestataire, destinataire des alertes techniques (rafales de
     # connexions ratées, erreurs 5xx, disque presque plein). Vide : les alertes
@@ -247,7 +290,8 @@ logging:
       max-file-size: ${LOG_MAX_FILE_SIZE:10MB}
       # Un mois d'historique : de quoi remonter à un incident signalé tard,
       # sans garder indéfiniment des journaux qui nomment des patients.
-      max-history: ${LOG_MAX_HISTORY:30}
+      # Un an (lot 6) : un incident se comprend parfois des mois après.
+      max-history: ${LOG_MAX_HISTORY:365}
       total-size-cap: ${LOG_TOTAL_SIZE_CAP:1GB}
       clean-history-on-start: false
 

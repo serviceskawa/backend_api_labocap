@@ -25,6 +25,11 @@ public class CourrielsDeTest extends EmailServiceImpl {
     // Statique : @Async fait du bean un proxy d'interface, qu'on ne peut injecter
     // sous ce type. Le test lit ici, sans injection.
     private static volatile String dernierCode;
+    // L'envoi est asynchrone : le test peut lire avant que le code soit posé,
+    // et récupérer celui de la connexion précédente. On compte les envois et
+    // chaque lecture attend un code plus récent que le dernier lu.
+    private static volatile long envois;
+    private static long lus;
 
     public CourrielsDeTest(JavaMailSender mailSender, TemplateEngine templateEngine, Environment environment) {
         super(mailSender, templateEngine, environment);
@@ -33,9 +38,16 @@ public class CourrielsDeTest extends EmailServiceImpl {
     @Override
     public void sendOtp(String to, String firstname, String otp) {
         dernierCode = otp;
+        envois++;
     }
 
-    public static String dernierCode() {
+    /** Le code de la dernière connexion, attendu jusqu'à 5 s s'il n'est pas encore parti. */
+    public static synchronized String dernierCode() {
+        long limite = System.currentTimeMillis() + 5_000;
+        while (envois <= lus && System.currentTimeMillis() < limite) {
+            try { Thread.sleep(20); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
+        }
+        lus = envois;
         return dernierCode;
     }
 }

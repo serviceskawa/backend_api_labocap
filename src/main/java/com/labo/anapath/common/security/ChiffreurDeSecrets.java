@@ -92,6 +92,11 @@ public class ChiffreurDeSecrets {
         }
     }
 
+    /** La valeur porte-t-elle la marque de format, donc est-elle chiffrée ? */
+    public static boolean estChiffre(String valeur) {
+        return valeur != null && valeur.startsWith(MARQUE);
+    }
+
     /** Une clé est-elle configurée ? */
     public boolean estActif() {
         return cle != null;

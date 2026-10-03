@@ -136,6 +136,8 @@ INSERT INTO permissions (id, name, slug, created_at) VALUES
     (gen_random_uuid(), 'view-process-refund-request', 'view-process-refund-request', NOW()),
     (gen_random_uuid(), 'view-refund-reasons', 'view-refund-reasons', NOW()),
     (gen_random_uuid(), 'view-refund-requests', 'view-refund-requests', NOW()),
+    (gen_random_uuid(), 'view-audit', 'view-audit', NOW()),
+    (gen_random_uuid(), 'view-report-history', 'view-report-history', NOW()),
     (gen_random_uuid(), 'view-reports', 'view-reports', NOW()),
     (gen_random_uuid(), 'view-settings', 'view-settings', NOW()),
     (gen_random_uuid(), 'view-supplier-categories', 'view-supplier-categories', NOW()),

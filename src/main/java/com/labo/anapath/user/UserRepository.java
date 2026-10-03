@@ -157,4 +157,16 @@ public interface UserRepository extends JpaRepository<User, UUID> {
             ORDER BY u.lastname, u.firstname
             """)
     List<User> findMetiersDuSoin();
+
+    /** Secrets TOTP sans la marque de chiffrement (lot 11, rattrapage au démarrage). */
+    @org.springframework.data.jpa.repository.Query(value = """
+            SELECT id, two_factor_secret FROM users
+            WHERE two_factor_secret IS NOT NULL AND two_factor_secret NOT LIKE 'v1:%'
+            """, nativeQuery = true)
+    List<Object[]> secretsTotpEnClair();
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query(value = "UPDATE users SET two_factor_secret = :valeur WHERE id = :id", nativeQuery = true)
+    void remplacerSecretTotp(@org.springframework.data.repository.query.Param("id") UUID id,
+                             @org.springframework.data.repository.query.Param("valeur") String valeur);
 }
