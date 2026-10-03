@@ -1,5 +1,6 @@
 package com.labo.anapath.report;
 
+import com.labo.anapath.common.branch.BranchContext;
 import com.labo.anapath.common.Discipline;
 import com.labo.anapath.common.NomComplet;
 
@@ -495,7 +496,7 @@ public class TestPathologyMacroController {
                 });
 
         // Vérifier que l'employé existe
-        Employee employee = employeeRepository.findById(request.employeeId())
+        Employee employee = employeeRepository.findByIdAndBranchId(request.employeeId(), BranchContext.get())
                 .orElseThrow(() -> new ResourceNotFoundException("Employé", request.employeeId()));
 
         TestPathologyMacro macro = new TestPathologyMacro();
@@ -564,11 +565,13 @@ public class TestPathologyMacroController {
         // Enrichissement avec code bon et nom employé
         String orderCode = null;
         if (saved.getTestOrderId() != null) {
+            // Global : le seul code, d'une demande que la macro vient de rattacher dans l'agence.
             orderCode = testOrderRepository.findById(saved.getTestOrderId())
                     .map(TestOrder::getCode).orElse(null);
         }
         String empName = null;
         if (saved.getEmployeeId() != null) {
+            // Global : le seul nom, d'un employé que la macro vient de rattacher dans l'agence.
             empName = employeeRepository.findById(saved.getEmployeeId())
                     .map(e -> e.getFirstName() + " " + e.getLastName()).orElse(null);
         }

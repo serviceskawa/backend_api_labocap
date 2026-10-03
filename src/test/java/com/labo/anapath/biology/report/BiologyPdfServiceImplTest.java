@@ -208,6 +208,8 @@ class BiologyPdfServiceImplTest {
     void aiguillage() {
         BiologyPdfService biologie = mock(BiologyPdfService.class);
         when(biologie.generatePdf(report.getId(), USER, null)).thenReturn(new byte[] {1, 2, 3});
+        // Le cœur d'anatomie pathologique charge le compte-rendu dans l'agence de la requête.
+        when(reportRepository.findByIdAndBranchId(org.mockito.ArgumentMatchers.eq(report.getId()), org.mockito.ArgumentMatchers.any())).thenReturn(Optional.of(report));
         PdfReportServiceImpl pathologie = new PdfReportServiceImpl(reportRepository, logRepo, settingRepo,
                 userRepository, new QrCodeService(), moteur, biologie);
 

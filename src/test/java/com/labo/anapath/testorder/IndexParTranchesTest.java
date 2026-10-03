@@ -40,6 +40,8 @@ import static org.mockito.Mockito.when;
 @DisplayName("l'index des demandes se rend par tranches")
 class IndexParTranchesTest {
 
+    @Mock private com.labo.anapath.testorder.PerimetreDuMedecin perimetreDuMedecin;
+
     @Mock
     private TestOrderRepository testOrderRepository;
 

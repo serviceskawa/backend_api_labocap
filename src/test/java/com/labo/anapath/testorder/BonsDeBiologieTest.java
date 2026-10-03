@@ -76,6 +76,8 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class BonsDeBiologieTest {
 
+    @Mock private com.labo.anapath.testorder.PerimetreDuMedecin perimetreDuMedecin;
+
     @Mock private TestOrderRepository testOrderRepository;
     @Mock private PatientRepository patientRepository;
     @Mock private DoctorRepository doctorRepository;

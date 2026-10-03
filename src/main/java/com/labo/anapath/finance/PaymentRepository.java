@@ -11,6 +11,9 @@ import java.util.UUID;
 @Repository
 public interface PaymentRepository extends JpaRepository<Payment, UUID> {
 
+    /** Dans l'agence donnée seulement : un identifiant d'ailleurs est introuvable. */
+    Optional<Payment> findByIdAndBranchId(UUID id, UUID branchId);
+
     Page<Payment> findByBranchId(UUID branchId, Pageable pageable);
 
     Optional<Payment> findByInvoiceId(UUID invoiceId);

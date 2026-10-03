@@ -1,5 +1,6 @@
 package com.labo.anapath.finance;
 
+import com.labo.anapath.common.branch.BranchContext;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -39,11 +40,8 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional(readOnly = true)
     public PaymentResponseDto findById(UUID id, UUID branchId) {
-        Payment payment = paymentRepository.findById(id)
+        Payment payment = paymentRepository.findByIdAndBranchId(id, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Paiement", id));
-        if (!payment.getBranchId().equals(branchId)) {
-            throw new ResourceNotFoundException("Paiement", id);
-        }
         return financeMapper.toPaymentResponseDto(payment);
     }
 
@@ -63,7 +61,7 @@ public class PaymentServiceImpl implements PaymentService {
         payment.setMethod(dto.getMethod() != null ? dto.getMethod() : PaymentMethod.CASH);
         payment.setPaymentDate(dto.getPaymentDate());
         payment.setNotes(dto.getNotes());
-        payment.setInvoice(invoiceRepository.findById(dto.getInvoiceId())
+        payment.setInvoice(invoiceRepository.findByIdAndBranchId(dto.getInvoiceId(), branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Facture", dto.getInvoiceId())));
         return financeMapper.toPaymentResponseDto(paymentRepository.save(payment));
     }
@@ -72,7 +70,7 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional
     public void delete(UUID id) {
-        paymentRepository.findById(id)
+        paymentRepository.findByIdAndBranchId(id, BranchContext.get())
                 .orElseThrow(() -> new ResourceNotFoundException("Paiement", id));
         paymentRepository.deleteById(id);
     }

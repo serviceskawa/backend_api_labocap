@@ -74,7 +74,7 @@ class InvoiceServiceImplTest {
         Invoice inv = buildInvoice(0);
         inv.setPaid(true);
 
-        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(inv));
+        when(invoiceRepository.findByIdAndBranchId(eq(INVOICE_ID), any())).thenReturn(Optional.of(inv));
 
         InvoiceStatusUpdateDto dto = new InvoiceStatusUpdateDto();
         dto.setPayment("ESPECES");
@@ -96,7 +96,7 @@ class InvoiceServiceImplTest {
         cashVente.setType("vente");
         cashVente.setBalance(new BigDecimal("10000.00"));
 
-        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(inv));
+        when(invoiceRepository.findByIdAndBranchId(eq(INVOICE_ID), any())).thenReturn(Optional.of(inv));
         when(cashboxRepository.findFirstByBranchIdAndType(BRANCH_ID, "vente")).thenReturn(Optional.of(cashVente));
         when(cashboxRepository.save(cashVente)).thenReturn(cashVente);
         when(invoiceRepository.save(any())).thenReturn(inv);
@@ -132,7 +132,7 @@ class InvoiceServiceImplTest {
         cashVente.setType("vente");
         cashVente.setBalance(new BigDecimal("10000.00"));
 
-        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(inv));
+        when(invoiceRepository.findByIdAndBranchId(eq(INVOICE_ID), any())).thenReturn(Optional.of(inv));
         when(cashboxRepository.findFirstByBranchIdAndType(BRANCH_ID, "vente")).thenReturn(Optional.of(cashVente));
         when(invoiceRepository.save(any())).thenReturn(inv);
         when(financeMapper.toInvoiceResponseDto(inv)).thenReturn(null);
@@ -163,7 +163,7 @@ class InvoiceServiceImplTest {
         cashDepense.setType("depense");
         cashDepense.setBalance(new BigDecimal("10000.00"));
 
-        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(inv));
+        when(invoiceRepository.findByIdAndBranchId(eq(INVOICE_ID), any())).thenReturn(Optional.of(inv));
         when(cashboxRepository.findFirstByBranchIdAndType(BRANCH_ID, "depense")).thenReturn(Optional.of(cashDepense));
         when(invoiceRepository.save(any())).thenReturn(inv);
         when(financeMapper.toInvoiceResponseDto(inv)).thenReturn(null);
@@ -187,7 +187,7 @@ class InvoiceServiceImplTest {
         cashDepense.setType("depense");
         cashDepense.setBalance(new BigDecimal("3000.00"));
 
-        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(inv));
+        when(invoiceRepository.findByIdAndBranchId(eq(INVOICE_ID), any())).thenReturn(Optional.of(inv));
         when(cashboxRepository.findFirstByBranchIdAndType(BRANCH_ID, "depense")).thenReturn(Optional.of(cashDepense));
         when(cashboxRepository.save(cashDepense)).thenReturn(cashDepense);
         when(invoiceRepository.save(any())).thenReturn(inv);
@@ -218,7 +218,7 @@ class InvoiceServiceImplTest {
         cashVente.setType("vente");
         cashVente.setBalance(BigDecimal.ZERO);
 
-        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(inv));
+        when(invoiceRepository.findByIdAndBranchId(eq(INVOICE_ID), any())).thenReturn(Optional.of(inv));
         when(cashboxRepository.findFirstByBranchIdAndType(BRANCH_ID, "vente")).thenReturn(Optional.of(cashVente));
         when(cashboxRepository.save(any())).thenReturn(cashVente);
         when(invoiceRepository.save(any())).thenReturn(inv);

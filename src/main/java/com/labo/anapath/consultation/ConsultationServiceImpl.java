@@ -1,5 +1,8 @@
 package com.labo.anapath.consultation;
 
+import com.labo.anapath.common.branch.BranchContext;
+import com.labo.anapath.common.storage.FichierStockeRepository;
+import com.labo.anapath.common.storage.FichierStocke;
 import com.labo.anapath.common.dto.PageResponse;
 import com.labo.anapath.common.exception.ResourceNotFoundException;
 import com.labo.anapath.common.storage.FileStorageService;
@@ -29,6 +32,7 @@ public class ConsultationServiceImpl implements ConsultationService {
     private final UserRepository userRepository;
     private final ConsultationMapper consultationMapper;
     private final FileStorageService fileStorageService;
+    private final FichierStockeRepository fichiers;
 
     @Override
     @Transactional(readOnly = true)
@@ -67,7 +71,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         Consultation consultation = new Consultation();
         consultation.setBranchId(branchId);
         consultation.setCode(code);
-        consultation.setPatient(patientRepository.findById(dto.getPatientId())
+        consultation.setPatient(patientRepository.findByIdAndBranchId(dto.getPatientId(), branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Patient", dto.getPatientId())));
         consultation.setPrestation(prestation);
         consultation.setFees(prestation.getPrice()); // RÈGLE: fees toujours depuis prestation.price
@@ -98,7 +102,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         Prestation prestation = prestationRepository.findById(dto.getPrestationId())
                 .orElseThrow(() -> new ResourceNotFoundException("Prestation", dto.getPrestationId()));
 
-        consultation.setPatient(patientRepository.findById(dto.getPatientId())
+        consultation.setPatient(patientRepository.findByIdAndBranchId(dto.getPatientId(), BranchContext.get())
                 .orElseThrow(() -> new ResourceNotFoundException("Patient", dto.getPatientId())));
         consultation.setPrestation(prestation);
         consultation.setFees(prestation.getPrice());
@@ -177,7 +181,8 @@ public class ConsultationServiceImpl implements ConsultationService {
                 ConsultationFile cf = new ConsultationFile();
                 cf.setConsultation(consultation);
                 cf.setPath(path);
-                consultationFileRepository.save(cf);
+                cf = consultationFileRepository.save(cf);
+                fichiers.rattacher(path, FichierStocke.CONSULTATION_FILE, cf.getId(), consultation.getBranchId());
             }
         }
     }

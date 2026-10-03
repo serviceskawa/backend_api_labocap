@@ -66,6 +66,7 @@ class JournalAccesIT {
     @Autowired private PatientRepository patientRepository;
     @Autowired private JournalAccesRepository journal;
     @Autowired private PurgeDesJournaux purge;
+    @Autowired private com.labo.anapath.common.storage.FichierStockeRepository fichiers;
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private Jetons jetons;
     @LocalServerPort private int port;
@@ -127,6 +128,8 @@ class JournalAccesIT {
         Files.createDirectories(docs);
         String nom = UUID.randomUUID() + ".pdf";
         Files.write(docs.resolve(nom), "PDF".getBytes());
+        // Depuis le lot 7, un fichier ne se sert que rattaché à une entité lisible.
+        fichiers.rattacher("documents/" + nom, com.labo.anapath.common.storage.FichierStocke.TEST_ORDER, UUID.randomUUID(), AGENCE);
 
         assertThat(restTemplate.exchange(url("/files/documents/" + nom), HttpMethod.GET, connecte(ADMIN), byte[].class)
                 .getStatusCode()).isEqualTo(HttpStatus.OK);

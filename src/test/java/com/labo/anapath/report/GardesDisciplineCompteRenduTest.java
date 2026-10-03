@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -76,6 +77,8 @@ class GardesDisciplineCompteRenduTest {
     @DisplayName("ReportServiceImpl")
     class Service {
 
+        @Mock private com.labo.anapath.testorder.PerimetreDuMedecin perimetreDuMedecin;
+
         @Mock private ReportRepository reportRepository;
         @Mock private LogReportRepository logReportRepository;
         @Mock private TestOrderRepository testOrderRepository;
@@ -88,7 +91,7 @@ class GardesDisciplineCompteRenduTest {
         private ReportServiceImpl service;
 
         private void biologieEnBase() {
-            when(reportRepository.findById(REPORT_ID))
+            when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any()))
                     .thenReturn(Optional.of(compteRendu(Discipline.BIOLOGY)));
         }
 
@@ -110,7 +113,7 @@ class GardesDisciplineCompteRenduTest {
         @DisplayName("createOrUpdate refuse d'ouvrir un compte-rendu rédigé sur un bon de biologie")
         void createOrUpdateSurBonDeBiologie() {
             TestOrder bio = bon(Discipline.BIOLOGY);
-            when(testOrderRepository.findById(bio.getId())).thenReturn(Optional.of(bio));
+            when(testOrderRepository.findByIdAndBranchId(eq(bio.getId()), any())).thenReturn(Optional.of(bio));
             ReportRequestDto dto = new ReportRequestDto();
             dto.setTestOrderId(bio.getId());
 
@@ -123,7 +126,7 @@ class GardesDisciplineCompteRenduTest {
         @DisplayName("create refuse un bon de biologie")
         void createRefuse() {
             TestOrder bio = bon(Discipline.BIOLOGY);
-            when(testOrderRepository.findById(bio.getId())).thenReturn(Optional.of(bio));
+            when(testOrderRepository.findByIdAndBranchId(eq(bio.getId()), any())).thenReturn(Optional.of(bio));
             ReportRequestDto dto = new ReportRequestDto();
             dto.setTestOrderId(bio.getId());
 
@@ -178,7 +181,7 @@ class GardesDisciplineCompteRenduTest {
         @Test
         @DisplayName("modifications après signature : un compte-rendu inconnu rend toujours une liste vide")
         void modificationsApresSignatureInconnu() {
-            when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.empty());
+            when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.empty());
 
             assertThat(service.getModificationsApresSignature(REPORT_ID)).isEmpty();
         }

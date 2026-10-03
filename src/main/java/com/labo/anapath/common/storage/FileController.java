@@ -1,22 +1,34 @@
 package com.labo.anapath.common.storage;
 
+import com.labo.anapath.common.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.UriUtils;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.UUID;
 
+/**
+ * Sert les fichiers stockés, par identifiant ({@code GET /files/{id}}) ou,
+ * pour les clients qui n'ont pas encore basculé, par chemin
+ * ({@code GET /files/documents/x.pdf}). Dans les deux cas le fichier doit être
+ * rattaché à une entité ({@link FichierStocke}) et la personne doit avoir le
+ * droit de lire cette entité ({@link AccesAuxFichiers}) : un chemin deviné ne
+ * donne plus rien.
+ */
 @RestController
 @RequestMapping("/api/v1/files")
 @RequiredArgsConstructor
@@ -25,16 +37,39 @@ public class FileController {
 
     private final FileStorageService fileStorageService;
     private final StoredFiles storedFiles;
+    private final FichierStockeRepository fichiers;
+    private final AccesAuxFichiers acces;
 
+    @GetMapping("/{id:[0-9a-fA-F-]{36}}")
+    public ResponseEntity<Resource> parIdentifiant(@PathVariable UUID id,
+                                                   @AuthenticationPrincipal UserPrincipal personne)
+            throws IOException {
+        return servir(fichiers.findById(id).orElse(null), personne);
+    }
+
+    /** L'ancienne route : encore appelée par le front et le mobile, même règle. */
     @GetMapping("/**")
-    public ResponseEntity<Resource> getFile(@PathVariable(required = false) String relativePath,
-                                            jakarta.servlet.http.HttpServletRequest request) throws IOException {
-        String path = request.getRequestURI().replaceFirst("/api/v1/files/", "");
-        Path filePath = fileStorageService.resolve(path);
+    public ResponseEntity<Resource> parChemin(jakarta.servlet.http.HttpServletRequest request,
+                                              @AuthenticationPrincipal UserPrincipal personne)
+            throws IOException {
+        String path = UriUtils.decode(
+                request.getRequestURI().replaceFirst("/api/v1/files/", ""), StandardCharsets.UTF_8);
+        return servir(fichiers.parChemin(path).orElse(null), personne);
+    }
+
+    private ResponseEntity<Resource> servir(FichierStocke fichier, UserPrincipal personne)
+            throws IOException {
+        // Inconnu : 404, comme un fichier absent — rien ne dit s'il existe ailleurs.
+        if (fichier == null) {
+            return ResponseEntity.notFound().build();
+        }
+        acces.exiger(fichier, personne);
+
+        Path filePath = fileStorageService.resolve(fichier.getPath());
         Path basePath = fileStorageService.resolve("");
 
         if (!filePath.startsWith(basePath)) {
-            log.warn("Tentative de path traversal détectée: {}", path);
+            log.warn("Tentative de path traversal détectée: {}", fichier.getPath());
             return ResponseEntity.status(403).build();
         }
 

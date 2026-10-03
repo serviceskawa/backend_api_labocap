@@ -1,5 +1,7 @@
 package com.labo.anapath.hr;
 
+import com.labo.anapath.common.storage.FichierStocke;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import java.time.LocalDateTime;
@@ -14,4 +16,10 @@ public record EmployeeDocumentResponseDto(
         Long fileSize,
         UUID branchId,
         LocalDateTime createdAt
-) {}
+) {
+    /** L'identifiant du fichier pour {@code GET /files/{id}}, déduit du chemin. */
+    @JsonProperty
+    public UUID fileId() {
+        return FichierStocke.idPour(filePath);
+    }
+}

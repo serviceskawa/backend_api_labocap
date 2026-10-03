@@ -54,7 +54,7 @@ public class SignalServiceImpl implements SignalService {
      */
     private com.labo.anapath.testorder.TestOrder resoudreDemande(SignalRequestDto dto, UUID branchId) {
         if (dto.getTestOrderId() != null) {
-            return testOrderRepository.findById(dto.getTestOrderId())
+            return testOrderRepository.findByIdAndBranchId(dto.getTestOrderId(), branchId)
                     .orElseThrow(() -> new ResourceNotFoundException("Demande d'examen", dto.getTestOrderId()));
         }
         String code = dto.getTestOrderCode() != null ? dto.getTestOrderCode().trim() : "";

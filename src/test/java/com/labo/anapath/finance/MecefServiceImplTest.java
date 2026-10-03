@@ -91,7 +91,7 @@ class MecefServiceImplTest {
     @DisplayName("confirmInvoice - API indisponible → ExternalApiException")
     void confirmMecef_apiDown_throwsExternalApiException() {
         when(settingInvoiceRepository.findFirstByBranchId(BRANCH_ID)).thenReturn(Optional.of(buildSettingEnabled()));
-        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(buildInvoice()));
+        when(invoiceRepository.findByIdAndBranchId(eq(INVOICE_ID), any())).thenReturn(Optional.of(buildInvoice()));
         when(restTemplate.exchange(anyString(), eq(HttpMethod.PUT), any(), eq(MecefApiResponse.class)))
                 .thenThrow(new ResourceAccessException("Connection refused"));
 
@@ -113,7 +113,7 @@ class MecefServiceImplTest {
         mecefResp.setQrCode("base64data");
 
         when(settingInvoiceRepository.findFirstByBranchId(BRANCH_ID)).thenReturn(Optional.of(setting));
-        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(inv));
+        when(invoiceRepository.findByIdAndBranchId(eq(INVOICE_ID), any())).thenReturn(Optional.of(inv));
         when(restTemplate.exchange(anyString(), eq(HttpMethod.PUT), any(), eq(MecefApiResponse.class)))
                 .thenReturn(ResponseEntity.status(HttpStatus.OK).body(mecefResp));
         when(invoiceRepository.save(inv)).thenReturn(inv);

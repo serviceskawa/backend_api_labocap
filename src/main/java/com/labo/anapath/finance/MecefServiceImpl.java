@@ -39,7 +39,7 @@ public class MecefServiceImpl implements MecefService {
     public InvoiceResponseDto confirmInvoice(UUID invoiceId, String uid, UUID branchId) {
         SettingInvoice setting = requireMecefEnabled(branchId);
 
-        Invoice invoice = invoiceRepository.findById(invoiceId)
+        Invoice invoice = invoiceRepository.findByIdAndBranchId(invoiceId, branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Facture", invoiceId));
 
         log.info("Appel MECeF confirm — invoiceId={}, uid={}", invoiceId, uid);

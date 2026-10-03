@@ -75,7 +75,7 @@ class RefundServiceImplTest {
     @DisplayName("create - montant > invoice.total → InvalidOperationException REFUND_AMOUNT_EXCEEDS_INVOICE")
     void createRefund_montantExceedsInvoice_throws422() {
         when(refundRequestRepository.existsByInvoiceId(INVOICE_ID)).thenReturn(false);
-        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(buildInvoice()));
+        when(invoiceRepository.findByIdAndBranchId(eq(INVOICE_ID), any())).thenReturn(Optional.of(buildInvoice()));
 
         RefundRequestCreateDto dto = buildDto();
         dto.setMontant(new BigDecimal("9999.00")); // > 5000
@@ -89,7 +89,7 @@ class RefundServiceImplTest {
     @DisplayName("create - succès → log initial 'En attente' créé")
     void createRefund_createsInitialLog() {
         when(refundRequestRepository.existsByInvoiceId(INVOICE_ID)).thenReturn(false);
-        when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(buildInvoice()));
+        when(invoiceRepository.findByIdAndBranchId(eq(INVOICE_ID), any())).thenReturn(Optional.of(buildInvoice()));
         when(refundRequestRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(refundRequestLogRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(refundRequestLogRepository.findByRefundRequestId(any())).thenReturn(Collections.emptyList());
