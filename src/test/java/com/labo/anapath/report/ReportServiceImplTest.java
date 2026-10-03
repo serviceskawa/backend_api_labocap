@@ -274,7 +274,7 @@ class ReportServiceImplTest {
     @DisplayName("update - livré : sans motif → refusé avant toute écriture")
     void update_livre_sansMotif_refuse() {
         UUID medecinId = UUID.randomUUID();
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(compteRenduLivre(medecinId)));
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(compteRenduLivre(medecinId)));
 
         assertThatThrownBy(() -> service.update(REPORT_ID, complement(medecinId, "trop court"),
                 medecinId, BRANCH_ID))
@@ -287,7 +287,7 @@ class ReportServiceImplTest {
     @DisplayName("update - livré : par un non-signataire → 403 avec le motif du refus")
     void update_livre_parNonSignataire_refuse() {
         UUID medecinId = UUID.randomUUID();
-        when(reportRepository.findById(REPORT_ID)).thenReturn(Optional.of(compteRenduLivre(medecinId)));
+        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(compteRenduLivre(medecinId)));
 
         assertThatThrownBy(() -> service.update(REPORT_ID,
                 complement(medecinId, "Complément demandé par le prescripteur."), USER_ID, BRANCH_ID))
