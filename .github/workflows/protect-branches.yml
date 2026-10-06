@@ -40,8 +40,8 @@ jobs:
               echo "::error::Seule develop (ou un hotfix/) peut être fusionnée dans main. Ouvrir la PR vers develop."
               exit 1
             fi
-          elif ! echo "$BRANCH" | grep -qE "^(feat|fix|chore|hotfix|docs|refactor)/"; then
-            echo "::error::Nom de branche '$BRANCH' invalide. Préfixes : feat/ fix/ chore/ hotfix/ docs/ refactor/"
+          elif ! echo "$BRANCH" | grep -qE "^(feat|fix|chore|hotfix|docs|refactor|dependabot)/"; then
+            echo "::error::Nom de branche '$BRANCH' invalide. Préfixes : feat/ fix/ chore/ hotfix/ docs/ refactor/ dependabot/"
             exit 1
           fi
           echo "PR '$BRANCH' → '$BASE' : OK"
