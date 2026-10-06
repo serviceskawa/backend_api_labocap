@@ -566,12 +566,29 @@ public class TestOrderController {
         var dossiers = new java.util.ArrayList<DossierHorsLigneDto>(demandes.size());
         for (UUID id : demandes) {
             try {
-                // Sans la fiche : les trois chemins que l'application garde
-                // sont tous indexés par l'identifiant, et charger le DTO
-                // complet d'une demande pour son seul code pèserait 1 375
-                // octets par dossier — plus que les trois réponses réunies.
+                // La fiche en fait partie, et c'est une correction : je l'avais
+                // écartée en jugeant que l'index local du mobile suffisait. Il
+                // ne porte que code, patient et statut — pas la chronologie.
+                // Constaté sur l'appareil : un dossier ouvert sans réseau
+                // affichait « date d'enregistrement inconnue » et ne savait
+                // dire ni l'affectation ni le retrait.
+                //
+                // Sans la signature du récupérateur, en revanche : 14 Ko en
+                // moyenne, et elle ne sert qu'à l'écran qui la montre en grand.
+                // La descendre pour mille cinq cents dossiers coûterait plus
+                // que tout le reste réuni, pour une image qu'on ouvre rarement.
+                // Le code sert deux fois : l'application garde la fiche sous
+                // sa clé, et la fiche elle-même se lit par lui. Une demande
+                // encore en attente n'en a pas — elle sort alors par le `catch`
+                // plus bas, ce qui est juste : sans code, rien à scanner.
+                String code = testOrderService.findById(
+                        id, principal.getBranchId()).code();
+                var fiche = reportService.findResumeByTestOrderCode(
+                        code, principal.getBranchId());
                 dossiers.add(new DossierHorsLigneDto(
                         id,
+                        code,
+                        sansLaSignature(fiche),
                         testOrderService.getImages(id, principal.getBranchId()),
                         testOrderService.historiqueDuPatient(id, principal.getBranchId()),
                         discussionService.filSansCreer(
@@ -582,6 +599,19 @@ public class TestOrderController {
             }
         }
         return ResponseEntity.ok(ApiResponse.success(dossiers));
+    }
+
+    /** La même fiche, privée de la signature du récupérateur. */
+    private static com.labo.anapath.report.DossierResumeDto sansLaSignature(
+            com.labo.anapath.report.DossierResumeDto f) {
+        if (f == null || f.retrieverSignature() == null) return f;
+        return new com.labo.anapath.report.DossierResumeDto(
+                f.id(), f.code(), f.testOrderId(), f.testOrderCode(),
+                f.patientName(), f.titleName(), f.status(), f.isDelivered(),
+                f.retrieverName(), f.retrieverRelation(), null,
+                f.demandeCreatedAt(), f.deliveryDate(),
+                f.assignedToName(), f.assignmentCode(), f.assignmentDate(),
+                f.assignmentLabels(), f.assignmentNote(), f.assignmentLotNote());
     }
 
     @GetMapping("/index")
