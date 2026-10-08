@@ -283,18 +283,10 @@ class ReportServiceImplTest {
         verify(reportRepository, never()).save(any());
     }
 
-    @Test
-    @DisplayName("update - livré : par un non-signataire → 403 avec le motif du refus")
-    void update_livre_parNonSignataire_refuse() {
-        UUID medecinId = UUID.randomUUID();
-        when(reportRepository.findByIdAndBranchId(eq(REPORT_ID), any())).thenReturn(Optional.of(compteRenduLivre(medecinId)));
-
-        assertThatThrownBy(() -> service.update(REPORT_ID,
-                complement(medecinId, "Complément demandé par le prescripteur."), USER_ID, BRANCH_ID))
-                .isInstanceOf(com.labo.anapath.common.exception.AccesRefuseExplique.class)
-                .hasMessageContaining("signataires");
-        verify(reportRepository, never()).save(any());
-    }
+    // La levée de la restriction aux signataires est éprouvée de bout en bout
+    // dans `VersionsDeCompteRenduIT`, avec une vraie base et le vrai rôle
+    // secrétariat. La rejouer ici exigerait d'échafauder tout le chemin
+    // d'écriture en bouchons : on y éprouverait les bouchons, pas la règle.
 
     // ===== Tests story 3-7 — Validation, signature, livraison =====
 
