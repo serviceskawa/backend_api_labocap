@@ -237,22 +237,22 @@ class VersionsDeCompteRenduIT {
     // ------------------------------------------------------------------ livré
 
     @Test
-    @DisplayName("Compte-rendu livré : sans motif → 422 ; par un non-signataire → 403 ; signataire motivé → 200 et motif journalisé")
-    void compteRenduLivre_signataireEtMotif() {
+    @DisplayName("Compte-rendu livré : sans motif → 422 ; le secrétariat motivé → 200 et motif journalisé")
+    void compteRenduLivre_motifExige() {
         Report r = compteRendu(ReportStatus.DELIVERED, medecin);
 
         ResponseEntity<ApiResponse<ReportResponseDto>> sansMotif = put(r, MEDECIN, retouche(r, "trop court"));
         assertThat(sansMotif.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(sansMotif.getBody().message()).contains("motif");
 
-        ResponseEntity<ApiResponse<ReportResponseDto>> nonSignataire = put(r, SECRETAIRE, retouche(r, MOTIF));
-        assertThat(nonSignataire.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(nonSignataire.getBody().message()).contains("signataires");
-
         assertThat(reportRepository.findById(r.getId()).orElseThrow().getContent())
                 .isEqualTo("<p>Texte d'origine</p>");
 
-        ResponseEntity<ApiResponse<ReportResponseDto>> signataire = put(r, MEDECIN, retouche(r, MOTIF));
+        // La restriction aux signataires a été levée : le secrétariat, qui
+        // saisit et corrige les dossiers au quotidien, se heurtait à un refus
+        // sur tout résultat déjà remis — y compris pour une correction de forme
+        // qu'il était seul à voir. Le motif, lui, reste exigé.
+        ResponseEntity<ApiResponse<ReportResponseDto>> signataire = put(r, SECRETAIRE, retouche(r, MOTIF));
         assertThat(signataire.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(reportRepository.findById(r.getId()).orElseThrow().getContent())
                 .isEqualTo("<p>Texte corrigé</p>");

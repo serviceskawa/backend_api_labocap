@@ -584,7 +584,7 @@ public class ReportServiceImpl implements ReportService {
      * <p>Mais un compte-rendu validé ou livré ne s'écrase pas sans mémoire :
      * son état complet est conservé dans {@link ReportVersion} avant
      * l'écriture, et un compte-rendu livré n'est retouché que par un
-     * signataire, avec un motif — voir {@link #exigerSignataireEtMotif}.</p>
+     * motivée — voir {@link #exigerUnMotif}.</p>
      *
      * @param id  identifiant UUID du CR
      * @param dto nouvelles données
@@ -601,7 +601,7 @@ public class ReportServiceImpl implements ReportService {
         ReportStatus statutInitial = report.getStatus();
 
         if (statutInitial == ReportStatus.DELIVERED) {
-            exigerSignataireEtMotif(report, dto.getReason(), userId);
+            exigerUnMotif(report, dto.getReason(), userId);
         }
 
         // Empreinte et photographie prises AVANT toute écriture : au-delà,
@@ -750,30 +750,32 @@ public class ReportServiceImpl implements ReportService {
     static final int MOTIF_MINIMUM = 20;
 
     /**
-     * Qui peut encore toucher un compte-rendu livré.
+     * Ce qu'exige la retouche d'un compte-rendu livré : un motif, et rien d'autre.
      *
-     * <p>Le résultat est sorti : le patient ou le prescripteur l'a en main.
-     * Le modifier engage ceux dont la signature y figure, et eux seuls (ou la
-     * personne qui a posé la validation) peuvent en décider — avec un motif,
-     * qui suit la modification dans le journal et dans l'alerte envoyée aux
-     * administrateurs.</p>
+     * <p>Le résultat est sorti : le patient ou le prescripteur l'a en main. La
+     * modification reste possible — un complément arrive après la remise, et
+     * c'est le cours ordinaire des choses en anatomie pathologique.</p>
+     *
+     * <p><b>La restriction aux signataires a été levée.</b> Elle réservait la
+     * retouche aux médecins dont la signature figurait au compte-rendu, ou à
+     * celui qui l'avait validé. Le secrétariat, qui saisit et corrige les
+     * dossiers au quotidien, se heurtait donc à un refus sur tout résultat déjà
+     * remis — y compris pour une correction de forme qu'il était seul à voir.
+     * Le travail s'arrêtait là, sans recours depuis l'écran.</p>
+     *
+     * <p>Le motif, lui, reste exigé, et c'est lui qui porte la garantie. Il suit
+     * la modification dans le journal, dans l'alerte envoyée aux administrateurs
+     * et dans l'historique des versions : sans lui, {@code report_versions}
+     * conserverait l'ancien diagnostic sans que personne ne sache, six mois
+     * plus tard, ce qui l'a fait changer. Vingt caractères ne bloquent
+     * personne ; une version muette, si.</p>
      *
      * <p><b>Choix du laboratoire.</b> Pour interdire toute modification après
      * livraison, remplacer le corps de cette méthode par un refus
      * inconditionnel : {@code throw new AccesRefuseExplique("Un compte-rendu
      * livré ne se modifie plus.")}. Rien d'autre n'a à changer.</p>
      */
-    private static void exigerSignataireEtMotif(Report report, String motif, UUID userId) {
-        boolean signataire = Stream.of(report.getSignatory1(), report.getSignatory2(),
-                        report.getSignatory3(), report.getValidatedBy())
-                .filter(Objects::nonNull)
-                .anyMatch(u -> u.getId().equals(userId));
-        if (!signataire) {
-            // Motif montré : il ne parle que du compte-rendu que la personne a
-            // déjà sous les yeux, et lui dit à qui s'adresser.
-            throw new AccesRefuseExplique("Ce compte-rendu a été livré : seul un de ses signataires, "
-                    + "ou la personne qui l'a validé, peut encore le modifier.");
-        }
+    private static void exigerUnMotif(Report report, String motif, UUID userId) {
         if (motif == null || motif.strip().length() < MOTIF_MINIMUM) {
             throw new InvalidOperationException("Modifier un compte-rendu livré exige un motif d'au moins "
                     + MOTIF_MINIMUM + " caractères.");
