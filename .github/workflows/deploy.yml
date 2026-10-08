@@ -35,7 +35,7 @@ jobs:
     environment: production
     steps:
       - name: Déploiement (git pull + docker compose rebuild)
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@v1.2.5
         # Les variables du .env serveur peuvent venir d'ici (même mécanique que
         # africauto-dashboard) : le script ci-dessous n'écrit une clé QUE si
         # .env ne l'a pas déjà et que la valeur est non vide. Une valeur posée

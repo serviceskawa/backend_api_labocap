@@ -42,7 +42,12 @@ public final class PhoneNumbers {
             return null;
         }
         // 00229… est la forme internationale composée depuis un poste fixe.
-        if (chiffres.startsWith("00")) {
+        //
+        // Le « 00 » ne se retire que s'il précède l'indicatif : sans cette
+        // condition, tout numéro commençant par deux zéros perdait ses deux
+        // premiers chiffres et repartait amputé — dix patients de la base sont
+        // dans ce cas, et aucun n'écrit son numéro sous la forme 00229.
+        if (chiffres.startsWith("00" + INDICATIF_BENIN)) {
             chiffres = chiffres.substring(2);
         }
         // Un numéro béninois local fait 8 chiffres, et un fixe peut commencer par

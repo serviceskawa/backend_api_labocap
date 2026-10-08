@@ -29,6 +29,9 @@ import java.util.UUID;
  */
 public record DossierHorsLigneDto(
         UUID id,
+        /** Le code de la demande : l'application garde la fiche sous sa clé. */
+        String code,
+        com.labo.anapath.report.DossierResumeDto fiche,
         List<ImageDto> images,
         List<HistoriquePatientDto> historique,
         FilDto fil) {
